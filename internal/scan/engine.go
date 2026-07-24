@@ -14,26 +14,26 @@ type ScanJob struct {
 	Port int
 }
 
-// Engine orchestre le scan multi-cibles / multi-ports.
 type Engine struct {
 	opts    *config.Options
 	timeout time.Duration
 }
 
 func NewEngine(opts *config.Options) *Engine {
-	// Ajustement dynamique du timeout selon le modèle -T (0-5)
 	timeoutSec := 2.0
-	switch opts.Timing {
-	case 5:
-		timeoutSec = 0.5
-	case 4:
-		timeoutSec = 1.0
-	case 3:
-		timeoutSec = 2.0
-	case 2:
-		timeoutSec = 3.0
-	case 1:
-		timeoutSec = 5.0
+	if opts != nil {
+		switch opts.Timing {
+		case 5:
+			timeoutSec = 0.5
+		case 4:
+			timeoutSec = 1.0
+		case 3:
+			timeoutSec = 2.0
+		case 2:
+			timeoutSec = 3.0
+		case 1:
+			timeoutSec = 5.0
+		}
 	}
 
 	return &Engine{
@@ -42,34 +42,31 @@ func NewEngine(opts *config.Options) *Engine {
 	}
 }
 
-// Execute lance le pool de goroutines et retourne tous les résultats.
 func (e *Engine) Execute(targets []string, ports []int) []TargetResult {
 	totalJobs := len(targets) * len(ports)
 	jobs := make(chan ScanJob, totalJobs)
 	resultsChan := make(chan TargetResult, totalJobs)
 
 	var wg sync.WaitGroup
-	numWorkers := e.opts.Workers
+	numWorkers := 100
+	if e.opts != nil && e.opts.Workers > 0 {
+		numWorkers = e.opts.Workers
+	}
 	if numWorkers > totalJobs {
 		numWorkers = totalJobs
 	}
-	if numWorkers <= 0 {
-		numWorkers = 100
-	}
 
-	// Lancement du Worker Pool
 	for w := 0; w < numWorkers; w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				res := ScanConnectPort(job.IP, job.Port, e.opts, e.timeout)
+				res := e.dispatchScan(job.IP, job.Port)
 				resultsChan <- res
 			}
 		}()
 	}
 
-	// Envoi des tâches dans la file
 	for _, ip := range targets {
 		for _, port := range ports {
 			jobs <- ScanJob{IP: ip, Port: port}
@@ -77,7 +74,6 @@ func (e *Engine) Execute(targets []string, ports []int) []TargetResult {
 	}
 	close(jobs)
 
-	// Attente de la fin des workers
 	go func() {
 		wg.Wait()
 		close(resultsChan)
@@ -86,11 +82,11 @@ func (e *Engine) Execute(targets []string, ports []int) []TargetResult {
 	var results []TargetResult
 	for res := range resultsChan {
 		results = append(results, res)
-		if res.State == StateOpen || e.opts.Verbose {
+		if res.State == StateOpen || (e.opts != nil && e.opts.Verbose) {
 			color := config.Green
 			if res.State == StateClosed {
 				color = config.Red
-			} else if res.State == StateFiltered {
+			} else if res.State == StateFiltered || res.State == StateUnfiltered {
 				color = config.Yellow
 			}
 			fmt.Printf("%s[+] %s:%-5d ─ %-8s%s (time=%.2fms | reason=%s)\n",
@@ -99,4 +95,45 @@ func (e *Engine) Execute(targets []string, ports []int) []TargetResult {
 	}
 
 	return results
+}
+
+// dispatchScan aiguille la tâche vers la méthode activée dans la config
+func (e *Engine) dispatchScan(ip string, port int) TargetResult {
+	if e.opts == nil {
+		return ScanConnectPort(ip, port, nil, e.timeout)
+	}
+
+	// 1. Scan ACK (-sA)
+	if e.opts.AckScan {
+		return ScanAckPort(ip, port, e.opts, e.timeout)
+	}
+
+	// 2. Scan Window (-sW)
+	if e.opts.WindowScan {
+		return ScanWindowPort(ip, port, e.opts, e.timeout)
+	}
+
+	// 3. Scan SYN (-sS)
+	if e.opts.SynScan {
+		return ScanSYNPort(ip, port, e.opts, e.timeout)
+	}
+
+	// 4. Scan UDP (-sU)
+	if e.opts.UdpScan {
+		return ScanUDPPort(ip, port, e.opts, e.timeout)
+	}
+
+	// 5. Scans Furtifs (-sN, -sF, -sX)
+	if e.opts.NullScan {
+		return ScanStealthPort(ip, port, ScanNull, e.opts, e.timeout)
+	}
+	if e.opts.FinScan {
+		return ScanStealthPort(ip, port, ScanFin, e.opts, e.timeout)
+	}
+	if e.opts.XmasScan {
+		return ScanStealthPort(ip, port, ScanXmas, e.opts, e.timeout)
+	}
+
+	// Fallback sur TCP Connect (-sT) ou comportement par défaut
+	return ScanConnectPort(ip, port, e.opts, e.timeout)
 }
