@@ -5,7 +5,7 @@
 ```
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀   ⠀⠀⢤⣶⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⡾⠿⢿⡀⠀⠀⠀⠀⣠⣶⣿⣷
-⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣦⣴⣿⡋⠀⠀⠈⢳⡄⠀⢠⣾⣿⠁⠈⣿⡆      tcpcat v5.0 by NycolazSec
+⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣦⣴⣿⡋⠀⠀⠈⢳⡄⠀⢠⣾⣿⠁⠈⣿⡆      tcpcat v1.0 by NycolazSec
 ⠀⠀⠀⠀⠀⠀⠀⣰⣿⣿⠿⠛⠉⠉⠁⠀⠀⠀⠹⡄⣿⣿⣿⠀⠀⢹⇇      Modular Security & Network Engine
 ⠀⠀⠀⠀⠀⣠⣾⡿⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⣰⣏⢻⣿⣿⡆⠀⠸⣿
 ⠀⠀⠀⢀⣴⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣾⣿⣿⣆⠹⣿⣷⠀⢘⣿
@@ -54,39 +54,39 @@ go install ./cmd/tcpcat
 
 > **Note** : SYN scans (`-sS`), advanced scans, and the eBPF engine (`--ebpf`) required `root` privileges to operate.
 
-## Exemples d'Utilisation
+## Examples of Use
 
-**Scan SYN rapide des 1000 ports les plus courants :**
+**Rapid SYN scan of the 1,000 most common ports:**
 ```bash
 sudo ./tcpcat -sS --top-ports 1000 scanme.nmap.org
 ```
 
-**Scan de ports spécifiques avec détection de version :**
+**Specific port scanning with version detection:**
 ```bash
 sudo ./tcpcat -sV -p 22,80,443 192.168.1.1
 ```
 
-**Découverte d'hôtes sur un sous-réseau, puis scan des ports ouverts :**
+**Host discovery on a subnet, followed by an open port scan:**
 ```bash
 sudo ./tcpcat -sS -iL liste_cibles.txt --open
 ```
 
-**Scan UDP sur une plage de ports :**
+**UDP scan on a port range:**
 ```bash
 sudo ./tcpcat -sU -p 53,161,500 192.168.1.0/24
 ```
 
-**Scan ultra-rapide avec le moteur eBPF/XDP (Linux uniquement) :**
+**Ultra-fast scanning using the eBPF/XDP engine (Linux only):**
 ```bash
 sudo ./tcpcat --ebpf -p 1-1000 10.0.0.0/8
 ```
 
-**Traceroute TCP vers un hôte sur le port 443 :**
+**TCP traceroute to a host on port 443:**
 ```bash
 sudo ./tcpcat --traceroute scanme.nmap.org -p 443
 ```
 
-## Options de la Ligne de Commande
+## Command-Line Options
 
 ```
 COMMAND-LINE OPTIONS:
