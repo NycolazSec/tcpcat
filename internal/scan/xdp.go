@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"tcpcat/config"
+	"tcpcat/internal/evasion" // 🥷 NOUVEL IMPORT : Ton module d'évasion
 
 	"github.com/asavie/xdp"
 	"github.com/cilium/ebpf"
@@ -21,7 +22,7 @@ import (
 // Global XDP Socket
 var GlobalXsk *xdp.Socket
 var localMAC net.HardwareAddr
-var gatewayMAC net.HardwareAddr // MAINTENANT DYNAMIQUE !
+var gatewayMAC net.HardwareAddr // DYNAMIQUE
 var localIP net.IP
 
 var xdpTxLock sync.Mutex
@@ -210,36 +211,50 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 
 	targetIP := net.ParseIP(ip)
 	
-	// 💥 CORRECTION MAJEURE ICI : On utilise gatewayMAC au lieu de ff:ff...
 	rawFrame := constructSYNFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, uint16(opts.SourcePort), uint16(port))
 
+	// 🥷 ÉVASION : Fragmentation IP si l'option est activée
+	mtu := 0
+	if opts != nil && opts.Fragment {
+		mtu = 8 // Découpage de l'en-tête TCP en blocs minuscules de 8 octets
+	}
+	framesToSend := evasion.FragmentPacket(rawFrame, mtu)
+
+	// 🔒 DÉBUT DE LA ZONE CRITIQUE TX (Un worker à la fois)
 	xdpTxLock.Lock()
-	maxRetries := 5
-	var descs []xdp.Desc
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		descs = GlobalXsk.GetDescs(1)
-		if len(descs) > 0 {
-			break
+	
+	// On envoie tous les fragments générés un par un sur le câble
+	for _, frameBytes := range framesToSend {
+		maxRetries := 5
+		var descs []xdp.Desc
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			descs = GlobalXsk.GetDescs(1)
+			if len(descs) > 0 {
+				break
+			}
+			time.Sleep(time.Microsecond * 50)
 		}
-		time.Sleep(time.Microsecond * 50)
-	}
 
-	if len(descs) == 0 {
-		xdpTxLock.Unlock()
-		return TargetResult{
-			IP:     ip,
-			Port:   port,
-			State:  StateFiltered,
-			Reason: "XDP TX Ring Congestion",
+		if len(descs) == 0 {
+			xdpTxLock.Unlock()
+			return TargetResult{
+				IP:     ip,
+				Port:   port,
+				State:  StateFiltered,
+				Reason: "XDP TX Ring Congestion (Fragment dropped)",
+			}
 		}
-	}
 
-	frameLen := len(rawFrame)
-	copy(GlobalXsk.GetFrame(descs[0]), rawFrame)
-	descs[0].Len = uint32(frameLen)
-	GlobalXsk.Transmit(descs)
+		frameLen := len(frameBytes)
+		copy(GlobalXsk.GetFrame(descs[0]), frameBytes)
+		descs[0].Len = uint32(frameLen)
+		GlobalXsk.Transmit(descs)
+	}
+	
 	xdpTxLock.Unlock()
+	// 🔓 FIN DE LA ZONE CRITIQUE TX
 
+	// Lecture de la réponse dans la boîte aux lettres asynchrone
 	key := fmt.Sprintf("%s:%d", targetIP.String(), port)
 	deadline := time.Now().Add(timeout)
 	
