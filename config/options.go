@@ -22,7 +22,7 @@ const (
 var Banner = fmt.Sprintf(`
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀   ⠀⠀%s⢤⣶⣄%s⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀%s⣀⣤⡾⠿⢿⡀%s⠀⠀⠀⠀%s⣠⣶⣿⣷%s
-⠀⠀⠀⠀⠀⠀⠀⠀%s⢀⣴⣦⣴⣿⡋⠀⠀⠈⢳⡄%s⠀%s⢠⣾⣿⠁⠈⣿⡆%s      %s%stcpcat%s v5.0 %sby NycolazSec%s
+⠀⠀⠀⠀⠀⠀⠀⠀%s⢀⣴⣦⣴⣿⡋⠀⠀⠈⢳⡄%s⠀%s⢠⣾⣿⠁⠈⣿⡆%s      %s%stcpcat%s v1.0 %sby NycolazSec%s
 ⠀⠀⠀⠀⠀⠀⠀%s⣰⣿⣿⠿⠛⠉⠉⠁⠀⠀⠀⠹⡄%s%s⣿⣿⣿⠀⠀⢹⇇%s      %s%sModular Security & Network Engine%s
 ⠀⠀⠀⠀⠀%s⣠⣾⡿⠋⠁%s⠀⠀⠀⠀⠀⠀⠀⠀%s⣰⣏⢻⣿⣿⡆⠀⠸⣿%s
 ⠀⠀⠀%s⢀⣴⠟⠁%s⠀⠀⠀⠀⠀⠀⠀⠀⠀%s⢠⣾⣿⣿⣆⠹⣿⣷⠀⢘⣿%s
@@ -187,6 +187,7 @@ func ParseFlags() (*Options, error) {
         fmt.Printf("  %s-sF%s             TCP FIN Stealth Scan\n", Yellow, Reset)
         fmt.Printf("  %s-sX%s             TCP Xmas Stealth Scan\n", Yellow, Reset)
         fmt.Printf("  %s-sU%s             UDP Port Scan\n", Yellow, Reset)
+		fmt.Printf("  %s--open%s          Show only open ports\n", Yellow, Reset)
         fmt.Printf("  %s--ebpf%s          Enable experimental AF_XDP/eBPF engine (Extreme Performance)\n", Yellow, Reset)
         fmt.Println(Cyan + "\nSERVICE & OS DETECTION:" + Reset)
         fmt.Printf("  %s-sV%s             Service & Version detection\n", Yellow, Reset)
