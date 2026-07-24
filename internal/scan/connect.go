@@ -14,7 +14,6 @@ import (
 // ScanConnectPort effectue un TCP Connect scan et injecte le payload si défini.
 func ScanConnectPort(hostIP string, port int, opts *config.Options, timeout time.Duration) TargetResult {
 	res := TargetResult{
-		Host:  hostIP,
 		IP:    hostIP,
 		Port:  port,
 		State: StateFiltered,
