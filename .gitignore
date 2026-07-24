@@ -3,6 +3,8 @@
 
 tcp.go
 tcp.py
+.Ds_Store
+.DS_Store
 #
 # Binaries for programs and plugins
 *.exe
