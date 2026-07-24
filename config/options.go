@@ -65,6 +65,10 @@ type Options struct {
 	SynScan     bool
 	ConnectScan bool
 	AckScan     bool
+	WindowScan  bool
+	NullScan    bool
+	FinScan     bool
+	XmasScan    bool
 	UdpScan     bool
 
 	// Ports
@@ -134,10 +138,18 @@ func ParseFlags() (*Options, error) {
 
 	// Scan Types
 	flag.BoolVar(&opts.AckScan, "sA", false, "ACK Scan (Firewall mapping)")
+	flag.BoolVar(&opts.WindowScan, "sW", false, "TCP Window Scan")
 	flag.BoolVar(&opts.SynScan, "sS", false, "SYN Stealth Scan")
+	flag.BoolVar(&opts.ConnectScan, "sT", false, "TCP Connect Scan")
+	flag.BoolVar(&opts.NullScan, "sN", false, "TCP NULL Stealth Scan")
+	flag.BoolVar(&opts.FinScan, "sF", false, "TCP FIN Stealth Scan")
+	flag.BoolVar(&opts.XmasScan, "sX", false, "TCP Xmas Stealth Scan")
 	flag.BoolVar(&opts.UdpScan, "sU", false, "UDP Port Scan")
 	flag.IntVar(&opts.TopPorts, "top-ports", 0, "Scan <number> most common ports")
+
+	// Service & OS Detection
 	flag.BoolVar(&opts.ServiceDetect, "sV", false, "Probe open ports for service/version info")
+	flag.BoolVar(&opts.OsDetect, "O", false, "Enable OS detection")
 
 	// Evasion flags
 	flag.IntVar(&opts.SourcePort, "g", 0, "Use given source port number")
@@ -156,19 +168,35 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("%sUsage:%s tcpcat <target> [options]\n\n", Bold, Reset)
 		fmt.Println(Cyan + "TARGET & DISCOVERY SPECIFICATION:" + Reset)
 		fmt.Printf("  %s<target>%s         Hostnames, IP addresses, CIDRs\n", Yellow, Reset)
+		fmt.Printf("  %s-iL <file>%s       Input target list from file\n", Yellow, Reset)
 		fmt.Printf("  %s-sn%s             Ping Scan - disable port scan\n", Yellow, Reset)
 		fmt.Printf("  %s-Pn%s             Treat all hosts as online\n", Yellow, Reset)
 		fmt.Printf("  %s-PU <port>%s      UDP Ping discovery port\n", Yellow, Reset)
 		fmt.Println(Cyan + "\nPORT & SCAN SPECIFICATION:" + Reset)
 		fmt.Printf("  %s-p <ports>%s      Ports to scan (e.g. 80,443 | 1-1024)\n", Yellow, Reset)
 		fmt.Printf("  %s--top-ports <n>%s Scan n most common ports\n", Yellow, Reset)
+		fmt.Printf("  %s-sS%s             TCP SYN Stealth Scan\n", Yellow, Reset)
+		fmt.Printf("  %s-sT%s             TCP Connect Scan\n", Yellow, Reset)
 		fmt.Printf("  %s-sA%s             TCP ACK Scan (Firewall rules detection)\n", Yellow, Reset)
+		fmt.Printf("  %s-sW%s             TCP Window Scan\n", Yellow, Reset)
+		fmt.Printf("  %s-sN%s             TCP NULL Stealth Scan\n", Yellow, Reset)
+		fmt.Printf("  %s-sF%s             TCP FIN Stealth Scan\n", Yellow, Reset)
+		fmt.Printf("  %s-sX%s             TCP Xmas Stealth Scan\n", Yellow, Reset)
+		fmt.Printf("  %s-sU%s             UDP Port Scan\n", Yellow, Reset)
+		fmt.Println(Cyan + "\nSERVICE & OS DETECTION:" + Reset)
 		fmt.Printf("  %s-sV%s             Service & Version detection\n", Yellow, Reset)
+		fmt.Printf("  %s-O%s              Enable OS detection\n", Yellow, Reset)
 		fmt.Println(Cyan + "\nEVASION & OPTIONS:" + Reset)
 		fmt.Printf("  %s-g <port>%s       Use specified source port\n", Yellow, Reset)
 		fmt.Printf("  %s--ttl <val>%s     Set custom IP Time-To-Live\n", Yellow, Reset)
 		fmt.Printf("  %s--data-string%s   Append custom ASCII payload\n", Yellow, Reset)
+		fmt.Printf("  %s--data%s          Append custom HEX payload\n", Yellow, Reset)
 		fmt.Printf("  %s--traceroute%s    Trace hop path to target\n", Yellow, Reset)
+		fmt.Println(Cyan + "\nTIMING & OUTPUT:" + Reset)
+		fmt.Printf("  %s-T <0-5>%s        Set timing template\n", Yellow, Reset)
+		fmt.Printf("  %s-w <workers>%s    Number of parallel workers\n", Yellow, Reset)
+		fmt.Printf("  %s-v%s              Enable verbose output\n", Yellow, Reset)
+		fmt.Printf("  %s-j <file>%s       Export results to JSON file\n", Yellow, Reset)
 	}
 
 	flag.Parse()
