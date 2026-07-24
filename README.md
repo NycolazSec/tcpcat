@@ -52,7 +52,7 @@ go build -o tcpcat ./cmd/tcpcat
 go install ./cmd/tcpcat
 ```
 
-> **Note** : Les scans de type SYN (`-sS`), les scans avancés et le moteur eBPF (`--ebpf`) nécessitent des privilèges `root` pour fonctionner.
+> **Note** : SYN scans (`-sS`), advanced scans, and the eBPF engine (`--ebpf`) required `root` privileges to operate.
 
 ## Exemples d'Utilisation
 
@@ -78,7 +78,6 @@ sudo ./tcpcat -sU -p 53,161,500 192.168.1.0/24
 
 **Scan ultra-rapide avec le moteur eBPF/XDP (Linux uniquement) :**
 ```bash
-# Scanner les 1000 premiers ports sur un large réseau
 sudo ./tcpcat --ebpf -p 1-1000 10.0.0.0/8
 ```
 
