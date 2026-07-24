@@ -86,6 +86,7 @@ type Options struct {
     TTL        int
     DataString string
     DataHex    string
+	Fragment bool
 
     // Performance & Output
     Timing     int
@@ -160,6 +161,7 @@ func ParseFlags() (*Options, error) {
     flag.IntVar(&opts.TTL, "ttl", 0, "Set IP time-to-live field")
     flag.StringVar(&opts.DataString, "data-string", "", "Append custom ASCII string to probes")
     flag.StringVar(&opts.DataHex, "data", "", "Append custom hex string to probes")
+	flag.BoolVar(&opts.Fragment, "f", false, "Fragment packets to evade detection")
 
     // Timing & Output
     flag.IntVar(&opts.Timing, "T", 3, "Set timing template (0-5, higher is faster)")
@@ -198,6 +200,7 @@ func ParseFlags() (*Options, error) {
         fmt.Printf("  %s--data-string%s   Append custom ASCII payload\n", Yellow, Reset)
         fmt.Printf("  %s--data%s          Append custom HEX payload\n", Yellow, Reset)
         fmt.Printf("  %s--traceroute%s    Trace hop path to target\n", Yellow, Reset)
+		fmt.Printf("  %s-f%s              Fragment packets to evade detection\n", Yellow, Reset)
         fmt.Println(Cyan + "\nTIMING & OUTPUT:" + Reset)
         fmt.Printf("  %s-T <0-5>%s        Set timing template\n", Yellow, Reset)
         fmt.Printf("  %s-w <workers>%s    Number of parallel workers\n", Yellow, Reset)
