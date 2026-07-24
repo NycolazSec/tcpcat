@@ -71,6 +71,7 @@ type Options struct {
     XmasScan    bool
     UdpScan     bool
     UseXDP      bool 
+	OnlyOpen bool
 
     // Ports
     Ports    string
@@ -148,6 +149,7 @@ func ParseFlags() (*Options, error) {
     flag.BoolVar(&opts.UdpScan, "sU", false, "UDP Port Scan")
     flag.IntVar(&opts.TopPorts, "top-ports", 0, "Scan <number> most common ports")
     flag.BoolVar(&opts.UseXDP, "ebpf", false, "Enable experimental AF_XDP/eBPF engine")
+	flag.BoolVar(&opts.OnlyOpen, "open", false, "Show only open ports")
 
     // Service & OS Detection
     flag.BoolVar(&opts.ServiceDetect, "sV", false, "Probe open ports for service/version info")
