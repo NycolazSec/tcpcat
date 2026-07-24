@@ -2,9 +2,13 @@
 package scan
 
 import (
+	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"tcpcat/config"
@@ -17,11 +21,13 @@ import (
 // Global XDP Socket
 var GlobalXsk *xdp.Socket
 var localMAC net.HardwareAddr
-var gatewayMAC net.HardwareAddr
-var localIP net.IP // Va stocker la vraie IP de ton VPS (ex: 10.x.x.x)
+var gatewayMAC net.HardwareAddr // MAINTENANT DYNAMIQUE !
+var localIP net.IP
 
-// getDefaultNetworkInfo simule une connexion sortante pour forcer l'OS à révéler 
-// son interface principale (ens3, eth0...) et l'IP associée.
+var xdpTxLock sync.Mutex
+var xdpResults sync.Map
+var xdpRunning bool
+
 func getDefaultNetworkInfo() (string, net.IP, error) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
@@ -30,7 +36,6 @@ func getDefaultNetworkInfo() (string, net.IP, error) {
 	defer conn.Close()
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
-
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return "", nil, err
@@ -57,22 +62,45 @@ func getDefaultNetworkInfo() (string, net.IP, error) {
 	return "", nil, fmt.Errorf("impossible de détecter l'interface par défaut")
 }
 
-// InitXDPEngine initialise le moteur eBPF complet automatiquement.
+// getGatewayMAC lit le cache ARP de Linux pour trouver l'adresse MAC du routeur de ton VPS
+func getGatewayMAC(ifaceName string) (net.HardwareAddr, error) {
+	data, err := os.ReadFile("/proc/net/arp")
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines[1:] {
+		fields := strings.Fields(line)
+		if len(fields) >= 6 && fields[5] == ifaceName {
+			macAddr := fields[3]
+			if macAddr != "00:00:00:00:00:00" {
+				return net.ParseMAC(macAddr)
+			}
+		}
+	}
+	// Fallback si introuvable
+	return net.ParseMAC("ff:ff:ff:ff:ff:ff")
+}
+
 func InitXDPEngine() (*xdp.Socket, error) {
 	queueID := 0
 
-	// 💡 DÉTECTION AUTOMATIQUE DU RÉSEAU
 	ifaceName, ip, err := getDefaultNetworkInfo()
 	if err != nil {
 		return nil, fmt.Errorf("erreur de détection réseau: %v", err)
 	}
 	localIP = ip
 
-	log.Printf("[*] Auto-détection: Interface '%s' sélectionnée (IP source: %s)", ifaceName, localIP.String())
+	// 💡 Lecture dynamique de la MAC du routeur OVH
+	mac, err := getGatewayMAC(ifaceName)
+	if err == nil {
+		gatewayMAC = mac
+		log.Printf("[*] Auto-détection: Interface '%s' (IP: %s) | Routeur MAC: %s", ifaceName, localIP.String(), gatewayMAC.String())
+	} else {
+		gatewayMAC, _ = net.ParseMAC("ff:ff:ff:ff:ff:ff")
+		log.Printf("[*] Auto-détection: Interface '%s' (IP: %s) | Routeur MAC: Introuvable (Broadcast fallback)", ifaceName, localIP.String())
+	}
 
-	// =====================================================================
-	// ÉTAPE 1 : Génération de l'assembleur et Chargement dans le Noyau
-	// =====================================================================
 	spec, err := generateXDPCollection()
 	if err != nil {
 		return nil, fmt.Errorf("erreur de génération de l'assembleur BPF: %v", err)
@@ -86,14 +114,10 @@ func InitXDPEngine() (*xdp.Socket, error) {
 	prog := coll.Programs["tcpcat_xdp_hook"]
 	xskMap := coll.Maps["xsks_map"]
 
-	// =====================================================================
-	// ÉTAPE 2 : Attachement physique à la carte réseau
-	// =====================================================================
 	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {
 		return nil, fmt.Errorf("interface réseau %s introuvable: %v", ifaceName, err)
 	}
-
 	localMAC = iface.HardwareAddr
 
 	_, err = link.AttachXDP(link.XDPOptions{
@@ -106,9 +130,6 @@ func InitXDPEngine() (*xdp.Socket, error) {
 	}
 	log.Println("[+] Hook assembleur eBPF attaché au niveau physique avec succès.")
 
-	// =====================================================================
-	// ÉTAPE 3 : Création du Socket AF_XDP 
-	// =====================================================================
 	xsk, err := xdp.NewSocket(iface.Index, queueID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("échec de la création du socket AF_XDP: %v", err)
@@ -121,35 +142,123 @@ func InitXDPEngine() (*xdp.Socket, error) {
 	}
 
 	log.Println("[+] Pont Zéro-Copie (Ring Buffer) établi. Moteur prêt à l'emploi.")
+
+	xdpRunning = true
+	go xdpRxLoop()
+
 	return xsk, nil
 }
 
-// ScanXDPPort est appelé par le Worker Pool pour tirer à vitesse maximale
+func xdpRxLoop() {
+	for xdpRunning {
+		if GlobalXsk == nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		freeFill := GlobalXsk.NumFreeFillSlots()
+		if freeFill > 0 {
+			fillDescs := GlobalXsk.GetDescs(freeFill)
+			GlobalXsk.Fill(fillDescs)
+		}
+
+		numRx, _, err := GlobalXsk.Poll(50)
+		if err != nil || numRx == 0 {
+			continue
+		}
+
+		rxDescs := GlobalXsk.Receive(numRx)
+		for _, desc := range rxDescs {
+			frame := GlobalXsk.GetFrame(desc)
+			if len(frame) < 54 {
+				continue
+			}
+			if binary.BigEndian.Uint16(frame[12:14]) != 0x0800 {
+				continue
+			}
+
+			ipHeaderLen := int(frame[14]&0x0F) * 4
+			if frame[14+9] != 6 {
+				continue
+			}
+
+			tcpStart := 14 + ipHeaderLen
+			if len(frame) < tcpStart+20 {
+				continue
+			}
+
+			ipStart := 14
+			srcIPBytes := frame[ipStart+12 : ipStart+16]
+			pktSrcPort := binary.BigEndian.Uint16(frame[tcpStart : tcpStart+2])
+			tcpFlags := frame[tcpStart+13]
+
+			key := fmt.Sprintf("%s:%d", net.IP(srcIPBytes).String(), pktSrcPort)
+
+			if (tcpFlags & 0x12) == 0x12 {
+				xdpResults.Store(key, StateOpen)
+			} else if (tcpFlags & 0x04) != 0 {
+				xdpResults.Store(key, StateClosed)
+			}
+		}
+	}
+}
+
 func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duration) TargetResult {
 	if GlobalXsk == nil {
 		return TargetResult{IP: ip, Port: port, State: StateClosed, Reason: "XDP engine offline"}
 	}
 
 	targetIP := net.ParseIP(ip)
+	
+	// 💥 CORRECTION MAJEURE ICI : On utilise gatewayMAC au lieu de ff:ff...
+	rawFrame := constructSYNFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, uint16(opts.SourcePort), uint16(port))
 
-	// Broadcaste l'adresse MAC (pour l'instant, c'est suffisant pour le réseau local)
-	dstMAC, _ := net.ParseMAC("ff:ff:ff:ff:ff:ff")
+	xdpTxLock.Lock()
+	maxRetries := 5
+	var descs []xdp.Desc
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		descs = GlobalXsk.GetDescs(1)
+		if len(descs) > 0 {
+			break
+		}
+		time.Sleep(time.Microsecond * 50)
+	}
 
-	// 💡 Utilise l'IP réelle de ta machine au lieu du 192.168.1.100 en dur !
-	rawFrame := constructSYNFrame(localMAC, dstMAC, localIP.To4(), targetIP, uint16(opts.SourcePort), uint16(port))
+	if len(descs) == 0 {
+		xdpTxLock.Unlock()
+		return TargetResult{
+			IP:     ip,
+			Port:   port,
+			State:  StateFiltered,
+			Reason: "XDP TX Ring Congestion",
+		}
+	}
 
-	descs := GlobalXsk.GetDescs(1) 
 	frameLen := len(rawFrame)
-
 	copy(GlobalXsk.GetFrame(descs[0]), rawFrame)
 	descs[0].Len = uint32(frameLen)
-
 	GlobalXsk.Transmit(descs)
+	xdpTxLock.Unlock()
+
+	key := fmt.Sprintf("%s:%d", targetIP.String(), port)
+	deadline := time.Now().Add(timeout)
+	
+	for time.Now().Before(deadline) {
+		if val, ok := xdpResults.LoadAndDelete(key); ok {
+			state := val.(string)
+			reason := "SYN-ACK Received (AF_XDP)"
+			if state == StateClosed {
+				reason = "RST Received (AF_XDP)"
+			}
+			return TargetResult{IP: ip, Port: port, State: state, Reason: reason}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 
 	return TargetResult{
 		IP:     ip,
 		Port:   port,
-		State:  StateOpen,
-		Reason: "SYN Sent via AF_XDP",
+		State:  StateFiltered,
+		Reason: "No Response (Timeout)",
 	}
 }
