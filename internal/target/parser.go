@@ -8,34 +8,34 @@ import (
 	"strings"
 )
 
-// ParseTarget convertit une chaîne cible unique (IP, FQDN, CIDR, plage) en liste d'adresses IPv4.
+// ParseTarget converts a single target string (IP, FQDN, CIDR, range) into a list of IPv4 addresses.
 func ParseTarget(target string) ([]string, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return nil, nil
 	}
 
-	// 1. Notation CIDR (ex: 192.168.1.0/24)
+	// 1. CIDR notation (e.g., 192.168.1.0/24)
 	if strings.Contains(target, "/") {
 		return expandCIDR(target)
 	}
 
-	// 2. Plage d'IP avec tiret (ex: 192.168.1.1-50 ou 192.168.1.1-192.168.1.50)
+	// 2. IP range with a dash (e.g., 192.168.1.1-50 or 192.168.1.1-192.168.1.50)
 	if strings.Contains(target, "-") {
 		return expandRange(target)
 	}
 
-	// 3. Adresse IP IPv4 unique
+	// 3. Single IPv4 address
 	if ip := net.ParseIP(target); ip != nil {
 		if ip4 := ip.To4(); ip4 != nil {
 			return []string{ip4.String()}, nil
 		}
 	}
 
-	// 4. Résolution DNS (ex: scanme.nmap.org)
+	// 4. DNS resolution (e.g., scanme.nmap.org)
 	ips, err := net.LookupIP(target)
 	if err != nil {
-		return nil, fmt.Errorf("impossible de résoudre la cible '%s': %w", target, err)
+		return nil, fmt.Errorf("could not resolve target '%s': %w", target, err)
 	}
 
 	var resolved []string
@@ -46,13 +46,13 @@ func ParseTarget(target string) ([]string, error) {
 	}
 
 	if len(resolved) == 0 {
-		return nil, fmt.Errorf("aucune adresse IPv4 trouvée pour '%s'", target)
+		return nil, fmt.Errorf("no IPv4 address found for '%s'", target)
 	}
 
 	return resolved, nil
 }
 
-// ParseTargets prend une liste de cibles et retourne l'ensemble des adresses IPv4 résolues.
+// ParseTargets takes a list of targets and returns the set of resolved IPv4 addresses.
 func ParseTargets(targets []string) ([]string, error) {
 	var allIPs []string
 	for _, t := range targets {
@@ -65,15 +65,15 @@ func ParseTargets(targets []string) ([]string, error) {
 	return allIPs, nil
 }
 
-// expandCIDR génère toutes les IP utilisables d'un sous-réseau CIDR.
+// expandCIDR generates all usable IPs from a CIDR subnet.
 func expandCIDR(cidr string) ([]string, error) {
 	_, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
-		return nil, fmt.Errorf("format CIDR invalide '%s': %w", cidr, err)
+		return nil, fmt.Errorf("invalid CIDR format '%s': %w", cidr, err)
 	}
 
 	var ips []string
-	// Copie propre pour éviter les problèmes de référence mémoire lors de l'incrémentation
+	// Clean copy to avoid memory reference issues during incrementation
 	currIP := make(net.IP, len(ipnet.IP))
 	copy(currIP, ipnet.IP)
 
@@ -87,7 +87,7 @@ func expandCIDR(cidr string) ([]string, error) {
 	return ips, nil
 }
 
-// incIP incrémente une adresse IP byte par byte.
+// incIP increments an IP address byte by byte.
 func incIP(ip net.IP) {
 	for j := len(ip) - 1; j >= 0; j-- {
 		ip[j]++
@@ -97,16 +97,16 @@ func incIP(ip net.IP) {
 	}
 }
 
-// expandRange prend en charge les formats 192.168.1.1-50 et 192.168.1.1-192.168.1.50.
+// expandRange supports the formats 192.168.1.1-50 and 192.168.1.1-192.168.1.50.
 func expandRange(target string) ([]string, error) {
-	// Cas 1 : Plage complète d'IP (ex: 192.168.1.1-192.168.1.50)
+	// Case 1: Full IP range (e.g., 192.168.1.1-192.168.1.50)
 	if strings.Count(target, "-") == 1 && strings.Count(target, ".") == 6 {
 		parts := strings.Split(target, "-")
 		startIP := net.ParseIP(parts[0]).To4()
 		endIP := net.ParseIP(parts[1]).To4()
 
 		if startIP == nil || endIP == nil {
-			return nil, fmt.Errorf("adresse IP invalide dans la plage: %s", target)
+			return nil, fmt.Errorf("invalid IP address in range: %s", target)
 		}
 
 		var ips []string
@@ -123,22 +123,22 @@ func expandRange(target string) ([]string, error) {
 		return ips, nil
 	}
 
-	// Cas 2 : Plage sur le dernier octet (ex: 192.168.1.1-50)
+	// Case 2: Range on the last octet (e.g., 192.168.1.1-50)
 	parts := strings.Split(target, ".")
 	if len(parts) != 4 {
-		return nil, fmt.Errorf("format de plage invalide: %s", target)
+		return nil, fmt.Errorf("invalid range format: %s", target)
 	}
 
 	if strings.Contains(parts[3], "-") {
 		subParts := strings.Split(parts[3], "-")
 		if len(subParts) != 2 {
-			return nil, fmt.Errorf("plage d'octets malformée: %s", parts[3])
+			return nil, fmt.Errorf("malformed octet range: %s", parts[3])
 		}
 
 		start, err1 := strconv.Atoi(subParts[0])
 		end, err2 := strconv.Atoi(subParts[1])
 		if err1 != nil || err2 != nil || start > end || start < 0 || end > 255 {
-			return nil, fmt.Errorf("plage d'octets invalide dans %s", target)
+			return nil, fmt.Errorf("invalid octet range in %s", target)
 		}
 
 		basePrefix := strings.Join(parts[:3], ".")
@@ -149,5 +149,5 @@ func expandRange(target string) ([]string, error) {
 		return ips, nil
 	}
 
-	return nil, fmt.Errorf("format de plage non supporté: %s", target)
+	return nil, fmt.Errorf("unsupported range format: %s", target)
 }

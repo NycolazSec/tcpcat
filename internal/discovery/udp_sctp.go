@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// PingUDP envoie une sonde UDP vers le port spécifié (-PU).
-// Si l'hôte répond ou renvoie un rejet ICMP (Port Unreachable), l'hôte est considéré actif.
+// PingUDP sends a UDP probe to the specified port (-PU).
+// If the host responds or sends an ICMP rejection (Port Unreachable), the host is considered active.
 func PingUDP(ip string, port int, timeout time.Duration) bool {
 	target := fmt.Sprintf("%s:%d", ip, port)
 
@@ -18,7 +18,7 @@ func PingUDP(ip string, port int, timeout time.Duration) bool {
 	}
 	defer conn.Close()
 
-	// 1. Envoi d'un octet de sonde UDP
+	// 1. Send a UDP probe byte
 	probeData := []byte{0x00}
 	_ = conn.SetDeadline(time.Now().Add(timeout))
 
@@ -27,31 +27,31 @@ func PingUDP(ip string, port int, timeout time.Duration) bool {
 		return false
 	}
 
-	// 2. Lecture de la réponse éventuelle
+	// 2. Read the potential response
 	buf := make([]byte, 1024)
 	_, err = conn.Read(buf)
 
 	if err != nil {
-		// En cas de timeout, le résultat UDP reste indéterminé
+		// In case of a timeout, the UDP result remains undetermined
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			return false
 		}
-		// Toute autre erreur (ex: connection refused / ICMP port unreachable) atteste que l'hôte est vivant
+		// Any other error (e.g., connection refused / ICMP port unreachable) confirms that the host is alive
 		return true
 	}
 
-	// Réponse explicite reçue
+	// Explicit response received
 	return true
 }
 
-// PingSCTP tente une sonde de découverte d'hôte via la pile SCTP (-PY).
+// PingSCTP attempts a host discovery probe via the SCTP stack (-PY).
 func PingSCTP(ip string, port int, timeout time.Duration) bool {
 	target := fmt.Sprintf("%s:%d", ip, port)
 
-	// Tentative d'initialisation via le driver protocole du système
+	// Attempt to initialize via the system's protocol driver
 	conn, err := net.DialTimeout("sctp", target, timeout)
 	if err != nil {
-		// Une erreur de refus active signale également la présence de l'hôte
+		// An active refusal error also signals the host's presence
 		if netErr, ok := err.(net.Error); ok && !netErr.Timeout() {
 			return true
 		}

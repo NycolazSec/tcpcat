@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// PingHost teste si une IP est active en tentant des connexions TCP rapides
-// sur les ports d'administration/web courants (80, 443, 22, 445).
+// PingHost tests if an IP is active by attempting fast TCP connections
+// on common admin/web ports (80, 443, 22, 445).
 func PingHost(ip string, timeout time.Duration) bool {
 	probePorts := []int{80, 443, 22, 445}
 

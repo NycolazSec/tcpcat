@@ -101,7 +101,7 @@ func ParseFlags() (*Options, error) {
     var flagsArgs []string
     var posArgs []string
 
-    // Liste des options recevant une valeur séparée par un espace
+    // List of options that receive a value separated by a space
     valueFlags := map[string]bool{
         "-p":            true,
         "-iL":           true,

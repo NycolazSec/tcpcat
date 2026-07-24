@@ -83,8 +83,8 @@ func (e *Engine) Execute(targets []string, ports []int) []TargetResult {
 	for res := range resultsChan {
 		results = append(results, res)
 
-		// 🛑 LE FILTRE ABSOLU EST ICI :
-		// Si OnlyOpen est activé, on zappe silencieusement tout ce qui n'est pas "OPEN", même en mode Verbose.
+		// 🛑 THE ABSOLUTE FILTER IS HERE:
+		// If OnlyOpen is enabled, we silently skip anything that is not "OPEN", even in Verbose mode.
 		if e.opts != nil && e.opts.OnlyOpen && res.State != StateOpen {
 			continue
 		}
@@ -104,38 +104,38 @@ func (e *Engine) Execute(targets []string, ports []int) []TargetResult {
 	return results
 }
 
-// dispatchScan aiguille la tâche vers la méthode activée dans la config
+// dispatchScan routes the task to the method enabled in the config
 func (e *Engine) dispatchScan(ip string, port int) TargetResult {
 	if e.opts == nil {
 		return ScanConnectPort(ip, port, nil, e.timeout)
 	}
 
-	// 🚀 PRIORITÉ ABSOLUE : Moteur AF_XDP (Bypass Kernel)
+	// 🚀 ABSOLUTE PRIORITY: AF_XDP Engine (Kernel Bypass)
 	if e.opts.UseXDP {
 		return ScanXDPPort(ip, port, e.opts, e.timeout)
 	}
 
-	// 1. Scan ACK (-sA)
+	// 1. ACK Scan (-sA)
 	if e.opts.AckScan {
 		return ScanAckPort(ip, port, e.opts, e.timeout)
 	}
 
-	// 2. Scan Window (-sW)
+	// 2. Window Scan (-sW)
 	if e.opts.WindowScan {
 		return ScanWindowPort(ip, port, e.opts, e.timeout)
 	}
 
-	// 3. Scan SYN (-sS)
+	// 3. SYN Scan (-sS)
 	if e.opts.SynScan {
 		return ScanSYNPort(ip, port, e.opts, e.timeout)
 	}
 
-	// 4. Scan UDP (-sU)
+	// 4. UDP Scan (-sU)
 	if e.opts.UdpScan {
 		return ScanUDPPort(ip, port, e.opts, e.timeout)
 	}
 
-	// 5. Scans Furtifs (-sN, -sF, -sX)
+	// 5. Stealth Scans (-sN, -sF, -sX)
 	if e.opts.NullScan {
 		return ScanStealthPort(ip, port, ScanNull, e.opts, e.timeout)
 	}
@@ -146,6 +146,6 @@ func (e *Engine) dispatchScan(ip string, port int) TargetResult {
 		return ScanStealthPort(ip, port, ScanXmas, e.opts, e.timeout)
 	}
 
-	// Fallback sur TCP Connect (-sT) ou comportement par défaut
+	// Fallback to TCP Connect (-sT) or default behavior
 	return ScanConnectPort(ip, port, e.opts, e.timeout)
 }

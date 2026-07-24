@@ -19,12 +19,12 @@ type HopResult struct {
 	Reached   bool          `json:"reached"`
 }
 
-// RunTraceroute exécute un traçage de route TCP en faisant varier le TTL IP et en interceptant les paquets ICMP.
+// RunTraceroute executes a TCP traceroute by varying the IP TTL and intercepting ICMP packets.
 func RunTraceroute(targetIP string, port int, maxHops int, timeout time.Duration) []HopResult {
 	var hops []HopResult
 
 	for ttl := 1; ttl <= maxHops; ttl++ {
-		// Écouteur ICMP en mode privilège (sudo)
+		// ICMP listener in privileged mode (sudo)
 		var icmpConn net.PacketConn
 		var errICMP error
 		if os.Geteuid() == 0 {
@@ -62,7 +62,7 @@ func RunTraceroute(targetIP string, port int, maxHops int, timeout time.Duration
 			hop.IP = targetIP
 			hop.Reached = true
 		} else if icmpConn != nil {
-			// Lecture de la réponse ICMP (Time Exceeded) renvoyée par le routeur
+			// Read the ICMP response (Time Exceeded) returned by the router
 			buf := make([]byte, 512)
 			n, peer, errRead := icmpConn.ReadFrom(buf)
 			if errRead == nil && n > 0 {

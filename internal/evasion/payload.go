@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-// PreparePayload convertit une chaîne ASCII ou hexadécimale en bytes bruts.
+// PreparePayload converts an ASCII or hexadecimal string into raw bytes.
 func PreparePayload(dataStr string, dataHex string) ([]byte, error) {
 	if dataHex != "" {
 		b, err := hex.DecodeString(dataHex)

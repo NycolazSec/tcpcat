@@ -27,7 +27,7 @@ func main() {
 
     fmt.Println(config.Banner)
 
-    // Accumulation des cibles brutes (argument direct + fichier -iL)
+    // Accumulate raw targets (direct argument + -iL file)
     var rawTargets []string
 
     if opts.Target != "" {
@@ -48,14 +48,14 @@ func main() {
         os.Exit(1)
     }
 
-    // Résolution globale des cibles
+    // Global target resolution
     targetIPs, err := target.ParseTargets(rawTargets)
     if err != nil {
         fmt.Printf("%s[!] Target Error: %v%s\n", config.Red, err, config.Reset)
         os.Exit(1)
     }
 
-    // Initialisation de la configuration d'évasion
+    // Initialize evasion configuration
     _, err = evasion.NewConfig(opts.SourcePort, opts.TTL, opts.DataString, opts.DataHex, "")
     if err != nil {
         fmt.Printf("%s[!] Evasion config error: %v%s\n", config.Red, err, config.Reset)
@@ -70,7 +70,7 @@ func main() {
     fmt.Printf("%s[*] Target loaded: %s%s (%d IP(s) resolved)%s\n",
         config.Bold, config.Cyan, displayTarget, len(targetIPs), config.Reset)
 
-    // Mode Traceroute
+    // Traceroute Mode
     if opts.Traceroute {
         fmt.Printf("%s[*] Executing TCP Traceroute to %s...%s\n", config.Yellow, targetIPs[0], config.Reset)
         fmt.Printf("%s%-4s %-25s %-30s %-10s%s\n", config.Bold, "Hop", "IP Address", "Hostname", "Latency", config.Reset)
@@ -89,7 +89,7 @@ func main() {
         os.Exit(0)
     }
 
-    // Découverte d'hôtes (Host Discovery)
+    // Host Discovery
     var activeTargets []string
     if opts.SkipDiscovery {
         activeTargets = targetIPs
@@ -111,14 +111,14 @@ func main() {
         }
     }
 
-    // Mode Ping Scan uniquement (-sn)
+    // Ping Scan only mode (-sn)
     if opts.PingScan {
         fmt.Printf("%s[✓] Host discovery complete. %d/%d host(s) up.%s\n",
             config.Green, len(activeTargets), len(targetIPs), config.Reset)
         os.Exit(0)
     }
 
-    // Parsing des ports
+    // Port Parsing
     targetedPorts, err := ports.ParsePorts(opts.Ports, opts.TopPorts)
     if err != nil {
         fmt.Printf("%s[!] Port Parsing Error: %v%s\n", config.Red, err, config.Reset)
@@ -137,27 +137,27 @@ func main() {
         os.Exit(0)
     }()
 
-    // 💥 DÉMARRAGE DU MOTEUR eBPF (SI ACTIVÉ) 💥
+    // 💥 STARTING eBPF ENGINE (IF ENABLED) 💥
     if opts.UseXDP {
         fmt.Printf("%s[*] Booting experimental AF_XDP Engine...%s\n", config.Yellow, config.Reset)
         
-        // On récupère le socket initialisé (sans préciser "eth0", il gère tout seul)
+        // We retrieve the initialized socket (without specifying "eth0", it handles it automatically)
         xsk, err := scan.InitXDPEngine()
         if err != nil {
             fmt.Printf("%s[!] Fatal XDP Error: %v%s\n", config.Red, err, config.Reset)
             os.Exit(1)
         }
         
-        // On assigne le socket au pointeur global pour que ScanXDPPort puisse l'utiliser
+        // We assign the socket to the global pointer so ScanXDPPort can use it
         scan.GlobalXsk = xsk 
     }
 
-    // Exécution du Scan
+    // Execute Scan
     t0 := time.Now()
     engine := scan.NewEngine(opts)
     results := engine.Execute(activeTargets, targetedPorts)
 
-    // Détection de Version / Service (-sV) sur les ports ouverts
+    // Version / Service Detection (-sV) on open ports
     if opts.ServiceDetect {
         fmt.Println(config.Cyan + "───────────────────────────────────────────────────────────────────────────" + config.Reset)
         fmt.Printf("%s[*] Running Service & Version Detection (-sV)...%s\n", config.Yellow, config.Reset)
@@ -190,7 +190,7 @@ func main() {
     fmt.Printf("%s[✓] Scan completed in %v. Found %d open port(s) across %d active target(s).%s\n",
         config.Green, duration.Round(time.Millisecond), openCount, len(activeTargets), config.Reset)
 
-    // Export JSON (-j)
+    // JSON Export (-j)
     if opts.JsonOutput != "" {
         err := output.ExportJSON(opts.JsonOutput, opts.Target, results, duration)
         if err != nil {
