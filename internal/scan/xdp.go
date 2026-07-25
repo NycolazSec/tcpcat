@@ -13,7 +13,7 @@ import (
 
 	"tcpcat/config"
 	"tcpcat/internal/evasion" // 🥷 NOUVEL IMPORT : Ton module d'évasion
-
+	"tcpcat/internal/osdetect"
 	"github.com/asavie/xdp"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -195,9 +195,15 @@ func xdpRxLoop() {
 
 			key := fmt.Sprintf("%s:%d", net.IP(srcIPBytes).String(), pktSrcPort)
 
-			if (tcpFlags & 0x12) == 0x12 {
-				xdpResults.Store(key, StateOpen)
-			} else if (tcpFlags & 0x04) != 0 {
+			if (tcpFlags & 0x12) == 0x12 { // SYN-ACK = Port Ouvert
+				// 🕵️ ON CALCULE LA SIGNATURE ICI !
+				osSig := osdetect.GenerateSignature(frame, ipStart, tcpStart)
+				
+				// On stocke l'état ET la signature, séparés par un pipe "|"
+				val := fmt.Sprintf("%s|%s", StateOpen, osSig)
+				xdpResults.Store(key, val)
+				
+			} else if (tcpFlags & 0x04) != 0 { // RST = Port Fermé
 				xdpResults.Store(key, StateClosed)
 			}
 		}
@@ -260,9 +266,16 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 	
 	for time.Now().Before(deadline) {
 		if val, ok := xdpResults.LoadAndDelete(key); ok {
-			state := val.(string)
+			valStr := val.(string)
+			state := valStr
 			reason := "SYN-ACK Received (AF_XDP)"
-			if state == StateClosed {
+			
+			// Si on a concaténé l'OS (séparé par un |), on le sépare
+			if strings.Contains(valStr, "|") {
+				parts := strings.Split(valStr, "|")
+				state = parts[0]
+				reason = fmt.Sprintf("SYN-ACK [%s]", parts[1])
+			} else if state == StateClosed {
 				reason = "RST Received (AF_XDP)"
 			}
 			return TargetResult{IP: ip, Port: port, State: state, Reason: reason}
@@ -276,4 +289,5 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 		State:  StateFiltered,
 		Reason: "No Response (Timeout)",
 	}
+
 }
