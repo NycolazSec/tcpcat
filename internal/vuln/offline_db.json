@@ -1,0 +1,25 @@
+{
+  "nginx": {
+    "1.10.3": [
+      {
+        "id": "CVE-2017-7529",
+        "title": "Integer overflow in nginx range filter module allows cache poisoning.",
+        "cvss": 7.5
+      },
+      {
+        "id": "CVE-2016-1247",
+        "title": "Privilege escalation in nginx packages on Debian-based systems.",
+        "cvss": 7.8
+      }
+    ]
+  },
+  "openssh": {
+    "7.2p2": [
+      {
+        "id": "CVE-2016-10009",
+        "title": "Untrusted search path vulnerability in ssh-agent.",
+        "cvss": 5.0
+      }
+    ]
+  }
+}

@@ -1,4 +1,3 @@
-// internal/service/engine.go
 package service
 
 import (
@@ -15,7 +14,6 @@ type ServiceInfo struct {
 	Banner  string `json:"banner,omitempty"`
 }
 
-// DetectService tente d'identifier le service et la version sur un port ouvert.
 func DetectService(ip string, port int, timeout time.Duration) ServiceInfo {
 	info := ServiceInfo{
 		Name: "unknown",
@@ -23,7 +21,6 @@ func DetectService(ip string, port int, timeout time.Duration) ServiceInfo {
 
 	target := fmt.Sprintf("%s:%d", ip, port)
 
-	// 1. Test Handshake TLS / HTTPS (Ports web sécurisés ou SSL)
 	if port == 443 || port == 8443 || port == 465 || port == 993 || port == 995 {
 		tlsConfig := &tls.Config{InsecureSkipVerify: true}
 		dialer := &net.Dialer{Timeout: timeout}
@@ -33,21 +30,17 @@ func DetectService(ip string, port int, timeout time.Duration) ServiceInfo {
 			info.Name = "ssl/tls"
 			if port == 443 || port == 8443 {
 				info.Name = "https"
-				// Tentative d'extraction du serveur HTTP via TLS
 				req := fmt.Sprintf("HEAD / HTTP/1.1\r\nHost: %s\r\nUser-Agent: tcpcat-engine/5.0\r\n\r\n", ip)
 				_ = tlsConn.SetDeadline(time.Now().Add(timeout))
 				_, _ = tlsConn.Write([]byte(req))
 				buf := make([]byte, 512)
-				n, errRead := tlsConn.Read(buf)
-				if errRead == nil && n > 0 {
-					info.Banner = extractServerHeader(string(buf[:n]))
-				}
+				n, _ := tlsConn.Read(buf)
+				info.Banner, info.Version = extractServerHeader(string(buf[:n]))
 			}
 			return info
 		}
 	}
 
-	// 2. Connexion TCP classique pour lecture de bannière initiale (SSH, FTP, SMTP...)
 	conn, err := net.DialTimeout("tcp", target, timeout)
 	if err != nil {
 		return info
@@ -62,10 +55,15 @@ func DetectService(ip string, port int, timeout time.Duration) ServiceInfo {
 		rawBanner := strings.TrimSpace(string(buf[:n]))
 		info.Banner = sanitizeBanner(rawBanner)
 
-		// Analyse des bannières passives immédiates
 		if strings.HasPrefix(rawBanner, "SSH-") {
 			info.Name = "ssh"
-			info.Version = parseSSHVersion(rawBanner)
+			if strings.Contains(rawBanner, "OpenSSH") {
+				info.Name = "openssh"
+				info.Version = parseSSHVersion(rawBanner)
+			} else {
+				parts := strings.Split(rawBanner, " ")
+				info.Version = parts[0]
+			}
 			return info
 		}
 		if strings.HasPrefix(rawBanner, "220") {
@@ -78,7 +76,6 @@ func DetectService(ip string, port int, timeout time.Duration) ServiceInfo {
 		}
 	}
 
-	// 3. Sonde HTTP brute si le port n'a pas répondu passivement
 	if port == 80 || port == 8080 || port == 8000 || port == 8888 || info.Name == "unknown" {
 		req := fmt.Sprintf("HEAD / HTTP/1.1\r\nHost: %s\r\nUser-Agent: tcpcat-engine/5.0\r\n\r\n", ip)
 		_, errWrite := conn.Write([]byte(req))
@@ -89,14 +86,13 @@ func DetectService(ip string, port int, timeout time.Duration) ServiceInfo {
 				resp := string(buf[:nHTTP])
 				if strings.HasPrefix(resp, "HTTP/") {
 					info.Name = "http"
-					info.Banner = extractServerHeader(resp)
+					info.Banner, info.Version = extractServerHeader(resp)
 					return info
 				}
 			}
 		}
 	}
 
-	// Déduction par numéro de port par défaut en fallback
 	if info.Name == "unknown" {
 		info.Name = resolveDefaultPortName(port)
 	}
@@ -113,25 +109,33 @@ func sanitizeBanner(b string) string {
 	return cleaned
 }
 
-func extractServerHeader(httpResp string) string {
+func extractServerHeader(httpResp string) (string, string) {
 	lines := strings.Split(httpResp, "\r\n")
 	for _, line := range lines {
 		if strings.HasPrefix(strings.ToLower(line), "server:") {
-			return strings.TrimSpace(line[7:])
+			banner := strings.TrimSpace(line[7:])
+			parts := strings.Fields(banner)
+			if len(parts) > 0 {
+				versionParts := strings.Split(parts[0], "/")
+				if len(versionParts) > 1 {
+					return banner, versionParts[1]
+				}
+			}
+			return banner, ""
 		}
 	}
-	if len(lines) > 0 {
-		return lines[0]
-	}
-	return ""
+	return "", ""
 }
 
 func parseSSHVersion(banner string) string {
-	parts := strings.Split(banner, " ")
-	if len(parts) > 0 {
-		return parts[0]
+	if i := strings.Index(banner, "OpenSSH_"); i != -1 {
+		versionPart := banner[i+len("OpenSSH_"):]
+		if j := strings.Index(versionPart, " "); j != -1 {
+			return versionPart[:j]
+		}
+		return versionPart
 	}
-	return banner
+	return ""
 }
 
 func resolveDefaultPortName(port int) string {

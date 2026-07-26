@@ -1,4 +1,3 @@
-// internal/output/normal.go
 package output
 
 import (
@@ -9,7 +8,6 @@ import (
 	"tcpcat/internal/scan"
 )
 
-// ExportNormal écrit les résultats au format texte classique (-oN).
 func ExportNormal(filePath string, target string, results []scan.TargetResult, duration time.Duration) error {
 	file, err := os.Create(filePath)
 	if err != nil {

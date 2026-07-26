@@ -1,23 +1,22 @@
-// internal/output/xml.go
 package output
 
 import (
 	"encoding/xml"
 	"fmt"
 	"os"
-	"strings" // Import manquant
+	"strings"
 	"time"
 
 	"tcpcat/internal/scan"
 )
 
 type XMLReport struct {
-	XMLName  xml.Name   `xml:"nmaprun"`
-	Scanner  string     `xml:"scanner,attr"`
-	Version  string     `xml:"version,attr"`
-	Target   string     `xml:"target"`
-	Duration string     `xml:"duration"`
-	Host     XMLHost    `xml:"host"`
+	XMLName  xml.Name `xml:"nmaprun"`
+	Scanner  string   `xml:"scanner,attr"`
+	Version  string   `xml:"version,attr"`
+	Target   string   `xml:"target"`
+	Duration string   `xml:"duration"`
+	Host     XMLHost  `xml:"host"`
 }
 
 type XMLHost struct {
@@ -41,7 +40,6 @@ type XMLService struct {
 	Banner string `xml:"product,attr,omitempty"`
 }
 
-// ExportXML écrit les résultats au format XML (-oX).
 func ExportXML(filePath string, target string, results []scan.TargetResult, duration time.Duration) error {
 	report := XMLReport{
 		Scanner:  "tcpcat",

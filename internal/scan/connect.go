@@ -1,4 +1,3 @@
-// internal/scan/connect.go
 package scan
 
 import (
@@ -11,7 +10,6 @@ import (
 	"tcpcat/internal/evasion"
 )
 
-// ScanConnectPort effectue un TCP Connect scan et injecte le payload si défini.
 func ScanConnectPort(hostIP string, port int, opts *config.Options, timeout time.Duration) TargetResult {
 	res := TargetResult{
 		IP:    hostIP,
@@ -25,7 +23,6 @@ func ScanConnectPort(hostIP string, port int, opts *config.Options, timeout time
 	var err error
 	t0 := time.Now()
 
-	// Utilisation du dialer d'évasion si un port source ou TTL est configuré
 	if opts != nil && (opts.SourcePort > 0 || opts.TTL > 0) {
 		cfg, _ := evasion.NewConfig(opts.SourcePort, opts.TTL, opts.DataString, opts.DataHex, "")
 		dialer := evasion.NewCustomDialer(cfg, timeout)
@@ -55,7 +52,6 @@ func ScanConnectPort(hostIP string, port int, opts *config.Options, timeout time
 
 	defer conn.Close()
 
-	// Envoi du payload dans la connexion TCP
 	if opts != nil {
 		payload, _ := evasion.PreparePayload(opts.DataString, opts.DataHex)
 		if len(payload) > 0 {

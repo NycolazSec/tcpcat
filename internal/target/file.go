@@ -1,4 +1,3 @@
-// internal/target/file.go
 package target
 
 import (
@@ -8,7 +7,6 @@ import (
 	"strings"
 )
 
-// LoadFromFile lit un fichier (-iL) et extrait toutes les cibles IP/DNS.
 func LoadFromFile(filePath string) ([]string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -22,17 +20,15 @@ func LoadFromFile(filePath string) ([]string, error) {
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		// Ignorer les lignes vides et les commentaires
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		// Une ligne peut contenir plusieurs cibles séparées par des espaces
 		fields := strings.Fields(line)
 		for _, item := range fields {
 			parsed, err := ParseTarget(item)
 			if err != nil {
-				continue // Ignore les entrées malformées
+				continue
 			}
 			targets = append(targets, parsed...)
 		}

@@ -1,12 +1,13 @@
-// internal/scan/engine.go
 package scan
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
 	"tcpcat/config"
+	"tcpcat/internal/scripting"
 )
 
 type ScanJob struct {
@@ -15,48 +16,42 @@ type ScanJob struct {
 }
 
 type Engine struct {
-	opts    *config.Options
-	timeout time.Duration
+	opts         *config.Options
+	timeout      time.Duration
+	scriptEngine *scripting.ScriptingEngine
 }
 
 func NewEngine(opts *config.Options) *Engine {
-	timeoutSec := 2.0
-	if opts != nil {
-		switch opts.Timing {
-		case 5:
-			timeoutSec = 0.5
-		case 4:
-			timeoutSec = 1.0
-		case 3:
-			timeoutSec = 2.0
-		case 2:
-			timeoutSec = 3.0
-		case 1:
-			timeoutSec = 5.0
+	timeoutSec := 3.0 // Default T3
+	if opts.Timing >= 0 && opts.Timing <= 5 {
+		timeouts := []float64{15, 5, 3, 1, 0.5, 0.3}
+		timeoutSec = timeouts[opts.Timing]
+	}
+
+	timeout := time.Duration(timeoutSec * float64(time.Second))
+	var se *scripting.ScriptingEngine
+	if opts != nil && opts.ScriptPath != "" {
+		var err error
+		se, err = scripting.New(opts.ScriptPath, timeout)
+		if err != nil {
+			fmt.Printf("%s[!] Erreur d'initialisation du moteur de scripts: %v%s\n", config.Red, err, config.Reset)
 		}
 	}
 
 	return &Engine{
-		opts:    opts,
-		timeout: time.Duration(timeoutSec * float64(time.Second)),
+		opts:         opts,
+		timeout:      timeout,
+		scriptEngine: se,
 	}
 }
 
 func (e *Engine) Execute(targets []string, ports []int) []TargetResult {
-	totalJobs := len(targets) * len(ports)
-	jobs := make(chan ScanJob, totalJobs)
-	resultsChan := make(chan TargetResult, totalJobs)
+	jobs := make(chan ScanJob, len(targets)*len(ports))
+	resultsChan := make(chan TargetResult, len(targets)*len(ports))
+	var allResults []TargetResult
 
 	var wg sync.WaitGroup
-	numWorkers := 100
-	if e.opts != nil && e.opts.Workers > 0 {
-		numWorkers = e.opts.Workers
-	}
-	if numWorkers > totalJobs {
-		numWorkers = totalJobs
-	}
-
-	for w := 0; w < numWorkers; w++ {
+	for i := 0; i < e.opts.Workers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -74,68 +69,73 @@ func (e *Engine) Execute(targets []string, ports []int) []TargetResult {
 	}
 	close(jobs)
 
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
+	wg.Wait()
+	close(resultsChan)
 
-	var results []TargetResult
 	for res := range resultsChan {
-		results = append(results, res)
+		allResults = append(allResults, res)
+	}
 
-		// 🛑 THE ABSOLUTE FILTER IS HERE:
-		// If OnlyOpen is enabled, we silently skip anything that is not "OPEN", even in Verbose mode.
-		if e.opts != nil && e.opts.OnlyOpen && res.State != StateOpen {
-			continue
+	sort.Slice(allResults, func(i, j int) bool {
+		if allResults[i].IP != allResults[j].IP {
+			return allResults[i].IP < allResults[j].IP
 		}
+		return allResults[i].Port < allResults[j].Port
+	})
 
-		if res.State == StateOpen || (e.opts != nil && e.opts.Verbose) {
-			color := config.Green
-			if res.State == StateClosed {
+	var finalResults []TargetResult
+	for _, res := range allResults {
+		if res.State == StateOpen || !e.opts.OnlyOpen {
+			finalResults = append(finalResults, res)
+			color := config.White
+			switch res.State {
+			case StateOpen:
+				color = config.Green
+			case StateClosed:
 				color = config.Red
-			} else if res.State == StateFiltered || res.State == StateUnfiltered {
-				color = config.Yellow
 			}
 			fmt.Printf("%s[+] %s:%-5d ─ %-8s%s (time=%.2fms | reason=%s)\n",
 				color, res.IP, res.Port, res.State, config.Reset, res.LatencyMs, res.Reason)
+
+			if e.scriptEngine != nil && res.State == StateOpen {
+				scriptResults := e.scriptEngine.RunAll(res.IP, res.Port)
+				for _, sr := range scriptResults {
+					fmt.Printf("    |_ %s: %v\n", sr.ScriptName, sr.Output)
+				}
+			}
 		}
 	}
 
-	return results
+	return finalResults
 }
 
-// dispatchScan routes the task to the method enabled in the config
 func (e *Engine) dispatchScan(ip string, port int) TargetResult {
-	if e.opts == nil {
-		return ScanConnectPort(ip, port, nil, e.timeout)
+	if GlobalXsk != nil {
+		if e.opts.UdpScan {
+			return ScanXDPUDPPort(ip, port, e.opts, e.timeout)
+		}
+		isOtherRawScan := e.opts.AckScan || e.opts.WindowScan || e.opts.NullScan || e.opts.FinScan || e.opts.XmasScan
+		if e.opts.SynScan || !isOtherRawScan {
+			return ScanXDPPort(ip, port, e.opts, e.timeout)
+		}
 	}
 
-	// 🚀 ABSOLUTE PRIORITY: AF_XDP Engine (Kernel Bypass)
-	if e.opts.UseXDP {
-		return ScanXDPPort(ip, port, e.opts, e.timeout)
+	if e.opts.ZombieHost != "" {
+		return ScanIdlePort(ip, port, e.opts.ZombieHost, e.opts, e.timeout)
 	}
 
-	// 1. ACK Scan (-sA)
 	if e.opts.AckScan {
 		return ScanAckPort(ip, port, e.opts, e.timeout)
 	}
-
-	// 2. Window Scan (-sW)
 	if e.opts.WindowScan {
 		return ScanWindowPort(ip, port, e.opts, e.timeout)
 	}
-
-	// 3. SYN Scan (-sS)
-	if e.opts.SynScan {
-		return ScanSYNPort(ip, port, e.opts, e.timeout)
-	}
-
-	// 4. UDP Scan (-sU)
 	if e.opts.UdpScan {
 		return ScanUDPPort(ip, port, e.opts, e.timeout)
 	}
-
-	// 5. Stealth Scans (-sN, -sF, -sX)
+	if e.opts.SynScan {
+		return ScanSYNPort(ip, port, e.opts, e.timeout)
+	}
 	if e.opts.NullScan {
 		return ScanStealthPort(ip, port, ScanNull, e.opts, e.timeout)
 	}
@@ -146,6 +146,5 @@ func (e *Engine) dispatchScan(ip string, port int) TargetResult {
 		return ScanStealthPort(ip, port, ScanXmas, e.opts, e.timeout)
 	}
 
-	// Fallback to TCP Connect (-sT) or default behavior
 	return ScanConnectPort(ip, port, e.opts, e.timeout)
 }

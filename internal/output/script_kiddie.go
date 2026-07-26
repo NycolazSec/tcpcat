@@ -1,4 +1,3 @@
-// internal/output/script_kiddie.go
 package output
 
 import (
@@ -10,7 +9,6 @@ import (
 	"tcpcat/internal/scan"
 )
 
-// ExportScriptKiddie écrit les résultats au format s|<rIpt kIddi3 (-oS).
 func ExportScriptKiddie(filePath string, target string, results []scan.TargetResult, duration time.Duration) error {
 	file, err := os.Create(filePath)
 	if err != nil {
