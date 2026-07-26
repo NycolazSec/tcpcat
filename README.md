@@ -20,35 +20,41 @@
 
 </div>
 
-**tcpcat** is a modular, high-performance network security scanner written in Go. Inspired by the flexibility and power of Nmap, `tcpcat` stands out with its experimental **eBPF/AF_XDP** engine, designed to achieve extreme scanning speeds that surpass the capabilities of traditional raw sockets.
+**tcpcat** is a modular, high-performance network security scanner written in Go. Inspired by the flexibility and power of Nmap, `tcpcat` stands out with its experimental **eBPF/AF_XDP** engine, an extensible **Go-based scripting engine**, and integrated **vulnerability detection**.
 
 ## Philosophy
 
 The tool was designed with a dual approach:
 1.  **Familiar Ergonomics**: Adopting the popular syntax and options of Nmap (`-sS`, `-sV`, `-p`, `-iL`, `-Pn`...) for immediate adoption by security professionals.
-2.  **Cutting-Edge Performance**: Integrating modern network technologies (eBPF/XDP) to push the boundaries of scanning speed on large network perimeters.
+2.  **Modern Extensibility & Performance**: Integrating modern technologies like eBPF/XDP for speed, a Go-based scripting engine for flexibility, and vulnerability intelligence for deeper insights.
 
 ## Key Features
 
 -   **Advanced Scan Engine**: Supports a wide range of TCP (SYN, Connect, ACK, FIN, NULL, Xmas, Window) and UDP scan techniques.
 -   **Extreme Performance with eBPF/XDP**: Utilizes an `AF_XDP` engine for very high-speed packet injection and capture, directly at the network driver level (`--ebpf`).
+-   **Extensible Scripting Engine**: Write custom detection scripts directly in Go to identify specific services, configurations, or vulnerabilities (`--scripts`).
+-   **Integrated Vulnerability Detection**: Automatically queries an offline database or the Vulners API for known CVEs associated with detected services (`-sV`).
 -   **Host and Service Discovery**: Includes modules for host discovery (Ping Scan), service/version detection (`-sV`), and TCP traceroute.
 -   **Flexible Targeting**: Accepts IP addresses, hostnames, CIDR notation (`192.168.1.0/24`), and IP ranges (`10.0.0.1-254`).
 -   **Structured Output**: Exports results in JSON format (`-j`) for easy integration with other tools (SIEM, analysis scripts...).
 
 ## Installation
 
-Ensure that Go (version 1.18+) is installed on your system.
+Ensure that Go (version 1.20+) is installed on your system.
 
 ```bash
 # 1. Clone the repository
 git clone https://github.com/user/tcpcat.git
 cd tcpcat
 
-# 2. Compile the executable
+# 2. Install dependencies (including the scripting engine)
+go get github.com/traefik/yaegi
+go mod tidy
+
+# 3. Compile the executable
 go build -o tcpcat ./cmd/tcpcat
 
-# 3. (Optional) Install the executable in your $GOPATH/bin
+# 4. (Optional) Install the executable in your $GOPATH/bin
 go install ./cmd/tcpcat
 ```
 
