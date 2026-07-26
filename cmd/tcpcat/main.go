@@ -2,6 +2,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -48,8 +49,19 @@ func main() {
 		rawTargets = append(rawTargets, fileTargets...)
 	}
 
+	if opts.AWSTags != "" {
+		fmt.Printf("%s[*] Loading targets from AWS EC2 tags...%s\n", config.White, config.Reset)
+		awsTargets, err := target.LoadFromAWSTags(opts.AWSRegion, opts.AWSTags)
+		if err != nil {
+			fmt.Printf("%s[!] AWS Target Error: %v%s\n", config.Red, err, config.Reset)
+			os.Exit(1)
+		}
+		rawTargets = append(rawTargets, awsTargets...)
+	}
+
 	if len(rawTargets) == 0 {
 		fmt.Printf("%s[!] Error: No target specified.%s\n", config.Red, config.Reset)
+		flag.Usage()
 		os.Exit(1)
 	}
 
@@ -68,6 +80,9 @@ func main() {
 	displayTarget := opts.Target
 	if displayTarget == "" {
 		displayTarget = opts.InputFile
+	}
+	if displayTarget == "" && opts.AWSTags != "" {
+		displayTarget = fmt.Sprintf("AWS Tags in %s", opts.AWSRegion)
 	}
 
 	fmt.Printf("%s[*] Target loaded: %s%s (%d IP(s) resolved)%s\n",

@@ -88,6 +88,10 @@ type Options struct {
 	JsonOutput    string
 	ScriptPath    string
 	VulnersAPIKey string
+
+	// Cloud-Aware
+	AWSRegion string
+	AWSTags   string
 }
 
 func ParseFlags() (*Options, error) {
@@ -111,6 +115,8 @@ func ParseFlags() (*Options, error) {
 		"-sI":              true,
 		"--scripts":        true,
 		"--vulners-apikey": true,
+		"--aws-region":     true,
+		"--aws-tags":       true,
 		"-PU":              true,
 	}
 
@@ -164,6 +170,9 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.ScriptPath, "scripts", "", "Path to directory containing Go scripts")
 	flag.StringVar(&opts.VulnersAPIKey, "vulners-apikey", "", "Vulners.com API key for CVE lookup")
 
+	flag.StringVar(&opts.AWSRegion, "aws-region", "", "AWS region for tag-based target discovery")
+	flag.StringVar(&opts.AWSTags, "aws-tags", "", "Scan EC2 instances matching tags (e.g., 'Key=App,Value=Web')")
+
 	flag.Usage = func() {
 		fmt.Println(Banner)
 		fmt.Printf("%sUsage:%s tcpcat <target> [options]\n\n", Bold, Reset)
@@ -171,6 +180,9 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s<target>%s         Hostnames, IP addresses, CIDRs\n", Yellow, Reset)
 		fmt.Printf("  %s-iL <file>%s       Input target list from file\n", Yellow, Reset)
 		fmt.Printf("  %s-sn%s             Ping Scan - disable port scan\n", Yellow, Reset)
+		fmt.Println(Cyan + "\nCLOUD-AWARE TARGETING:" + Reset)
+		fmt.Printf("  %s--aws-region <region>%s AWS region for tag-based discovery\n", Yellow, Reset)
+		fmt.Printf("  %s--aws-tags <tags>%s   Scan EC2 instances matching tags (e.g., 'Key=App,Value=Web')\n", Yellow, Reset)
 		fmt.Printf("  %s-Pn%s             Treat all hosts as online\n", Yellow, Reset)
 		fmt.Printf("  %s-PU <port>%s      UDP Ping discovery port\n", Yellow, Reset)
 		fmt.Println(Cyan + "\nPORT & SCAN SPECIFICATION:" + Reset)
@@ -212,7 +224,7 @@ func ParseFlags() (*Options, error) {
 		opts.Target = flag.Arg(0)
 	}
 
-	if opts.Target == "" && opts.InputFile == "" {
+	if opts.Target == "" && opts.InputFile == "" && opts.AWSTags == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
