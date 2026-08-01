@@ -1,3 +1,5 @@
+//go:build linux
+
 package scan
 
 import (
@@ -283,11 +285,13 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 
 	rawFrame := constructSYNFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, srcPort, uint16(port))
 
-	mtu := 0
-	if opts != nil {
-		mtu = 8
+	var framesToSend [][]byte
+	if opts != nil && opts.Fragment {
+		mtu := 8 // Using a small MTU like 8 for fragmentation
+		framesToSend = evasion.FragmentPacket(rawFrame, mtu)
+	} else {
+		framesToSend = [][]byte{rawFrame}
 	}
-	framesToSend := evasion.FragmentPacket(rawFrame, mtu)
 
 	xdpTxLock.Lock()
 
@@ -360,29 +364,58 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 	var payload []byte
 	if opts != nil && opts.DataString != "" {
 		payload = []byte(opts.DataString)
+	} else {
+		// Pour les scans UDP, un payload vide est souvent ignoré.
+		// Nous ajoutons des sondes par défaut pour les services courants afin de provoquer une réponse.
+		switch port {
+		case 53: // DNS
+			// Sonde DNS simple pour "google.com" type A
+			payload = []byte{
+				0xDB, 0x42, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Header
+				0x06, 'g', 'o', 'o', 'g', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00, // Question: google.com
+				0x00, 0x01, // Type: A
+				0x00, 0x01, // Class: IN
+			}
+		}
 	}
 
 	rawFrame := constructUDPFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, srcPort, uint16(port), payload)
 
+	var framesToSend [][]byte
+	if opts != nil && opts.Fragment {
+		mtu := 8 // Using a small MTU like 8 for fragmentation
+		framesToSend = evasion.FragmentPacket(rawFrame, mtu)
+	} else {
+		framesToSend = [][]byte{rawFrame}
+	}
+
 	xdpTxLock.Lock()
-	maxRetries := 5
-	var descs []xdp.Desc
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		descs = xsk.GetDescs(1)
-		if len(descs) > 0 {
-			break
+	for _, frameBytes := range framesToSend {
+		maxRetries := 5
+		var descs []xdp.Desc
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			descs = xsk.GetDescs(1)
+			if len(descs) > 0 {
+				break
+			}
+			time.Sleep(time.Microsecond * 50)
 		}
-		time.Sleep(time.Microsecond * 50)
-	}
 
-	if len(descs) == 0 {
-		xdpTxLock.Unlock()
-		return TargetResult{IP: ip, Port: port, State: StateFiltered, Reason: "XDP TX Ring Congestion"}
-	}
+		if len(descs) == 0 {
+			xdpTxLock.Unlock()
+			return TargetResult{
+				IP:     ip,
+				Port:   port,
+				State:  StateFiltered,
+				Reason: "XDP TX Ring Congestion (Fragment dropped)",
+			}
+		}
 
-	copy(xsk.GetFrame(descs[0]), rawFrame)
-	descs[0].Len = uint32(len(rawFrame))
-	xsk.Transmit(descs)
+		frameLen := len(frameBytes)
+		copy(xsk.GetFrame(descs[0]), frameBytes)
+		descs[0].Len = uint32(frameLen)
+		xsk.Transmit(descs)
+	}
 	xdpTxLock.Unlock()
 
 	key := fmt.Sprintf("%s:%d", targetIP.String(), port)
