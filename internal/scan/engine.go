@@ -109,42 +109,119 @@ func (e *Engine) Execute(targets []string, ports []int) []TargetResult {
 	return finalResults
 }
 
+// dispatchScan est le point d'entrée principal pour scanner un port. Il orchestre le scan primaire et la séquence de contournement.
 func (e *Engine) dispatchScan(ip string, port int) TargetResult {
+	res := e.runPrimaryScan(ip, port)
+
+	isFiltered := res.State == StateFiltered || res.State == StateOpenFiltered
+	if isFiltered && e.opts.SmartBypass {
+		fmt.Printf("    %s[~] Port %s:%d is %s. Attempting bypass techniques...%s\n", config.Yellow, ip, port, res.State, config.Reset)
+		return e.runBypassSequence(ip, port, res)
+	}
+
+	return res
+}
+
+// runBypassSequence tente une série de scans alternatifs pour obtenir un état définitif.
+func (e *Engine) runBypassSequence(ip string, port int, originalRes TargetResult) TargetResult {
+	// --- Technique 1: Scan ACK pour sonder les règles du pare-feu ---
+	if !e.opts.UdpScan { // Le scan ACK est uniquement TCP
+		ackRes := ScanAckPort(ip, port, e.opts, e.timeout)
+		if ackRes.State == StateUnfiltered {
+			// Le port est joignable. Un pare-feu stateful simple est probablement en place.
+			// Essayons un scan FIN. Un port fermé répondra par RST. Un port ouvert restera silencieux.
+			finRes := ScanStealthPort(ip, port, ScanFin, e.opts, e.timeout)
+			if finRes.State == StateClosed {
+				finRes.Reason = "Bypass: ACK->unfiltered, FIN->closed"
+				return finRes // État DÉFINITIF: FERMÉ.
+			}
+			// Si le scan FIN est silencieux, cela implique fortement que le port est ouvert.
+			return TargetResult{IP: ip, Port: port, State: StateOpen, Reason: "Bypass: ACK->unfiltered, FIN->filtered (implies OPEN)"}
+		}
+	}
+
+	// --- Technique 2: Scan fragmenté ---
+	fragOpts := *e.opts
+	fragOpts.Fragment = true
+	fragRes := e.runScanWithOptions(ip, port, &fragOpts)
+	if fragRes.State != StateFiltered && fragRes.State != StateOpenFiltered {
+		fragRes.Reason = "Bypass: Fragmented scan succeeded"
+		return fragRes
+	}
+
+	// --- Technique 3: Changer le port source ---
+	// Certains pare-feu autorisent le trafic provenant de ports bien connus (DNS, HTTP).
+	for _, srcPort := range []int{53, 80, 443} {
+		spOpts := *e.opts
+		spOpts.SourcePort = srcPort
+		spRes := e.runScanWithOptions(ip, port, &spOpts)
+		if spRes.State != StateFiltered && spRes.State != StateOpenFiltered {
+			spRes.Reason = fmt.Sprintf("Bypass: Source port %d scan succeeded", srcPort)
+			return spRes
+		}
+	}
+
+	// --- Technique 4: Scan Window ---
+	// Certains systèmes d'exploitation (pas tous) renvoient une taille de fenêtre non nulle sur les ports ouverts.
+	if !e.opts.UdpScan {
+		winRes := ScanWindowPort(ip, port, e.opts, e.timeout)
+		if winRes.State == StateOpen {
+			winRes.Reason = "Bypass: Window scan detected open port"
+			return winRes
+		}
+		if winRes.State == StateClosed {
+			winRes.Reason = "Bypass: Window scan detected closed port"
+			return winRes
+		}
+	}
+
+	// Si toutes les techniques échouent, retourne le résultat original.
+	finalRes := originalRes
+	finalRes.Reason += " (Bypass failed)"
+	return finalRes
+}
+
+// runPrimaryScan exécute le type de scan initial demandé par l'utilisateur.
+func (e *Engine) runPrimaryScan(ip string, port int) TargetResult {
+	return e.runScanWithOptions(ip, port, e.opts)
+}
+
+// runScanWithOptions contient la logique de sélection du scan, mais utilise une configuration d'options temporaire.
+func (e *Engine) runScanWithOptions(ip string, port int, opts *config.Options) TargetResult {
 	if GlobalXsk != nil {
-		if e.opts.UdpScan {
-			return ScanXDPUDPPort(ip, port, e.opts, e.timeout)
+		if opts.UdpScan {
+			return ScanXDPUDPPort(ip, port, opts, e.timeout)
 		}
-		isOtherRawScan := e.opts.AckScan || e.opts.WindowScan || e.opts.NullScan || e.opts.FinScan || e.opts.XmasScan
-		if e.opts.SynScan || !isOtherRawScan {
-			return ScanXDPPort(ip, port, e.opts, e.timeout)
+		isOtherRawScan := opts.AckScan || opts.WindowScan || opts.NullScan || opts.FinScan || opts.XmasScan
+		if opts.SynScan || !isOtherRawScan {
+			return ScanXDPPort(ip, port, opts, e.timeout)
 		}
 	}
 
-	if e.opts.ZombieHost != "" {
-		return ScanIdlePort(ip, port, e.opts.ZombieHost, e.opts, e.timeout)
+	if opts.ZombieHost != "" {
+		return ScanIdlePort(ip, port, opts.ZombieHost, opts, e.timeout)
+	}
+	if opts.AckScan {
+		return ScanAckPort(ip, port, opts, e.timeout)
+	}
+	if opts.WindowScan {
+		return ScanWindowPort(ip, port, opts, e.timeout)
+	}
+	if opts.UdpScan {
+		return ScanUDPPort(ip, port, opts, e.timeout)
+	}
+	if opts.SynScan {
+		return ScanSYNPort(ip, port, opts, e.timeout)
+	}
+	if opts.NullScan {
+		return ScanStealthPort(ip, port, ScanNull, opts, e.timeout)
+	}
+	if opts.FinScan {
+		return ScanStealthPort(ip, port, ScanFin, opts, e.timeout)
+	}
+	if opts.XmasScan {
+		return ScanStealthPort(ip, port, ScanXmas, opts, e.timeout)
 	}
 
-	if e.opts.AckScan {
-		return ScanAckPort(ip, port, e.opts, e.timeout)
-	}
-	if e.opts.WindowScan {
-		return ScanWindowPort(ip, port, e.opts, e.timeout)
-	}
-	if e.opts.UdpScan {
-		return ScanUDPPort(ip, port, e.opts, e.timeout)
-	}
-	if e.opts.SynScan {
-		return ScanSYNPort(ip, port, e.opts, e.timeout)
-	}
-	if e.opts.NullScan {
-		return ScanStealthPort(ip, port, ScanNull, e.opts, e.timeout)
-	}
-	if e.opts.FinScan {
-		return ScanStealthPort(ip, port, ScanFin, e.opts, e.timeout)
-	}
-	if e.opts.XmasScan {
-		return ScanStealthPort(ip, port, ScanXmas, e.opts, e.timeout)
-	}
-
-	return ScanConnectPort(ip, port, e.opts, e.timeout)
+	return ScanConnectPort(ip, port, opts, e.timeout)
 }
