@@ -33,6 +33,7 @@ The tool was designed with a dual approach:
 -   **Advanced Scan Engine**: Supports a wide range of TCP (SYN, Connect, ACK, FIN, NULL, Xmas, Window) and UDP scan techniques.
 -   **Extreme Performance with eBPF/XDP**: Utilizes an `AF_XDP` engine for very high-speed packet injection and capture, directly at the network driver level (`--ebpf`).
 -   **Extensible Scripting Engine**: Write custom detection scripts directly in Go to identify specific services, configurations, or vulnerabilities (`--scripts`).
+-   **Intelligent UDP Probing**: Automatically sends protocol-specific probes for common UDP ports (like DNS) to increase the accuracy of open port detection.
 -   **Integrated Vulnerability Detection**: Automatically queries an offline database or the Vulners API for known CVEs associated with detected services (`-sV`).
 -   **Host and Service Discovery**: Includes modules for host discovery (Ping Scan), service/version detection (`-sV`), and TCP traceroute.
 -   **Flexible Targeting**: Accepts IP addresses, hostnames, CIDR notation (`192.168.1.0/24`), and IP ranges (`10.0.0.1-254`).
@@ -113,6 +114,7 @@ PORTS & SCANS:
   -sF              TCP FIN Scan (Stealth)
   -sX              TCP Xmas Scan (Stealth)
   -sU              UDP Port Scan
+  -sI <zombie>     TCP Idle Scan (requires a zombie host)
   --ebpf           Enable the experimental AF_XDP/eBPF engine (High Performance)
   --open           Show only open ports
 
@@ -124,6 +126,8 @@ EVASION & OPTIONS:
   -g <port>        Use a specific source port
   --ttl <val>      Set a custom IP Time-To-Live (TTL)
   --data-string    Append a custom ASCII payload
+  --frag           Fragment packets (evasion)
+  --smart-bypass   Attempt advanced techniques to bypass firewalls on filtered ports
   --data           Append a custom HEX payload
   --traceroute     Trace the router path to the target
 
