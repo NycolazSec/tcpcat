@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -28,6 +29,11 @@ func main() {
 	}
 
 	fmt.Println(config.Banner)
+
+	if opts.UseXDP && runtime.GOOS != "linux" {
+		fmt.Printf("%s[!] Avertissement: L'option --ebpf n'est supportée que sur Linux et sera ignorée.%s\n", config.Yellow, config.Reset)
+		opts.UseXDP = false
+	}
 
 	if opts.VulnersAPIKey != "" && !opts.ServiceDetect {
 		fmt.Printf("%s[!] Warning: --vulners-apikey was provided without -sV. CVE lookup requires service detection.%s\n", config.Yellow, config.Reset)
@@ -147,7 +153,10 @@ func main() {
 	go func() {
 		<-sigChan
 		fmt.Printf("\n%s[!] Scan interrupted by user.%s\n", config.Yellow, config.Reset)
-		os.Exit(0)
+		if opts.UseXDP && runtime.GOOS == "linux" {
+			scan.ShutdownXDPEngine()
+		}
+		os.Exit(1)
 	}()
 
 	if opts.UseXDP {
@@ -160,6 +169,7 @@ func main() {
 		}
 
 		scan.GlobalXsk = xsk
+		defer scan.ShutdownXDPEngine()
 	}
 
 	t0 := time.Now()
