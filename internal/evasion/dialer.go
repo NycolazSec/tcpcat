@@ -32,7 +32,10 @@ func (d *CustomDialer) Dial(network, address string) (net.Conn, error) {
 		Control: func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
 				_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-				_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, 0x20, 1) // SO_REUSEPORT sur macOS
+
+				// Note: SO_REUSEPORT est omis pour une meilleure portabilité.
+				// Sa valeur et sa disponibilité varient considérablement entre les OS (Linux, macOS, BSDs).
+				// La logique de fallback du dialer gère déjà les cas où le port source est occupé.
 
 				if d.Config != nil && d.Config.TTL > 0 {
 					_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TTL, d.Config.TTL)
@@ -42,7 +45,7 @@ func (d *CustomDialer) Dial(network, address string) (net.Conn, error) {
 	}
 
 	conn, err := netDialer.Dial(network, address)
-	
+
 	// Fallback : Si le port source spécifié est bloqué/occupé, retente sans forcer le port local
 	if err != nil && localAddr != nil {
 		fallbackDialer := &net.Dialer{Timeout: d.Timeout}
