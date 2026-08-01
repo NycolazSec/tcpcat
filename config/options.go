@@ -88,6 +88,7 @@ type Options struct {
 	JsonOutput    string
 	ScriptPath    string
 	VulnersAPIKey string
+	SmartBypass   bool
 
 	// Cloud-Aware
 	AWSRegion string
@@ -162,6 +163,7 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.DataString, "data-string", "", "Append custom ASCII string to probes")
 	flag.StringVar(&opts.DataHex, "data", "", "Append custom hex string to probes")
 	flag.BoolVar(&opts.Fragment, "frag", false, "Fragment packets to evade detection")
+	flag.BoolVar(&opts.SmartBypass, "smart-bypass", false, "Enable smart bypass mode")
 
 	flag.IntVar(&opts.Timing, "T", 3, "Set timing template (0-5, higher is faster)")
 	flag.IntVar(&opts.Workers, "w", 100, "Number of parallel workers")
