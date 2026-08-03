@@ -17,6 +17,7 @@ type TargetResult struct {
 	Service   string        `json:"service,omitempty"`
 	Version   string        `json:"version,omitempty"`
 	Banner    string        `json:"banner,omitempty"`
+	OS        string        `json:"os,omitempty"`
 	Latency   time.Duration `json:"latency_ns"`
 	LatencyMs float64       `json:"latency_ms"`
 	Reason    string        `json:"reason"`
