@@ -34,7 +34,7 @@ func NewEngine(opts *config.Options) *Engine {
 		var err error
 		se, err = scripting.New(opts.ScriptPath, timeout)
 		if err != nil {
-			fmt.Printf("%s[!] Erreur d'initialisation du moteur de scripts: %v%s\n", config.Red, err, config.Reset)
+			fmt.Printf("%s[!] Error initializing script engine: %v%s\n", config.Red, err, config.Reset)
 		}
 	}
 
@@ -51,7 +51,7 @@ func (e *Engine) Execute(targets []string, ports []int) []TargetResult {
 	var allResults []TargetResult
 
 	var wg sync.WaitGroup
-	for i := 0; i < e.opts.Workers; i++ {
+	for i := 0; i < e.opts.MaxWorkers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -109,7 +109,6 @@ func (e *Engine) Execute(targets []string, ports []int) []TargetResult {
 	return finalResults
 }
 
-// dispatchScan est le point d'entrée principal pour scanner un port. Il orchestre le scan primaire et la séquence de contournement.
 func (e *Engine) dispatchScan(ip string, port int) TargetResult {
 	res := e.runPrimaryScan(ip, port)
 
@@ -122,25 +121,18 @@ func (e *Engine) dispatchScan(ip string, port int) TargetResult {
 	return res
 }
 
-// runBypassSequence tente une série de scans alternatifs pour obtenir un état définitif.
 func (e *Engine) runBypassSequence(ip string, port int, originalRes TargetResult) TargetResult {
-	// --- Technique 1: Scan ACK pour sonder les règles du pare-feu ---
-	if !e.opts.UdpScan { // Le scan ACK est uniquement TCP
+	if !e.opts.UdpScan {
 		ackRes := ScanAckPort(ip, port, e.opts, e.timeout)
 		if ackRes.State == StateUnfiltered {
-			// Le port est joignable. Un pare-feu stateful simple est probablement en place.
-			// Essayons un scan FIN. Un port fermé répondra par RST. Un port ouvert restera silencieux.
 			finRes := ScanStealthPort(ip, port, ScanFin, e.opts, e.timeout)
 			if finRes.State == StateClosed {
 				finRes.Reason = "Bypass: ACK->unfiltered, FIN->closed"
-				return finRes // État DÉFINITIF: FERMÉ.
+				return finRes
 			}
-			// Si le scan FIN est silencieux, cela implique fortement que le port est ouvert.
 			return TargetResult{IP: ip, Port: port, State: StateOpen, Reason: "Bypass: ACK->unfiltered, FIN->filtered (implies OPEN)"}
 		}
 	}
-
-	// --- Technique 2: Scan fragmenté ---
 	fragOpts := *e.opts
 	fragOpts.Fragment = true
 	fragRes := e.runScanWithOptions(ip, port, &fragOpts)
@@ -149,8 +141,6 @@ func (e *Engine) runBypassSequence(ip string, port int, originalRes TargetResult
 		return fragRes
 	}
 
-	// --- Technique 3: Changer le port source ---
-	// Certains pare-feu autorisent le trafic provenant de ports bien connus (DNS, HTTP).
 	for _, srcPort := range []int{53, 80, 443} {
 		spOpts := *e.opts
 		spOpts.SourcePort = srcPort
@@ -161,8 +151,6 @@ func (e *Engine) runBypassSequence(ip string, port int, originalRes TargetResult
 		}
 	}
 
-	// --- Technique 4: Scan Window ---
-	// Certains systèmes d'exploitation (pas tous) renvoient une taille de fenêtre non nulle sur les ports ouverts.
 	if !e.opts.UdpScan {
 		winRes := ScanWindowPort(ip, port, e.opts, e.timeout)
 		if winRes.State == StateOpen {
@@ -175,18 +163,15 @@ func (e *Engine) runBypassSequence(ip string, port int, originalRes TargetResult
 		}
 	}
 
-	// Si toutes les techniques échouent, retourne le résultat original.
 	finalRes := originalRes
 	finalRes.Reason += " (Bypass failed)"
 	return finalRes
 }
 
-// runPrimaryScan exécute le type de scan initial demandé par l'utilisateur.
 func (e *Engine) runPrimaryScan(ip string, port int) TargetResult {
 	return e.runScanWithOptions(ip, port, e.opts)
 }
 
-// runScanWithOptions contient la logique de sélection du scan, mais utilise une configuration d'options temporaire.
 func (e *Engine) runScanWithOptions(ip string, port int, opts *config.Options) TargetResult {
 	if GlobalXsk != nil {
 		if opts.UdpScan {
