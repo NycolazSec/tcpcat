@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"sort"
+	"sync"
 	"syscall"
 	"time"
 
@@ -31,7 +33,7 @@ func main() {
 	fmt.Println(config.Banner)
 
 	if opts.UseXDP && runtime.GOOS != "linux" {
-		fmt.Printf("%s[!] Avertissement: L'option --ebpf n'est supportée que sur Linux et sera ignorée.%s\n", config.Yellow, config.Reset)
+		fmt.Printf("%s[!] Warning: The --ebpf option is only supported on Linux and will be ignored.%s\n", config.Yellow, config.Reset)
 		opts.UseXDP = false
 	}
 
@@ -115,18 +117,63 @@ func main() {
 	var activeTargets []string
 	if opts.SkipDiscovery {
 		activeTargets = targetIPs
+		fmt.Printf("%s[*] Host discovery skipped (-Pn). All %d target(s) will be scanned.%s\n", config.Yellow, len(targetIPs), config.Reset)
 	} else {
 		fmt.Printf("%s[*] Running Host Discovery...%s\n", config.White, config.Reset)
-		for _, ip := range targetIPs {
-			if discovery.PingHost(ip, 1*time.Second) {
-				activeTargets = append(activeTargets, ip)
-				fmt.Printf("    ├─ %s[UP]%s %s\n", config.Green, config.Reset, ip)
-			} else {
-				if opts.Verbose {
-					fmt.Printf("    ├─ %s[DOWN]%s %s\n", config.Red, config.Reset, ip)
+
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+
+		if opts.UnsafeNoLimits {
+			fmt.Printf("%s[!] Running host discovery with unlimited concurrency (--unsafe-no-limits). This may crash your system.%s\n", config.Red, config.Reset)
+			for _, ip := range targetIPs {
+				wg.Add(1)
+				go func(ip string) {
+					defer wg.Done()
+					if discovery.PingHost(ip, 500*time.Millisecond) {
+						mu.Lock()
+						activeTargets = append(activeTargets, ip)
+						mu.Unlock()
+						fmt.Printf("    ├─ %s[UP]%s %s\n", config.Green, config.Reset, ip)
+					} else if opts.Verbose {
+						fmt.Printf("    ├─ %s[DOWN]%s %s\n", config.Red, config.Reset, ip)
+					}
+				}(ip)
+			}
+		} else {
+			sem := make(chan struct{}, opts.MaxWorkers)
+
+			var limiter *time.Ticker
+			if opts.RateLimit > 0 {
+				limiter = time.NewTicker(time.Second / time.Duration(opts.RateLimit))
+				defer limiter.Stop()
+			}
+
+			for _, ip := range targetIPs {
+				if limiter != nil {
+					<-limiter.C
 				}
+				wg.Add(1)
+				sem <- struct{}{}
+
+				go func(ip string) {
+					defer wg.Done()
+					defer func() { <-sem }()
+
+					if discovery.PingHost(ip, 500*time.Millisecond) {
+						mu.Lock()
+						activeTargets = append(activeTargets, ip)
+						mu.Unlock()
+						fmt.Printf("    ├─ %s[UP]%s %s\n", config.Green, config.Reset, ip)
+					} else if opts.Verbose {
+						fmt.Printf("    ├─ %s[DOWN]%s %s\n", config.Red, config.Reset, ip)
+					}
+				}(ip)
 			}
 		}
+
+		wg.Wait()
+
 		if len(activeTargets) == 0 {
 			fmt.Printf("%s[!] No active hosts found. Use -Pn to skip host discovery.%s\n", config.Yellow, config.Reset)
 			os.Exit(0)
@@ -181,7 +228,7 @@ func main() {
 		fmt.Printf("%s[*] Running Service & Version Detection (-sV)...%s\n", config.Yellow, config.Reset)
 		for i := range results {
 			if results[i].State == scan.StateOpen {
-				svc := service.DetectService(results[i].IP, results[i].Port, 2*time.Second)
+				svc := service.DetectService(results[i].IP, results[i].Port, 2*time.Second, opts.InsecureTLS)
 				results[i].Service = svc.Name
 				results[i].Banner = svc.Banner
 				results[i].Version = svc.Version
@@ -190,8 +237,13 @@ func main() {
 				if svc.Banner != "" {
 					bannerDisp = fmt.Sprintf(" | banner=[%s]", svc.Banner)
 				}
-				fmt.Printf("%s[v] %s:%-5d ─ SERVICE: %s%s %s%s%s\n",
-					config.Cyan, results[i].IP, results[i].Port, config.Bold, svc.Name, svc.Version, config.Reset, bannerDisp)
+				osDisp := ""
+				if svc.OS != "unknown" {
+					osDisp = fmt.Sprintf(" (OS: %s)", svc.OS)
+				}
+				results[i].OS = svc.OS
+				fmt.Printf("%s[v] %s:%-5d ─ SERVICE: %s%s %s%s%s%s\n",
+					config.Cyan, results[i].IP, results[i].Port, config.Bold, svc.Name, svc.Version, osDisp, config.Reset, bannerDisp)
 			}
 		}
 
@@ -200,22 +252,55 @@ func main() {
 		if opts.VulnersAPIKey != "" {
 			vulnScanner, err = vuln.NewVulnersScanner(opts.VulnersAPIKey)
 		} else {
-			vulnScanner, err = vuln.NewOfflineScanner()
+			vulnScanner = vuln.NewOSVScanner()
 		}
 
 		if err != nil {
-			fmt.Printf("%s[!] Erreur d'initialisation du scanner de vulnérabilités: %v%s\n", config.Red, err, config.Reset)
+			fmt.Printf("%s[!] Error initializing vulnerability scanner: %v%s\n", config.Red, err, config.Reset)
 		} else {
 			fmt.Println(config.Cyan + "───────────────────────────────────────────────────────────────────────────" + config.Reset)
 			fmt.Printf("%s[*] Running CVE Lookup (Source: %s)...%s\n", config.Yellow, vulnScanner.SourceName(), config.Reset)
 
+			offlineScanner, offlineErr := vuln.NewOfflineScanner()
+			if offlineErr != nil {
+				fmt.Printf("%s[!] Could not load fallback offline database: %v%s\n", config.Red, offlineErr, config.Reset)
+			}
+
 			for _, r := range results {
 				if r.State == scan.StateOpen && r.Service != "unknown" && r.Version != "" {
-					vulnerabilities, err := vulnScanner.GetForSoftware(r.Service, r.Version)
-					if err == nil && len(vulnerabilities) > 0 {
-						fmt.Printf("%s[!] %s:%-5d - %d CVEs trouvées pour %s %s%s\n", config.Red, r.IP, r.Port, len(vulnerabilities), r.Service, r.Version, config.Reset)
+					allVulnerabilities, err := vulnScanner.GetForSoftware(r.Service, r.Version)
+
+					if err != nil && offlineScanner != nil {
+						fmt.Printf("    %s[~] OSV lookup failed, falling back to offline DB for %s:%d%s\n", config.Yellow, r.IP, r.Port, config.Reset)
+						allVulnerabilities, err = offlineScanner.GetForSoftware(r.Service, r.Version)
+					}
+
+					initialCount := len(allVulnerabilities)
+					vulnerabilities := vuln.FilterRelevantCVEs(allVulnerabilities, r.OS)
+					filteredCount := initialCount - len(vulnerabilities)
+
+					sort.Slice(vulnerabilities, func(i, j int) bool {
+						return vulnerabilities[i].CVSS > vulnerabilities[j].CVSS
+					})
+
+					if len(vulnerabilities) > 0 {
+						fmt.Printf("%s[!] %s:%-5d - %d CVEs found for %s %s%s\n", config.Red, r.IP, r.Port, len(vulnerabilities), r.Service, r.Version, config.Reset)
 						for _, v := range vulnerabilities {
-							fmt.Printf("    |_ %s (CVSS: %.1f) - %s\n", v.ID, v.CVSS, v.Title)
+							var cvssColor string
+							switch {
+							case v.CVSS >= 9.0:
+								cvssColor = config.Red
+							case v.CVSS >= 7.0:
+								cvssColor = config.Yellow
+							case v.CVSS >= 4.0:
+								cvssColor = config.Cyan
+							default:
+								cvssColor = config.White
+							}
+							fmt.Printf("    |_ %s (%sCVSS: %.1f%s) - %s\n", v.ID, cvssColor, v.CVSS, config.Reset, v.Title)
+						}
+						if filteredCount > 0 {
+							fmt.Printf("    %s[~] %d CVEs filtered by OS (%s)%s\n", config.Yellow, filteredCount, r.OS, config.Reset)
 						}
 					}
 				}
