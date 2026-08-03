@@ -16,7 +16,6 @@ type JSONReport struct {
 	Results  []scan.TargetResult `json:"results"`
 }
 
-// ExportJSON écrit les résultats au format JSON (-j).
 func ExportJSON(filePath string, target string, results []scan.TargetResult, duration time.Duration) error {
 	report := JSONReport{
 		Target:   target,
@@ -26,7 +25,7 @@ func ExportJSON(filePath string, target string, results []scan.TargetResult, dur
 
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
-		return fmt.Errorf("erreur de sérialisation JSON: %w", err)
+		return fmt.Errorf("json serialization error: %w", err)
 	}
 
 	return os.WriteFile(filePath, data, 0644)
