@@ -5,17 +5,14 @@ import (
 	"encoding/binary"
 )
 
-// FragmentPacket prend une trame brute (Ethernet + IP + TCP) et la découpe
-// en plusieurs sous-trames selon le MTU (Maximum Transmission Unit) spécifié (ex: 8 octets).
 func FragmentPacket(rawFrame []byte, mtu int) [][]byte {
-	// Si la trame est trop petite ou si la fragmentation est désactivée (mtu = 0)
 	if len(rawFrame) < 34 || mtu <= 0 {
 		return [][]byte{rawFrame}
 	}
 
 	ethHeader := rawFrame[:14]
 	ipHeaderBase := rawFrame[14:34]
-	ipPayload := rawFrame[34:] // C'est l'en-tête TCP que l'on va découper
+	ipPayload := rawFrame[34:]
 
 	var fragments [][]byte
 	offset := 0
@@ -26,29 +23,24 @@ func FragmentPacket(rawFrame []byte, mtu int) [][]byte {
 			chunkSize = len(ipPayload) - offset
 		}
 
-		// Les fragments IP (sauf le dernier) doivent être des multiples de 8
 		if chunkSize%8 != 0 && offset+chunkSize < len(ipPayload) {
 			chunkSize = (chunkSize / 8) * 8
 		}
 
 		chunk := ipPayload[offset : offset+chunkSize]
 
-		// Copie de l'en-tête IP original
 		newIPHeader := make([]byte, 20)
 		copy(newIPHeader, ipHeaderBase)
 
-		// Mise à jour de la longueur totale (20 octets IP + taille du fragment)
 		binary.BigEndian.PutUint16(newIPHeader[2:4], uint16(20+chunkSize))
 
-		// Calcul de l'Offset et des drapeaux IP
 		fragOffsetBlock := uint16(offset / 8)
 		flagsAndOffset := fragOffsetBlock & 0x1FFF
 		if offset+chunkSize < len(ipPayload) {
-			flagsAndOffset |= 0x2000 // On active le drapeau MF (More Fragments)
+			flagsAndOffset |= 0x2000
 		}
 		binary.BigEndian.PutUint16(newIPHeader[6:8], flagsAndOffset)
 
-		// Recalcul du Checksum de l'en-tête IP
 		newIPHeader[10] = 0
 		newIPHeader[11] = 0
 		chk := computeIPChecksum(newIPHeader)
@@ -67,7 +59,6 @@ func FragmentPacket(rawFrame []byte, mtu int) [][]byte {
 	return fragments
 }
 
-// computeIPChecksum recalcule la validité mathématique de l'en-tête IP
 func computeIPChecksum(header []byte) uint16 {
 	var sum uint32
 	for i := 0; i < len(header); i += 2 {
