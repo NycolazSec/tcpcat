@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -12,9 +13,20 @@ type ServiceInfo struct {
 	Name    string `json:"name"`
 	Version string `json:"version,omitempty"`
 	Banner  string `json:"banner,omitempty"`
+	OS      string `json:"os,omitempty"`
 }
 
-func DetectService(ip string, port int, timeout time.Duration) ServiceInfo {
+var osRegexps = map[string]*regexp.Regexp{
+	"ubuntu":  regexp.MustCompile(`(?i)ubuntu|ubuntudeb`),
+	"debian":  regexp.MustCompile(`(?i)debian|deb`),
+	"alpine":  regexp.MustCompile(`(?i)alpine`),
+	"centos":  regexp.MustCompile(`(?i)centos`),
+	"amazon":  regexp.MustCompile(`(?i)amazon linux|amzn`),
+	"windows": regexp.MustCompile(`(?i)windows|winnt`),
+	"freebsd": regexp.MustCompile(`(?i)freebsd`),
+}
+
+func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerify bool) ServiceInfo {
 	info := ServiceInfo{
 		Name: "unknown",
 	}
@@ -22,7 +34,7 @@ func DetectService(ip string, port int, timeout time.Duration) ServiceInfo {
 	target := fmt.Sprintf("%s:%d", ip, port)
 
 	if port == 443 || port == 8443 || port == 465 || port == 993 || port == 995 {
-		tlsConfig := &tls.Config{InsecureSkipVerify: true}
+		tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify}
 		dialer := &net.Dialer{Timeout: timeout}
 		tlsConn, err := tls.DialWithDialer(dialer, "tcp", target, tlsConfig)
 		if err == nil {
@@ -35,7 +47,13 @@ func DetectService(ip string, port int, timeout time.Duration) ServiceInfo {
 				_, _ = tlsConn.Write([]byte(req))
 				buf := make([]byte, 512)
 				n, _ := tlsConn.Read(buf)
-				info.Banner, info.Version = extractServerHeader(string(buf[:n]))
+				banner, software, version, os := extractServerHeader(string(buf[:n]))
+				info.Banner = banner
+				if software != "" {
+					info.Name = software
+					info.Version = version
+				}
+				info.OS = os
 			}
 			return info
 		}
@@ -58,6 +76,7 @@ func DetectService(ip string, port int, timeout time.Duration) ServiceInfo {
 		if strings.HasPrefix(rawBanner, "SSH-") {
 			info.Name = "ssh"
 			if strings.Contains(rawBanner, "OpenSSH") {
+				info.OS = extractOSFromBanner(rawBanner)
 				info.Name = "openssh"
 				info.Version = parseSSHVersion(rawBanner)
 			} else {
@@ -85,8 +104,15 @@ func DetectService(ip string, port int, timeout time.Duration) ServiceInfo {
 			if errHTTP == nil && nHTTP > 0 {
 				resp := string(buf[:nHTTP])
 				if strings.HasPrefix(resp, "HTTP/") {
-					info.Name = "http"
-					info.Banner, info.Version = extractServerHeader(resp)
+					banner, software, version, os := extractServerHeader(resp)
+					info.Banner = banner
+					info.OS = os
+					if software != "" {
+						info.Name = software
+						info.Version = version
+					} else {
+						info.Name = "http"
+					}
 					return info
 				}
 			}
@@ -109,22 +135,34 @@ func sanitizeBanner(b string) string {
 	return cleaned
 }
 
-func extractServerHeader(httpResp string) (string, string) {
+func extractServerHeader(httpResp string) (banner string, software string, version string, os string) {
 	lines := strings.Split(httpResp, "\r\n")
 	for _, line := range lines {
 		if strings.HasPrefix(strings.ToLower(line), "server:") {
-			banner := strings.TrimSpace(line[7:])
+			banner = strings.TrimSpace(line[7:])
 			parts := strings.Fields(banner)
 			if len(parts) > 0 {
 				versionParts := strings.Split(parts[0], "/")
 				if len(versionParts) > 1 {
-					return banner, versionParts[1]
+					software = strings.ToLower(versionParts[0])
+					version = versionParts[1]
 				}
 			}
-			return banner, ""
+			os = extractOSFromBanner(banner)
+			return
 		}
 	}
-	return "", ""
+	return "", "", "", "unknown"
+}
+
+func extractOSFromBanner(banner string) string {
+	lowerBanner := strings.ToLower(banner)
+	for osName, re := range osRegexps {
+		if re.MatchString(lowerBanner) {
+			return osName
+		}
+	}
+	return "unknown"
 }
 
 func parseSSHVersion(banner string) string {
