@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-// offlineDBJSON contains the embedded vulnerability database as a raw string.
-// This avoids file system dependencies and ensures the DB is always available.
 const offlineDBJSON = `{
   "nginx": {
     "1.10.3": [
@@ -43,28 +41,25 @@ type OfflineScanner struct {
 func NewOfflineScanner() (*OfflineScanner, error) {
 	var dbData []byte
 
-	// 1. Essayer de charger une base de données externe fournie par l'utilisateur.
 	userDBPath := getUserOfflineDBPath()
 	if userDBPath != "" {
 		if data, err := os.ReadFile(userDBPath); err == nil && len(data) > 0 {
-			fmt.Printf("[*] Chargement de la base de données de vulnérabilités hors ligne depuis: %s\n", userDBPath)
+			fmt.Printf("[*] Loading offline vulnerability database from: %s\n", userDBPath)
 			dbData = data
 		}
 	}
 
-	// 2. Si aucune base de données externe n'est trouvée, utiliser la base de données embarquée.
 	if dbData == nil {
 		dbData = []byte(offlineDBJSON)
 	}
 
 	var db map[string]map[string][]Vulnerability
 	if err := json.Unmarshal(dbData, &db); err != nil {
-		return nil, fmt.Errorf("impossible de parser la base de données de vulnérabilités: %w", err)
+		return nil, fmt.Errorf("could not parse vulnerability database: %w", err)
 	}
 
-	// Valider la structure de la base de données chargée
 	if db == nil || len(db) == 0 {
-		return nil, fmt.Errorf("la base de données de vulnérabilités chargée est vide ou invalide")
+		return nil, fmt.Errorf("loaded vulnerability database is empty or invalid")
 	}
 
 	return &OfflineScanner{db: db}, nil
@@ -84,7 +79,6 @@ func (s *OfflineScanner) SourceName() string {
 	return "Offline DB"
 }
 
-// getUserOfflineDBPath retourne le chemin attendu pour la base de données hors ligne de l'utilisateur.
 func getUserOfflineDBPath() string {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
@@ -93,61 +87,52 @@ func getUserOfflineDBPath() string {
 	return filepath.Join(configDir, "tcpcat", "offline_db.json")
 }
 
-// UpdateOfflineDB permet de mettre à jour la base de données hors ligne de l'utilisateur.
 func UpdateOfflineDB(newData []byte) error {
 	userDBPath := getUserOfflineDBPath()
 	if userDBPath == "" {
-		return fmt.Errorf("impossible de déterminer le chemin de la base de données utilisateur")
+		return fmt.Errorf("could not determine user database path")
 	}
 
-	// Assurez-vous que le répertoire existe
 	dir := filepath.Dir(userDBPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("impossible de créer le répertoire de configuration: %w", err)
+		return fmt.Errorf("could not create config directory: %w", err)
 	}
 
-	// Valider le JSON avant d'écrire
 	var tempDB map[string]map[string][]Vulnerability
 	if err := json.Unmarshal(newData, &tempDB); err != nil {
-		return fmt.Errorf("les données fournies ne sont pas un JSON de base de données valide: %w", err)
+		return fmt.Errorf("provided data is not a valid database JSON: %w", err)
 	}
 
-	// Écrire les nouvelles données dans le fichier
-	// Utiliser MarshalIndent pour un formatage lisible
 	formattedData, err := json.MarshalIndent(tempDB, "", "  ")
 	if err != nil {
-		return fmt.Errorf("impossible de formater les données JSON: %w", err)
+		return fmt.Errorf("could not format JSON data: %w", err)
 	}
 
 	if err := os.WriteFile(userDBPath, formattedData, 0644); err != nil {
-		return fmt.Errorf("impossible d'écrire la base de données hors ligne: %w", err)
+		return fmt.Errorf("could not write offline database: %w", err)
 	}
-	fmt.Printf("[*] Base de données hors ligne mise à jour avec succès: %s\n", userDBPath)
+	fmt.Printf("[*] Offline database successfully updated: %s\n", userDBPath)
 	return nil
 }
 
-// GetEmbeddedOfflineDB retourne la base de données embarquée.
 func GetEmbeddedOfflineDB() []byte {
 	return []byte(offlineDBJSON)
 }
 
-// AddSoftwareToOfflineDB permet d'ajouter ou de mettre à jour des entrées logicielles dans la base de données hors ligne de l'utilisateur.
 func AddSoftwareToOfflineDB(software, version string, newVulns []Vulnerability) error {
 	userDBPath := getUserOfflineDBPath()
 	if userDBPath == "" {
-		return fmt.Errorf("impossible de déterminer le chemin de la base de données utilisateur")
+		return fmt.Errorf("could not determine user database path")
 	}
 
-	// Charger la base de données existante (ou la base embarquée si aucune n'existe)
 	var currentDB map[string]map[string][]Vulnerability
 	if data, err := os.ReadFile(userDBPath); err == nil {
 		if err := json.Unmarshal(data, &currentDB); err != nil {
-			return fmt.Errorf("impossible de lire la base de données existante: %w", err)
+			return fmt.Errorf("could not read existing database: %w", err)
 		}
 	} else {
-		// Si le fichier n'existe pas ou ne peut pas être lu, utiliser la base embarquée comme point de départ.
 		if err := json.Unmarshal([]byte(offlineDBJSON), &currentDB); err != nil {
-			return fmt.Errorf("impossible de parser la base de données embarquée: %w", err)
+			return fmt.Errorf("could not parse embedded database: %w", err)
 		}
 	}
 
@@ -163,17 +148,17 @@ func AddSoftwareToOfflineDB(software, version string, newVulns []Vulnerability) 
 
 	formattedData, err := json.MarshalIndent(currentDB, "", "  ")
 	if err != nil {
-		return fmt.Errorf("impossible de formater les données JSON: %w", err)
+		return fmt.Errorf("could not format JSON data: %w", err)
 	}
 
 	dir := filepath.Dir(userDBPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("impossible de créer le répertoire de configuration: %w", err)
+		return fmt.Errorf("could not create config directory: %w", err)
 	}
 
 	if err := os.WriteFile(userDBPath, formattedData, 0644); err != nil {
-		return fmt.Errorf("impossible d'écrire la base de données hors ligne: %w", err)
+		return fmt.Errorf("could not write offline database: %w", err)
 	}
-	fmt.Printf("[*] Entrée '%s %s' ajoutée/mise à jour dans la base de données hors ligne: %s\n", software, version, userDBPath)
+	fmt.Printf("[*] Entry '%s %s' added/updated in offline database: %s\n", software, version, userDBPath)
 	return nil
 }
