@@ -32,9 +32,9 @@ The tool was designed with a dual approach:
 
 -   **Advanced Scan Engine**: Supports a wide range of TCP (SYN, Connect, ACK, FIN, NULL, Xmas, Window) and UDP scan techniques.
 -   **Extreme Performance with eBPF/XDP**: Utilizes an `AF_XDP` engine for very high-speed packet injection and capture, directly at the network driver level (`--ebpf`).
--   **Extensible Scripting Engine**: Write custom detection scripts directly in Go to identify specific services, configurations, or vulnerabilities (`--scripts`).
+-   **Extensible Scripting with WebAssembly (Wasm)**: Instead of Lua, `tcpcat` integrates a `Wazero`-based engine. Write custom detection scripts in Rust, Go, C, or any language that compiles to Wasm, and run them in a secure, sandboxed, and highly concurrent environment (`--scripts <path>`).
 -   **Intelligent UDP Probing**: Automatically sends protocol-specific probes for common UDP ports (like DNS) to increase the accuracy of open port detection.
--   **Integrated Vulnerability Detection**: Automatically queries an offline database or the Vulners API for known CVEs associated with detected services (`-sV`).
+-   **Integrated Vulnerability Detection**: Automatically queries multiple sources for known CVEs associated with detected services (`-sV`), including an offline database, the Vulners API, and the **Google OSV (Open Source Vulnerability) database**.
 -   **Host and Service Discovery**: Includes modules for host discovery (Ping Scan), service/version detection (`-sV`), and TCP traceroute.
 -   **Flexible Targeting**: Accepts IP addresses, hostnames, CIDR notation (`192.168.1.0/24`), and IP ranges (`10.0.0.1-254`).
 -   **Structured Output**: Exports results in JSON format (`-j`) for easy integration with other tools (SIEM, analysis scripts...).
@@ -48,8 +48,7 @@ Ensure that Go (version 1.20+) is installed on your system.
 git clone https://github.com/user/tcpcat.git
 cd tcpcat
 
-# 2. Install dependencies (including the scripting engine)
-go get github.com/traefik/yaegi
+# 2. Install dependencies
 go mod tidy
 
 # 3. Compile the executable
@@ -121,6 +120,9 @@ PORTS & SCANS:
 SERVICE & OS DETECTION:
   -sV              Service version detection
   -O               Enable OS detection
+
+SCRIPTING:
+  --scripts <path>  Load custom WebAssembly (.wasm) scripts from a directory
 
 EVASION & OPTIONS:
   -g <port>        Use a specific source port
