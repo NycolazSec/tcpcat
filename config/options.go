@@ -52,7 +52,6 @@ type Options struct {
 	InputFile   string
 	ExcludeHost string
 
-	// Host Discovery
 	PingScan      bool
 	SkipDiscovery bool
 	UdpPing       int
@@ -82,15 +81,17 @@ type Options struct {
 	DataHex    string
 	Fragment   bool
 
-	Timing        int
-	Workers       int
-	Verbose       bool
-	JsonOutput    string
-	ScriptPath    string
-	VulnersAPIKey string
-	SmartBypass   bool
+	Timing         int
+	RateLimit      int
+	MaxWorkers     int
+	UnsafeNoLimits bool
+	InsecureTLS    bool
+	Verbose        bool
+	JsonOutput     string
+	ScriptPath     string
+	VulnersAPIKey  string
+	SmartBypass    bool
 
-	// Cloud-Aware
 	AWSRegion string
 	AWSTags   string
 }
@@ -107,7 +108,6 @@ func ParseFlags() (*Options, error) {
 		"-iL":              true,
 		"-j":               true,
 		"-w":               true,
-		"-T":               true,
 		"-g":               true,
 		"--ttl":            true,
 		"--data-string":    true,
@@ -115,7 +115,9 @@ func ParseFlags() (*Options, error) {
 		"--top-ports":      true,
 		"-sI":              true,
 		"--scripts":        true,
+		"-T":               true,
 		"--vulners-apikey": true,
+		"--rate":           true,
 		"--aws-region":     true,
 		"--aws-tags":       true,
 		"-PU":              true,
@@ -166,14 +168,20 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.SmartBypass, "smart-bypass", false, "Enable smart bypass mode")
 
 	flag.IntVar(&opts.Timing, "T", 3, "Set timing template (0-5, higher is faster)")
-	flag.IntVar(&opts.Workers, "w", 100, "Number of parallel workers")
+	flag.IntVar(&opts.MaxWorkers, "w", 256, "Number of parallel workers (for discovery and port scanning)")
+	flag.IntVar(&opts.RateLimit, "rate", 500, "Max packets per second for discovery and scans")
+	flag.BoolVar(&opts.UnsafeNoLimits, "unsafe-no-limits", false, "Disable concurrency limits (DANGEROUS: may cause OOM killer)")
 	flag.BoolVar(&opts.Verbose, "v", false, "Enable verbose output")
+	flag.BoolVar(&opts.InsecureTLS, "k", false, "Allow insecure server connections (alias --insecure)")
 	flag.StringVar(&opts.JsonOutput, "j", "", "Export results to JSON file")
 	flag.StringVar(&opts.ScriptPath, "scripts", "", "Path to directory containing Go scripts")
 	flag.StringVar(&opts.VulnersAPIKey, "vulners-apikey", "", "Vulners.com API key for CVE lookup")
 
 	flag.StringVar(&opts.AWSRegion, "aws-region", "", "AWS region for tag-based target discovery")
 	flag.StringVar(&opts.AWSTags, "aws-tags", "", "Scan EC2 instances matching tags (e.g., 'Key=App,Value=Web')")
+
+	// Alias for -k
+	flag.BoolVar(&opts.InsecureTLS, "insecure", false, "Allow insecure server connections")
 
 	flag.Usage = func() {
 		fmt.Println(Banner)
@@ -213,11 +221,15 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--data%s          Append custom HEX payload\n", Yellow, Reset)
 		fmt.Printf("  %s--traceroute%s    Trace hop path to target\n", Yellow, Reset)
 		fmt.Printf("  %s--frag%s              Fragment packets to evade detection\n", Yellow, Reset)
+		fmt.Printf("  %s--smart-bypass%s  Attempt advanced techniques to bypass firewalls on filtered ports\n", Yellow, Reset)
 		fmt.Println(Cyan + "\nTIMING & OUTPUT:" + Reset)
 		fmt.Printf("  %s-T <0-5>%s        Set timing template\n", Yellow, Reset)
+		fmt.Printf("  %s--rate <pps>%s    Set max packets per second for discovery and scans\n", Yellow, Reset)
 		fmt.Printf("  %s-w <workers>%s    Number of parallel workers\n", Yellow, Reset)
 		fmt.Printf("  %s-v%s              Enable verbose output\n", Yellow, Reset)
 		fmt.Printf("  %s-j <file>%s       Export results to JSON file\n", Yellow, Reset)
+		fmt.Printf("  %s-k, --insecure%s  Allow insecure SSL/TLS connections\n", Yellow, Reset)
+		fmt.Printf("  %s--unsafe-no-limits%s Disable all concurrency limits (DANGEROUS)\n", Yellow, Reset)
 	}
 
 	flag.Parse()
