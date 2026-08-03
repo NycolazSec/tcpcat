@@ -18,7 +18,7 @@ type VulnersScanner struct {
 
 func NewVulnersScanner(apiKey string) (*VulnersScanner, error) {
 	if apiKey == "" {
-		return nil, fmt.Errorf("la clé API Vulners est requise")
+		return nil, fmt.Errorf("Vulners API key is required")
 	}
 	return &VulnersScanner{
 		apiKey: apiKey,
@@ -64,22 +64,22 @@ func (s *VulnersScanner) GetForSoftware(software, version string) ([]Vulnerabili
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("échec de la sérialisation de la requête Vulners: %w", err)
+		return nil, fmt.Errorf("failed to serialize Vulners request: %w", err)
 	}
 
 	resp, err := s.httpClient.Post(vulnersAPIEndpoint, "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return nil, fmt.Errorf("échec de l'appel à l'API Vulners: %w", err)
+		return nil, fmt.Errorf("failed to call Vulners API: %w", err)
 	}
 	defer resp.Body.Close()
 
 	var vulnersResp vulnersResponse
 	if err := json.NewDecoder(resp.Body).Decode(&vulnersResp); err != nil {
-		return nil, fmt.Errorf("échec du décodage de la réponse Vulners: %w", err)
+		return nil, fmt.Errorf("failed to decode Vulners response: %w", err)
 	}
 
 	if vulnersResp.Result != "OK" {
-		return nil, fmt.Errorf("l'API Vulners a retourné une erreur: %s", vulnersResp.Result)
+		return nil, fmt.Errorf("Vulners API returned an error: %s", vulnersResp.Result)
 	}
 
 	var vulnerabilities []Vulnerability
