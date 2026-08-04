@@ -33,43 +33,18 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 
 	target := fmt.Sprintf("%s:%d", ip, port)
 
-	if port == 443 || port == 8443 || port == 465 || port == 993 || port == 995 {
-		tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify}
-		dialer := &net.Dialer{Timeout: timeout}
-		tlsConn, err := tls.DialWithDialer(dialer, "tcp", target, tlsConfig)
-		if err == nil {
-			defer tlsConn.Close()
-			info.Name = "ssl/tls"
-			if port == 443 || port == 8443 {
-				info.Name = "https"
-				req := fmt.Sprintf("HEAD / HTTP/1.1\r\nHost: %s\r\nUser-Agent: tcpcat-engine/5.0\r\n\r\n", ip)
-				_ = tlsConn.SetDeadline(time.Now().Add(timeout))
-				_, _ = tlsConn.Write([]byte(req))
-				buf := make([]byte, 512)
-				n, _ := tlsConn.Read(buf)
-				banner, software, version, os := extractServerHeader(string(buf[:n]))
-				info.Banner = banner
-				if software != "" {
-					info.Name = software
-					info.Version = version
-				}
-				info.OS = os
-			}
-			return info
-		}
-	}
-
 	conn, err := net.DialTimeout("tcp", target, timeout)
 	if err != nil {
 		return info
 	}
 	defer conn.Close()
 
-	_ = conn.SetDeadline(time.Now().Add(timeout))
+	// 1. Try a passive read with a short timeout to catch talkative services (e.g., SSH, FTP)
+	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	buf := make([]byte, 512)
-	n, errRead := conn.Read(buf)
+	n, _ := conn.Read(buf)
 
-	if errRead == nil && n > 0 {
+	if n > 0 {
 		rawBanner := strings.TrimSpace(string(buf[:n]))
 		info.Banner = sanitizeBanner(rawBanner)
 
@@ -79,9 +54,6 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 				info.OS = extractOSFromBanner(rawBanner)
 				info.Name = "openssh"
 				info.Version = parseSSHVersion(rawBanner)
-			} else {
-				parts := strings.Split(rawBanner, " ")
-				info.Version = parts[0]
 			}
 			return info
 		}
@@ -95,30 +67,56 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 		}
 	}
 
-	if port == 80 || port == 8080 || port == 8000 || port == 8888 || info.Name == "unknown" {
-		req := fmt.Sprintf("HEAD / HTTP/1.1\r\nHost: %s\r\nUser-Agent: tcpcat-engine/5.0\r\n\r\n", ip)
-		_, errWrite := conn.Write([]byte(req))
-		if errWrite == nil {
-			_ = conn.SetDeadline(time.Now().Add(timeout))
-			nHTTP, errHTTP := conn.Read(buf)
-			if errHTTP == nil && nHTTP > 0 {
-				resp := string(buf[:nHTTP])
-				if strings.HasPrefix(resp, "HTTP/") {
-					banner, software, version, os := extractServerHeader(resp)
-					info.Banner = banner
-					info.OS = os
-					if software != "" {
-						info.Name = software
-						info.Version = version
-					} else {
-						info.Name = "http"
+	// 2. If the port was silent, probe actively if it's a common web port.
+	isWebPort := port == 80 || port == 443 || port == 8080 || port == 8443 || port == 8000 || port == 8888
+	if isWebPort {
+		isTLS := port == 443 || port == 8443
+		var probeConn net.Conn = conn
+
+		// A. If it's a TLS port, wrap the connection and perform a handshake.
+		if isTLS {
+			tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify}
+			tlsClient := tls.Client(conn, tlsConfig)
+
+			// Set a strict deadline for the handshake itself.
+			if err := tlsClient.SetDeadline(time.Now().Add(timeout)); err != nil {
+				info.Name = resolveDefaultPortName(port)
+				return info
+			}
+
+			if err := tlsClient.Handshake(); err == nil {
+				probeConn = tlsClient
+			}
+		}
+
+		// B. Send the HTTP probe over the appropriate connection (raw or TLS).
+		// We only do this if the connection is still valid for probing (e.g., TLS handshake succeeded).
+		if (isTLS && probeConn != conn) || !isTLS {
+			probeConn.SetDeadline(time.Now().Add(timeout)) // Reset deadline for the probe
+			probe := fmt.Sprintf("GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\nAccept: */*\r\nConnection: close\r\n\r\n", ip)
+			_, errWrite := probeConn.Write([]byte(probe))
+			if errWrite == nil {
+				n, errRead := probeConn.Read(buf)
+				if errRead == nil && n > 0 {
+					resp := string(buf[:n])
+					if strings.HasPrefix(resp, "HTTP/") {
+						banner, software, version, os := extractServerHeader(resp)
+						info.Banner = banner
+						info.OS = os
+						if software != "" {
+							info.Name = software
+							info.Version = version
+						} else {
+							info.Name = "http" // It's HTTP, but no server header.
+						}
+						return info // We got a definitive answer.
 					}
-					return info
 				}
 			}
 		}
 	}
 
+	// 3. Final fallback: If service is still unknown, use the default for the port.
 	if info.Name == "unknown" {
 		info.Name = resolveDefaultPortName(port)
 	}
@@ -152,6 +150,26 @@ func extractServerHeader(httpResp string) (banner string, software string, versi
 			return
 		}
 	}
+
+	// Fallback: If no "Server" header, look for common signatures in the body.
+	bodyLower := strings.ToLower(httpResp)
+	if i := strings.Index(bodyLower, "<address>apache/"); i != -1 {
+		signature := httpResp[i+len("<address>"):]
+		if j := strings.Index(signature, " "); j != -1 {
+			banner = signature[:j]
+			parts := strings.Split(banner, "/")
+			if len(parts) > 1 {
+				software = "apache"
+				version = parts[1]
+				os = extractOSFromBanner(banner)
+				return
+			}
+		}
+	}
+	if i := strings.Index(bodyLower, "<center>nginx/"); i != -1 {
+		// Similar logic can be added for nginx and others.
+	}
+
 	return "", "", "", "unknown"
 }
 
