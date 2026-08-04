@@ -302,6 +302,8 @@ func main() {
 						if filteredCount > 0 {
 							fmt.Printf("    %s[~] %d CVEs filtered by OS (%s)%s\n", config.Yellow, filteredCount, r.OS, config.Reset)
 						}
+					} else if initialCount > 0 {
+						fmt.Printf("%s[+] %s:%-5d - 0 CVEs found after strict version filtering.%s\n", config.Green, r.IP, r.Port, config.Reset)
 					}
 				}
 			}
