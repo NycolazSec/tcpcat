@@ -82,6 +82,11 @@ func (s *OSVScanner) GetForSoftware(software, version string) ([]Vulnerability, 
 			vuln.Title = vuln.Title[:97] + "..."
 		}
 
+		// Check if the target version is actually affected by this vulnerability
+		if !IsVersionAffected(version, v.Affected) {
+			continue
+		}
+
 		vuln.CVSS = extractCVSSScore(v.Severity, v.DatabaseSpecific)
 		vulnerabilities = append(vulnerabilities, vuln)
 	}
@@ -105,10 +110,27 @@ type osvVulnerability struct {
 	Details          string          `json:"details"`
 	Severity         []osvSeverity   `json:"severity"`
 	DatabaseSpecific json.RawMessage `json:"database_specific"`
+	Affected         []osvAffected   `json:"affected"`
 }
 type osvSeverity struct {
 	Type  string `json:"type"`
 	Score string `json:"score"`
+}
+
+type osvAffected struct {
+	Package  osvPackage `json:"package"`
+	Ranges   []osvRange `json:"ranges"`
+	Versions []string   `json:"versions,omitempty"`
+}
+
+type osvRange struct {
+	Type   string     `json:"type"`
+	Events []osvEvent `json:"events"`
+}
+
+type osvEvent struct {
+	Introduced string `json:"introduced,omitempty"`
+	Fixed      string `json:"fixed,omitempty"`
 }
 
 type osvDatabaseSpecific struct {
