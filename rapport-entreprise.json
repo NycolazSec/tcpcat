@@ -1,0 +1,42 @@
+{
+  "target": "scanme.nmap.org",
+  "duration": "1.288s",
+  "results": [
+    {
+      "ip": "45.33.32.156",
+      "port": 22,
+      "state": "OPEN",
+      "service": "openssh",
+      "version": "6.6.1p1",
+      "banner": "SSH-2.0-OpenSSH_6.6.1p1 Ubuntu-2ubuntu2.13",
+      "os": "ubuntu",
+      "latency_ns": 152736084,
+      "latency_ms": 152.736,
+      "reason": "SYN-ACK Received",
+      "vulnerability_assessment": {
+        "status": "no_match",
+        "source": "Offline DB",
+        "reason": "No matching vulnerabilities were found for openssh 6.6.1p1.",
+        "assessed_at": "2026-09-05T23:03:11.573238Z"
+      }
+    },
+    {
+      "ip": "45.33.32.156",
+      "port": 80,
+      "state": "OPEN",
+      "service": "apache",
+      "version": "2.4.7",
+      "banner": "Apache/2.4.7 (Ubuntu)",
+      "os": "ubuntu",
+      "latency_ns": 160821125,
+      "latency_ms": 160.821,
+      "reason": "SYN-ACK Received",
+      "vulnerability_assessment": {
+        "status": "no_match",
+        "source": "Offline DB",
+        "reason": "No matching vulnerabilities were found for apache 2.4.7.",
+        "assessed_at": "2026-09-05T23:03:11.573245Z"
+      }
+    }
+  ]
+}

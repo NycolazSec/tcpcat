@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tcpcat — Releases</title>
+<meta name="description" content="tcpcat — release notes and version history.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:      #eef1ec;
+    --paper-flat: #e6e9e3;
+    --card:       #f6f7f3;
+    --ink:        #171a17;
+    --ink-soft:   #545b52;
+    --ink-faint:  #8b9188;
+    --rule:       #c6ccc1;
+    --rule-strong:#9aa294;
+    --stamp:      #9c2b21;
+    --wire:       #1f5c6f;
+    --tag-add:    #2f6b3a;
+    --tag-fix:    #8a5e10;
+    --tag-chg:    #1f5c6f;
+    --tag-brk:    #9c2b21;
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Mono', ui-monospace, monospace;
+    font-size:14px;
+    line-height:1.7;
+    margin:0;
+  }
+  .paper-grid{
+    background-image:
+      linear-gradient(to right, rgba(23,26,23,0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(23,26,23,0.045) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .font-display{font-family:'Space Grotesk', 'IBM Plex Mono', monospace;}
+  ::selection{background:var(--stamp); color:#fff;}
+  header{
+    position:sticky; top:0; z-index:10;
+    background:var(--paper);
+    border-bottom:1.5px solid var(--ink);
+  }
+  .bar{
+    height:56px; display:flex; align-items:center; justify-content:space-between;
+    max-width:760px; margin:0 auto; padding:0 24px;
+  }
+  .brand{font-family:'Space Grotesk', monospace; font-weight:700; font-size:18px; text-decoration:none; color:var(--ink); display:flex; align-items:baseline; gap:8px;}
+  .brand .dot{color:var(--stamp);}
+  .brand .tag{font-family:'IBM Plex Mono', monospace; font-size:10px; font-weight:400; letter-spacing:.08em; color:var(--ink-faint); text-transform:uppercase;}
+  a.doclink{color:var(--wire); text-decoration:underline; text-underline-offset:2px; text-decoration-color:rgba(31,92,111,0.4);}
+  a.doclink:hover{text-decoration-color:var(--wire);}
+  .wrap{max-width:760px; margin:0 auto; padding:0 24px;}
+  main{padding:56px 0 96px;}
+  .meta{
+    font-size:11px; color:var(--ink-soft);
+    display:grid; grid-template-columns:1fr 1fr; gap:2px 32px;
+    margin-bottom:40px;
+  }
+  .meta div:nth-child(even){text-align:right;}
+  h1{
+    font-family:'Space Grotesk', monospace; font-weight:700;
+    font-size:28px; line-height:1.2; margin:0 0 8px;
+  }
+  .subtitle{color:var(--ink-faint); font-size:11px; text-transform:uppercase; letter-spacing:.12em; margin:0 0 48px;}
+
+  /* timeline */
+  .timeline{position:relative; padding-left:0;}
+  .release{
+    position:relative;
+    padding:0 0 44px 0;
+    border-left:1.5px solid var(--rule-strong);
+    margin-left:6px;
+    padding-left:28px;
+  }
+  .release:last-child{border-left-color:transparent;}
+  .release::before{
+    content:'';
+    position:absolute; left:-6.5px; top:2px;
+    width:11px; height:11px; border-radius:50%;
+    background:var(--paper); border:2px solid var(--ink);
+  }
+  .release.latest::before{ background:var(--stamp); border-color:var(--stamp); }
+
+  .rel-head{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:4px;}
+  .rel-version{font-family:'Space Grotesk', monospace; font-weight:700; font-size:18px;}
+  .rel-date{font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em;}
+  .rel-badge{
+    font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+    border:1.5px solid var(--stamp); color:var(--stamp);
+    padding:2px 7px; transform:rotate(-1deg); font-weight:600;
+  }
+  .rel-summary{color:var(--ink-soft); font-size:13px; margin:6px 0 14px;}
+
+  .changes{list-style:none; margin:0; padding:0;}
+  .changes li{
+    display:grid; grid-template-columns:74px 1fr; gap:10px;
+    padding:6px 0; border-top:1px solid var(--rule);
+    font-size:13px;
+  }
+  .changes li:first-child{border-top:none;}
+  .change-tag{
+    font-size:10px; text-transform:uppercase; letter-spacing:.05em;
+    font-weight:600; padding-top:2px;
+  }
+  .change-tag.add{color:var(--tag-add);}
+  .change-tag.fix{color:var(--tag-fix);}
+  .change-tag.chg{color:var(--tag-chg);}
+  .change-tag.brk{color:var(--tag-brk);}
+  code{
+    font-family:'IBM Plex Mono', monospace; background:var(--card);
+    border:1px solid var(--rule); padding:1px 5px; border-radius:2px; font-size:.9em;
+  }
+  .assets{
+    margin-top:16px; padding:14px 16px;
+    background:var(--card); border:1px solid var(--rule);
+    font-size:12px; color:var(--ink-soft);
+  }
+  .assets a{color:var(--wire);}
+
+  footer{
+    border-top:1.5px solid var(--ink); padding:24px 0 40px;
+    font-size:11px; color:var(--ink-faint);
+  }
+  footer .wrap{display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;}
+
+  @media (max-width:640px){
+    .meta{grid-template-columns:1fr;}
+    .meta div:nth-child(even){text-align:left;}
+    h1{font-size:22px;}
+    .changes li{grid-template-columns:60px 1fr;}
+  }
+</style>
+</head>
+<body class="paper-grid">
+
+  <header>
+    <div class="bar">
+      <a href="{{ url_for('undex') }}" class="brand">tcpcat<span class="dot">.</span><span class="tag">Releases</span></a>
+      <a href="{{ url_for('undex') }}" class="doclink" style="font-size:11px; text-transform:uppercase; letter-spacing:.05em;">← Back</a>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <div class="meta">
+      <div>Document type: Release notes</div>
+      <div>N. — NycolazSec</div>
+      <div>Project: tcpcat</div>
+      <div>github.com/NycolazSec/tcpcat/releases</div>
+    </div>
+
+    <h1>Releases</h1>
+    <p class="subtitle">Version history &amp; changelog — semantic versioning</p>
+
+    <div class="timeline">
+
+      <!-- ⬇ Latest release — edit or duplicate this block for each new version -->
+      <div class="release latest">
+        <div class="rel-head">
+          <span class="rel-version">v1.0.0</span>
+          <span class="rel-date">September 2026</span>
+          <span class="rel-badge">Latest</span>
+        </div>
+        <p class="rel-summary">First stable release. eBPF/AF_XDP acceleration, WASM detection engine, and the <code>safe-production</code> assessment profile.</p>
+        <ul class="changes">
+          <li><span class="change-tag add">Added</span><span>eBPF/AF_XDP packet capture path for wire-speed scans.</span></li>
+          <li><span class="change-tag add">Added</span><span>WASM protocol dissector sandbox (Rust, C, Go, AssemblyScript).</span></li>
+          <li><span class="change-tag add">Added</span><span><code>--scope-file</code>, <code>--profile safe-production</code>, and <code>--audit-log</code> options.</span></li>
+          <li><span class="change-tag add">Added</span><span>JSON, SARIF, and JSONL report output.</span></li>
+        </ul>
+        <div class="assets">
+          Binaries: linux/amd64, linux/arm64 · Signed checksums (<code>SHA256SUMS</code>) available on the
+          <a href="https://github.com/NycolazSec/tcpcat/releases/tag/v1.0.0" target="_blank">GitHub release page</a>.
+        </div>
+      </div>
+
+      <!-- ⬇ Older release — example structure -->
+      <div class="release">
+        <div class="rel-head">
+          <span class="rel-version">v0.9.0</span>
+          <span class="rel-date">August 2026</span>
+        </div>
+        <p class="rel-summary">Beta. Core scanning engine, IDS/IPS visibility profiles, and initial CLI.</p>
+        <ul class="changes">
+          <li><span class="change-tag add">Added</span><span>L3–L7 variation controls (<code>--evasion</code>) for authorized visibility testing.</span></li>
+          <li><span class="change-tag chg">Changed</span><span>Default scan timeout reduced for faster authorized inventories.</span></li>
+          <li><span class="change-tag fix">Fixed</span><span>IPv6 fragmentation edge case in the topology mapper.</span></li>
+        </ul>
+      </div>
+
+      <div class="release">
+        <div class="rel-head">
+          <span class="rel-version">v0.1.0</span>
+          <span class="rel-date">June 2026</span>
+        </div>
+        <p class="rel-summary">Initial public prototype.</p>
+        <ul class="changes">
+          <li><span class="change-tag add">Added</span><span>Multi-protocol enumeration: TCP, UDP, ICMP.</span></li>
+          <li><span class="change-tag add">Added</span><span>Asynchronous DNS / mDNS / NetBIOS discovery.</span></li>
+        </ul>
+      </div>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>tcpcat — Apache-2.0 license</span>
+      <span>Full history: <a class="doclink" href="https://github.com/NycolazSec/tcpcat/releases" target="_blank">github.com/NycolazSec/tcpcat/releases</a></span>
+    </div>
+  </footer>
+
+</body>
+</html>

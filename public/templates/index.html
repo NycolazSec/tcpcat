@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tcpcat Technical Note 1337 — Network Assessment</title>
+<meta name="description" content="tcpcat — open-source network assessment with eBPF/AF_XDP acceleration and IDS/IPS visibility testing.">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:      #eef1ec;
+    --paper-flat: #e6e9e3;
+    --card:       #f6f7f3;
+    --ink:        #171a17;
+    --ink-soft:   #545b52;
+    --ink-faint:  #8b9188;
+    --rule:       #c6ccc1;
+    --rule-strong:#9aa294;
+    --stamp:      #9c2b21;
+    --wire:       #1f5c6f;
+    --amber:      #8a5e10;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Mono', ui-monospace, monospace;
+  }
+  .paper-grid{
+    background-image:
+      linear-gradient(to right, rgba(23,26,23,0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(23,26,23,0.045) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .font-display{font-family:'Space Grotesk', 'IBM Plex Mono', monospace;}
+  .doc-rule{border-top:1px solid var(--rule);}
+  .doc-rule-strong{border-top:1.5px solid var(--ink);}
+  .leader{
+    flex:1 1 auto;
+    border-bottom:2px dotted var(--rule-strong);
+    margin:0 0.5em;
+    transform: translateY(-4px);
+  }
+  .fade-in{opacity:0; transform:translateY(10px); transition:opacity .6s ease, transform .6s ease;}
+  .fade-in.is-visible{opacity:1; transform:translateY(0);}
+  @media (prefers-reduced-motion: reduce){
+    .fade-in{opacity:1; transform:none; transition:none;}
+    html{scroll-behavior:auto;}
+  }
+  ::selection{background:var(--stamp); color:#fff;}
+  .stamp{
+    border:1.5px solid var(--stamp);
+    color:var(--stamp);
+    transform:rotate(-2deg);
+  }
+  a.doclink{color:var(--wire); text-decoration:underline; text-underline-offset:2px; text-decoration-color:rgba(31,92,111,0.4);}
+  a.doclink:hover{text-decoration-color:var(--wire);}
+  table.doctable th, table.doctable td{border-bottom:1px solid var(--rule);}
+  table.doctable thead th{border-bottom:1.5px solid var(--ink);}
+  .field-tag{border:1px solid var(--rule-strong); color:var(--ink-soft);}
+  .bar-track{background:var(--paper-flat); border:1px solid var(--rule);}
+  code, pre{font-family:'IBM Plex Mono', monospace;}
+  .no-scrollbar::-webkit-scrollbar{display:none;}
+  .no-scrollbar{-ms-overflow-style:none; scrollbar-width:none;}
+  .lang-switch{border:1px solid var(--rule-strong); font-size:10px; letter-spacing:.05em;}
+  .lang-switch button{padding:3px 8px; font-family:'IBM Plex Mono', monospace; text-transform:uppercase;}
+  .lang-switch button[aria-pressed="true"]{background:var(--ink); color:var(--paper);}
+  .lang-switch button[aria-pressed="false"]{color:var(--ink-soft); background:transparent;}
+  .colophon-box{max-width:100%; min-width:0;}
+</style>
+</head>
+<body class="paper-grid antialiased leading-relaxed">
+
+  <!-- running status line -->
+  <div class="hidden sm:flex items-center justify-center gap-6 text-[10px] tracking-widest uppercase text-[var(--ink-faint)] border-b border-[var(--rule)] py-1 bg-[var(--paper-flat)] whitespace-nowrap">
+    <span data-i18n="status-1">Moteur eBPF AF_XDP : actif</span>
+    <span>·</span>
+    <span data-i18n="status-2">Débit crête ≈ 1 000 000 pps/cœur</span>
+    <span>·</span>
+    <span data-i18n="status-3">Conformité RFC 793 — usage autorisé uniquement</span>
+  </div>
+
+  <!-- doc nav -->
+  <header class="sticky top-0 z-40 bg-[var(--paper)] border-b border-[var(--rule-strong)]">
+    <div class="max-w-5xl mx-auto px-5 sm:px-8 h-14 flex items-center justify-between gap-3">
+      <a href="#top" class="font-display font-bold text-lg tracking-tight flex items-baseline gap-2 shrink-0">
+        tcpcat<span class="text-[var(--stamp)]">.</span>
+        <span class="hidden sm:inline text-[10px] font-mono font-normal tracking-widest text-[var(--ink-faint)] uppercase">Technical&nbsp;Note&nbsp;1337</span>
+      </a>
+      <nav class="flex gap-3 text-[11px] uppercase tracking-wide overflow-x-auto no-scrollbar">
+        <a href="#resume" data-i18n="nav-1" class="hover:text-[var(--stamp)] whitespace-nowrap">Résumé</a>
+        <a href="#capacites" data-i18n="nav-2" class="hover:text-[var(--stamp)] whitespace-nowrap">Capacités</a>
+        <a href="#evasion" data-i18n="nav-3" class="hover:text-[var(--stamp)] whitespace-nowrap">Visibilité</a>
+        <a href="#architecture" data-i18n="nav-4" class="hover:text-[var(--stamp)] whitespace-nowrap">Architecture</a>
+        <a href="#audit" data-i18n="nav-audit" class="hover:text-[var(--stamp)] whitespace-nowrap">Audit</a>
+        <a href="#cli" data-i18n="nav-6" class="hover:text-[var(--stamp)] whitespace-nowrap">CLI</a>
+        <a href="https://github.com/NycolazSec/tcpcat" target="_blank" class="hidden sm:inline text-[var(--wire)] whitespace-nowrap">GitHub ↗</a>
+      </nav>
+      <div class="lang-switch flex shrink-0" role="group" aria-label="Langue / Language">
+        <button type="button" id="btn-fr" aria-pressed="true">FR</button>
+        <button type="button" id="btn-en" aria-pressed="false">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="top" class="max-w-3xl mx-auto px-5 sm:px-8 py-12">
+
+    <!-- document header block -->
+    <div class="text-[11px] sm:text-xs text-[var(--ink-soft)] grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-0.5 mb-10">
+      <div data-i18n="meta-wg">Projet communautaire open source</div>   <div class="sm:text-right">N. — NycolazSec</div>
+      <div data-i18n="meta-rfc">Note technique : 1337</div>              <div class="sm:text-right">github.com/NycolazSec/tcpcat</div>
+      <div data-i18n="meta-obs">Références : Nmap, RFC 793, eBPF/AF_XDP</div><div class="sm:text-right" data-i18n="meta-date">Septembre 2026</div>
+      <div data-i18n="meta-cat">Catégorie : informationnel — évaluation réseau autorisée</div>
+      <div class="sm:text-right sm:col-start-2" data-i18n="meta-issn">Document communautaire — non commercial</div>
+    </div>
+
+    <!-- title -->
+    <h1 data-i18n="title" class="font-display font-bold text-[26px] sm:text-[34px] leading-tight text-center mb-3">
+      tcpcat — reconnaissance réseau hautes performances<br class="hidden sm:block"> et test de visibilité IDS/IPS
+    </h1>
+    <p data-i18n="subtitle" class="text-center text-[var(--ink-faint)] text-xs uppercase tracking-widest mb-8">Note technique communautaire — v1.0</p>
+    <div class="flex flex-wrap justify-center gap-2 mb-10 text-[10px] uppercase tracking-wide">
+      <a class="field-tag px-2 py-1 hover:text-[var(--stamp)]" href="https://github.com/NycolazSec/tcpcat/actions" target="_blank" rel="noreferrer">CI: Go test -race</a>
+      <span class="field-tag px-2 py-1">Go 1.22</span>
+      <span class="field-tag px-2 py-1">Apache-2.0</span>
+      <span data-i18n="badge-platforms" class="field-tag px-2 py-1">Linux · macOS · Windows</span>
+      <span data-i18n="badge-community" class="field-tag px-2 py-1">Projet communautaire</span>
+    </div>
+
+    <!-- colophon / signature mark -->
+    <figure class="mb-14 flex flex-col items-center">
+      <div class="colophon-box border border-[var(--rule-strong)] bg-[var(--card)] px-5 sm:px-8 py-5 overflow-x-auto no-scrollbar">
+        <pre class="text-[9px] sm:text-[11px] leading-[1.05] font-mono inline-block">
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀   ⠀⠀<span class="text-[var(--stamp)]">⢤⣶⣄</span>⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀<span class="text-[var(--stamp)]">⣀⣤⡾⠿⢿⡀</span>⠀⠀⠀⠀<span class="text-[var(--ink)]">⣠⣶⣿⣷</span>
+⠀⠀⠀⠀⠀⠀⠀⠀<span class="text-[var(--stamp)]">⢀⣴⣦⣴⣿⡋⠀⠀⠈⢳⡄</span>⠀<span class="text-[var(--ink)]">⢠⣾⣿⠁⠈⣿⡆</span>      <span class="font-display text-[var(--stamp)] font-bold text-xs sm:text-sm">tcpcat</span> <span class="font-display text-[var(--ink)] font-bold text-xs sm:text-sm">v1.0</span> <span class="text-[var(--ink-faint)] text-xs">by NycolazSec</span>
+⠀⠀⠀⠀⠀⠀⠀<span class="text-[var(--stamp)]">⣰⣿⣿⠿⠛⠉⠉⠁⠀⠀⠀⠹⡄</span><span class="text-[var(--ink)]">⣿⣿⣿⠀⠀⢹⇇</span>      <span class="text-[var(--ink-soft)] text-xs uppercase tracking-wide">Modular Security &amp; Network Engine</span>
+⠀⠀⠀⠀⠀<span class="text-[var(--stamp)]">⣠⣾⡿⠋⠁</span>⠀⠀⠀⠀⠀⠀⠀⠀<span class="text-[var(--ink)]">⣰⣏⢻⣿⣿⡆⠀⠸⣿</span>
+⠀⠀⠀<span class="text-[var(--stamp)]">⢀⣴⠟⠁</span>⠀⠀⠀⠀⠀⠀⠀⠀⠀<span class="text-[var(--ink)]">⢠⣾⣿⣿⣆⠹⣿⣷⠀⢘⣿</span>
+⠀⠀<span class="text-[var(--stamp)]">⢀⡾⠁</span>⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀<span class="text-[var(--ink)]">⢰⣿⣿⠋⠉⠛⠂⠹⠿⣲⣿⣿⣧</span>
+⠀<span class="text-[var(--stamp)]">⢠⠏</span>⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀<span class="text-[var(--ink)]">⢀⣤⣿⣿⣿⣷⣾⣿⡇⢀⠀⣼⣿⣿⣿⣧</span>
+<span class="text-[var(--stamp)]">⠰⠃</span>⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀<span class="text-[var(--ink)]">⢠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⡘⢿⣿⣿⣿</span>
+<span class="text-[var(--stamp)]">⠁</span>⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀<span class="text-[var(--ink)]">⠸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⣷⡈⠿⢿⣿⡆</span>
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀<span class="text-[var(--ink)]">⠙⠛⠁⢙⠛⣿⣿⣿⣿⡟⠀⡿⠀⠀⢀⣿⡇</span>
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀<span class="text-[var(--ink)]">⠘⣶⣤⣉⣛⠻⠇⢠⣿⣾⣿⡄⢻⡇</span>
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀<span class="text-[var(--ink)]">⣿⣿⣿⣿⦦⣤⣾⣿⣿⣿⣿⣆</span></pre>
+      </div>
+      <figcaption class="text-[10px] text-[var(--ink-faint)] uppercase tracking-widest mt-2">Colophon</figcaption>
+    </figure>
+
+    <!-- status of memo -->
+    <section class="mb-10 text-sm text-[var(--ink-soft)] max-w-2xl mx-auto">
+      <p data-i18n="memo-label" class="font-semibold text-[var(--ink)] mb-1 text-xs uppercase tracking-wide">Statut de ce mémo</p>
+      <p data-i18n="memo-body">Ce document présente <strong class="text-[var(--ink)]">tcpcat</strong>, un moteur de reconnaissance réseau écrit en Go. Cette note communautaire n'est pas une RFC IETF et ne remplace pas Nmap ; elle décrit une approche complémentaire orientée performances, rapports et évaluation autorisée. Le projet est distribué sous licence Apache-2.0.</p>
+    </section>
+
+    <!-- abstract -->
+    <section class="mb-16 text-sm max-w-2xl mx-auto">
+      <p data-i18n="abstract-label" class="font-semibold text-xs uppercase tracking-wide mb-1">Résumé</p>
+      <p data-i18n="abstract-body" class="text-[var(--ink-soft)]">tcpcat combine un moteur de scan multi-protocoles avec une accélération eBPF/AF_XDP sur Linux. Ses contrôles de variation de paquets et de timing aident les équipes autorisées à évaluer la visibilité de leurs IDS/IPS. Un moteur de détection sandboxé en WebAssembly assure la corrélation avec des bases CVE.</p>
+    </section>
+
+    <section id="quick-start" class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between">
+        <h2 data-i18n="quick-title" class="font-display font-bold text-xl">Démarrage rapide</h2>
+        <span data-i18n="quick-tag" class="text-[10px] text-[var(--ink-faint)]">Local</span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-px bg-[var(--rule)] border border-[var(--rule)] text-xs">
+        <div class="bg-[var(--card)] p-4"><p data-i18n="quick-cli" class="font-semibold mb-2">Découvrir la CLI</p><pre class="overflow-x-auto">go run ./cmd/tcpcat --help</pre></div>
+          <div class="bg-[var(--card)] p-4"><p data-i18n="quick-report" class="font-semibold mb-2">Exporter un rapport</p><pre class="overflow-x-auto">go run ./cmd/tcpcat -sV \
+        -j report.json 127.0.0.1</pre></div>
+        <div class="bg-[var(--card)] p-4"><p data-i18n="quick-build" class="font-semibold mb-2">Compiler depuis les sources</p><pre class="overflow-x-auto">go build -o tcpcat \
+  ./cmd/tcpcat</pre></div>
+      </div>
+    </section>
+
+    <!-- table of contents -->
+    <nav class="mb-20 text-sm max-w-2xl mx-auto" aria-label="Table des matières">
+      <p data-i18n="toc-label" class="font-semibold text-xs uppercase tracking-wide mb-3">Table des matières</p>
+      <ol class="space-y-1.5 text-[var(--ink-soft)]">
+        <li class="flex items-baseline"><span data-i18n="toc-1">1. Introduction et spécifications</span><span class="leader"></span><span>3</span></li>
+        <li class="flex items-baseline"><span data-i18n="toc-2">2. Capacités système</span><span class="leader"></span><span>4</span></li>
+        <li class="flex items-baseline"><span data-i18n="toc-3">3. Test de visibilité IDS/IPS</span><span class="leader"></span><span>6</span></li>
+        <li class="flex items-baseline"><span data-i18n="toc-4">4. Chaîne d'évaluation</span><span class="leader"></span><span>8</span></li>
+        <li class="flex items-baseline"><span data-i18n="toc-5">5. Benchmark comparatif</span><span class="leader"></span><span>9</span></li>
+        <li class="flex items-baseline"><span data-i18n="toc-6">6. Référence en ligne de commande</span><span class="leader"></span><span>10</span></li>
+        <li class="flex items-baseline"><span data-i18n="toc-7">7. Considérations de sécurité</span><span class="leader"></span><span>12</span></li>
+        <li class="flex items-baseline"><span data-i18n="toc-appendix">Annexe A. Folklore réseau (informatif)</span><span class="leader"></span><span>13</span></li>
+        <li class="flex items-baseline"><span data-i18n="toc-8">Adresse de l'auteur</span><span class="leader"></span><span>13</span></li>
+      </ol>
+    </nav>
+
+    <!-- 1. INTRODUCTION -->
+    <section id="resume" class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between">
+        <h2 data-i18n="sec1-title" class="font-display font-bold text-xl">1. Introduction et spécifications</h2>
+        <span class="text-[10px] text-[var(--ink-faint)]">§1</span>
+      </div>
+
+      <p data-i18n="sec1-body" class="text-sm text-[var(--ink-soft)] mb-6">
+        tcpcat expose l'intégralité de la pile TCP/IP au niveau du pilote réseau. Plutôt que de passer par les sockets BSD, chaque paquet est construit, envoyé et lu directement en espace noyau. Le tableau ci-dessous résume les valeurs mesurées en environnement de test.
+      </p>
+
+      <dl class="grid grid-cols-1 sm:grid-cols-3 gap-px bg-[var(--rule)] border border-[var(--rule)] mb-10 text-xs">
+        <div class="bg-[var(--card)] p-4"><dt data-i18n="stat-1-label" class="text-[var(--ink-faint)] uppercase tracking-wide mb-1">Débit vs. outils classiques</dt><dd class="font-display font-bold text-lg text-[var(--stamp)]">23,8×</dd></div>
+        <div class="bg-[var(--card)] p-4"><dt data-i18n="stat-2-label" class="text-[var(--ink-faint)] uppercase tracking-wide mb-1">Contrôles de variation (phase 4)</dt><dd data-i18n="stat-2-val" class="font-display font-bold text-lg">29 techniques</dd></div>
+        <div class="bg-[var(--card)] p-4"><dt data-i18n="stat-3-label" class="text-[var(--ink-faint)] uppercase tracking-wide mb-1">Débit crête / cœur</dt><dd class="font-display font-bold text-lg">≈ 1 000 000 pps</dd></div>
+      </dl>
+
+      <!-- signature element: TCP header diagram -->
+      <figure class="mb-3 overflow-x-auto">
+        <pre class="text-[10px] sm:text-[12px] leading-[1.15] bg-[var(--card)] border border-[var(--rule-strong)] p-4 sm:p-6 inline-block min-w-full">
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|          Source Port         |       Destination Port       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        Sequence Number                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Acknowledgment Number                     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  Data |           |U|A|P|R|S|F|                               |
+| Offset| Reserved  |R|C|S|S|Y|I|            Window             |
+|       |           |G|K|H|T|N|N|                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|           Checksum           |         Urgent Pointer        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Options                    |    Padding    |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+</pre>
+        <figcaption data-i18n="fig1-caption" class="text-xs text-[var(--ink-faint)] mt-2">Figure 1 — En-tête TCP (RFC 793 §3.1). Champs configurables lors d'une évaluation tcpcat :</figcaption>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <span class="field-tag text-[10px] px-2 py-0.5">Flags (SYN/ACK/FIN/Xmas)</span>
+          <span class="field-tag text-[10px] px-2 py-0.5">Window</span>
+          <span class="field-tag text-[10px] px-2 py-0.5">Options / Padding</span>
+          <span data-i18n="fig1-tag4" class="field-tag text-[10px] px-2 py-0.5">Sequence Number (jitter)</span>
+        </div>
+      </figure>
+    </section>
+
+    <!-- 2. CAPACITIES -->
+    <section id="capacites" class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between">
+        <h2 data-i18n="sec2-title" class="font-display font-bold text-xl">2. Capacités système</h2>
+        <span class="text-[10px] text-[var(--ink-faint)]">§2</span>
+      </div>
+
+      <div class="space-y-8">
+        <div>
+          <h3 data-i18n="sec2-1-h" class="font-semibold text-sm mb-1.5">2.1 Reconnaissance L2–L7</h3>
+          <p data-i18n="sec2-1-p" class="text-sm text-[var(--ink-soft)] mb-2">Énumération multi-protocoles (TCP, UDP, ICMP), cartographie de topologie L3/L4 avec empreinte logicielle, et découverte asynchrone DNS / mDNS / NetBIOS.</p>
+          <code class="text-xs bg-[var(--card)] border border-[var(--rule)] px-2 py-1 inline-block">SYN · ACK · Window · Xmas · FIN scans</code>
+        </div>
+        <div>
+          <h3 data-i18n="sec2-2-h" class="font-semibold text-sm mb-1.5">2.2 Noyau Linux eBPF / AF_XDP</h3>
+          <p data-i18n="sec2-2-p" class="text-sm text-[var(--ink-soft)] mb-2">Accès direct aux paquets au niveau du pilote réseau — contournement complet de la couche socket. Débit filaire sans surcharge CPU notable.</p>
+          <code class="text-xs bg-[var(--card)] border border-[var(--rule)] px-2 py-1 inline-block">≈1M pps/cœur · Zero-Copy Driver Mode</code>
+        </div>
+        <div>
+          <h3 data-i18n="sec2-3-h" class="font-semibold text-sm mb-1.5">2.3 Intelligence programmable (WASM)</h3>
+          <p data-i18n="sec2-3-p" class="text-sm text-[var(--ink-soft)] mb-2">Moteur de détection sandboxé en WebAssembly. Les dissecteurs de protocoles peuvent être écrits en Rust, C, Go ou AssemblyScript.</p>
+          <code class="text-xs bg-[var(--card)] border border-[var(--rule)] px-2 py-1 inline-block">Corrélation CVE dynamique · Vulners API · Google OSV</code>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. IDS/IPS VISIBILITY -->
+    <section id="evasion" class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between">
+        <h2 data-i18n="sec3-title" class="font-display font-bold text-xl">3. Test de visibilité IDS/IPS</h2>
+        <span class="text-[10px] text-[var(--ink-faint)]">§3</span>
+      </div>
+      <p data-i18n="sec3-intro" class="text-sm text-[var(--ink-soft)] mb-6">Des contrôles de variation répartis sur la pile OSI, sélectionnables via <code>--evasion</code>, pour valider la journalisation et les alertes de défenses autorisées.</p>
+
+      <div class="overflow-x-auto mb-8">
+        <table class="doctable w-full text-left text-xs sm:text-sm">
+          <thead>
+            <tr class="text-[var(--ink-faint)] uppercase tracking-wide text-[10px]">
+              <th data-i18n="th-1" class="py-2 pr-4">Profil</th>
+              <th data-i18n="th-2" class="py-2 pr-4">Variation</th>
+              <th data-i18n="th-3" class="py-2 pr-4">Usage</th>
+              <th data-i18n="th-4" class="py-2 pr-4">Surcharge</th>
+              <th data-i18n="th-5" class="py-2">Usage recommandé</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="py-2 pr-4 font-semibold">off</td><td class="py-2 pr-4 text-[var(--stamp)]">Trafic de référence</td><td data-i18n="td-off-3" class="py-2 pr-4">Inventaire autorisé</td><td class="py-2 pr-4">0 %</td><td data-i18n="td-off-5" class="py-2 text-[var(--ink-soft)]">Cartographie rapide</td></tr>
+            <tr><td class="py-2 pr-4 font-semibold">light</td><td class="py-2 pr-4 text-[var(--amber)]">Variation limitée</td><td data-i18n="td-light-3" class="py-2 pr-4">Audit de production</td><td class="py-2 pr-4">+5 %</td><td data-i18n="td-light-5" class="py-2 text-[var(--ink-soft)]">Impact réduit</td></tr>
+            <tr><td class="py-2 pr-4 font-semibold">moderate</td><td class="py-2 pr-4 text-[var(--amber)]">Variation standard</td><td data-i18n="td-mod-3" class="py-2 pr-4">Validation contrôlée</td><td class="py-2 pr-4">+15 %</td><td data-i18n="td-mod-5" class="py-2 text-[var(--ink-soft)]">Environnements surveillés</td></tr>
+            <tr><td class="py-2 pr-4 font-semibold">aggressive</td><td class="py-2 pr-4 text-[var(--wire)]">Variation étendue</td><td data-i18n="td-agg-3" class="py-2 pr-4">Plan de test approuvé</td><td class="py-2 pr-4">+30 %</td><td data-i18n="td-agg-5" class="py-2 text-[var(--ink-soft)]">Laboratoire ou environnement contrôlé</td></tr>
+            <tr class="bg-[var(--card)]"><td class="py-2 pr-4 font-semibold">stealthy</td><td class="py-2 pr-4 text-[var(--wire)] font-semibold">Variation élevée</td><td data-i18n="td-st-3" class="py-2 pr-4 font-semibold">Scénario de visibilité</td><td class="py-2 pr-4">+50 %</td><td data-i18n="td-st-5" class="py-2 text-[var(--ink-soft)]">Validation encadrée</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <dl class="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
+        <div class="border-t border-[var(--rule)] pt-2"><dt data-i18n="l3-h" class="font-semibold mb-1">Couche réseau (L3)</dt><dd data-i18n="l3-p" class="text-[var(--ink-soft)]">Fragmentation IPv4 et mutation adaptative de la stratégie TTL.</dd></div>
+        <div class="border-t border-[var(--rule)] pt-2"><dt data-i18n="l4-h" class="font-semibold mb-1">Couche transport (L4)</dt><dd data-i18n="l4-p" class="text-[var(--ink-soft)]">Ajustement de fenêtre TCP, ports éphémères randomisés, crafting de flags.</dd></div>
+        <div class="border-t border-[var(--rule)] pt-2"><dt data-i18n="l5-h" class="font-semibold mb-1">Couche session (L5)</dt><dd data-i18n="l5-p" class="text-[var(--ink-soft)]">Jitter temporel à coefficient de variance réglable (0.0–1.0).</dd></div>
+        <div class="border-t border-[var(--rule)] pt-2"><dt data-i18n="l7-h" class="font-semibold mb-1">Couche application (L7)</dt><dd data-i18n="l7-p" class="text-[var(--ink-soft)]">Orchestration distribuée de leurres (decoy swarm) en sockets brutes.</dd></div>
+      </dl>
+    </section>
+
+    <!-- 4. ARCHITECTURE -->
+    <section id="architecture" class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between">
+      <h2 data-i18n="architecture-title" class="font-display font-bold text-xl">4. Chaîne d'évaluation</h2>
+      <span data-i18n="architecture-tag" class="text-[10px] text-[var(--ink-faint)]">Flux</span>
+      </div>
+      <p data-i18n="architecture-body" class="text-sm text-[var(--ink-soft)] mb-5">Les cibles, services et résultats traversent les contrôles suivants avant de produire des rapports exploitables.</p>
+      <pre class="text-[11px] sm:text-xs leading-7 bg-[var(--card)] border border-[var(--rule-strong)] p-4 overflow-x-auto">Target input
+    |
+  Scope validation (--scope-file)
+    |
+  Host discovery and scan engine
+    |
+  Service and version detection (-sV)
+    |
+  Offline/API CVE correlation
+    |
+  JSON / SARIF / JSONL / baseline comparison</pre>
+    </section>
+
+    <!-- 5. BENCHMARK -->
+    <section id="benchmark" class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between">
+        <h2 data-i18n="sec4-title" class="font-display font-bold text-xl">5. Benchmark comparatif</h2>
+        <span class="text-[10px] text-[var(--ink-faint)]">§5</span>
+      </div>
+      <p data-i18n="sec4-intro" class="text-sm text-[var(--ink-soft)] mb-6">Énumération des ports 1–1024, même charge réseau et même infrastructure cible.</p>
+
+      <div class="space-y-5 font-mono text-xs">
+        <div>
+          <div class="flex justify-between mb-1"><span class="font-semibold">tcpcat (eBPF <span data-i18n="native">natif</span>)</span><span data-i18n="bench-1" class="font-semibold">80 ms — 23,8× plus rapide</span></div>
+          <div class="bar-track h-4 w-full"><div class="h-full bg-[var(--stamp)]" style="width:4%"></div></div>
+        </div>
+        <div>
+          <div class="flex justify-between mb-1"><span data-i18n="bench-2-label" class="text-[var(--ink-soft)]">Nmap (SYN scan standard)</span><span class="text-[var(--ink-soft)]">1 900–2 300 ms</span></div>
+          <div class="bar-track h-4 w-full"><div class="h-full bg-[var(--ink-faint)]" style="width:100%"></div></div>
+        </div>
+      </div>
+      <p data-i18n="benchmark-note" class="text-[10px] text-[var(--ink-faint)] mt-4">Résultats de laboratoire indicatifs. Consultez le dépôt pour la méthode, le matériel et les limites de reproductibilité.</p>
+    </section>
+
+    <section id="audit" class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between">
+        <h2 data-i18n="audit-title" class="font-display font-bold text-xl">Audit autorisé</h2>
+        <span data-i18n="audit-tag" class="text-[10px] text-[var(--ink-faint)]">Guide</span>
+      </div>
+      <p data-i18n="audit-body" class="text-sm text-[var(--ink-soft)] mb-4">Le profil <code>safe-production</code> fournit un point de départ prudent pour un périmètre explicitement approuvé. Les rapports JSON, SARIF et JSONL facilitent le suivi et l'intégration aux outils de sécurité.</p>
+      <pre class="text-xs bg-[var(--card)] border border-[var(--rule)] p-3 overflow-x-auto">sudo tcpcat \
+  --profile safe-production \
+  --scope-file scope.txt \
+  -Pn -sT -sV -p 443 \
+  -j report.json --sarif report.sarif --audit-log audit.jsonl \
+  10.42.10.15</pre>
+    </section>
+
+    <section class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between">
+        <h2 data-i18n="reports-title" class="font-display font-bold text-xl">Rapports et suivi</h2>
+        <span data-i18n="reports-tag" class="text-[10px] text-[var(--ink-faint)]">Sorties</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="doctable w-full text-left text-xs sm:text-sm">
+          <thead><tr class="text-[var(--ink-faint)] uppercase tracking-wide text-[10px]"><th data-i18n="reports-format" class="py-2 pr-4">Format</th><th data-i18n="reports-purpose" class="py-2">Utilisation</th></tr></thead>
+          <tbody>
+            <tr><td class="py-2 pr-4"><code>-j report.json</code></td><td data-i18n="reports-json" class="py-2">Résultats détaillés, services et évaluation CVE.</td></tr>
+            <tr><td class="py-2 pr-4"><code>--sarif report.sarif</code></td><td data-i18n="reports-sarif" class="py-2">Résultats pour CI/CD et outils compatibles SARIF.</td></tr>
+            <tr><td class="py-2 pr-4"><code>--audit-log audit.jsonl</code></td><td data-i18n="reports-audit" class="py-2">Historique append-only d'exécutions autorisées.</td></tr>
+            <tr><td class="py-2 pr-4"><code>--baseline previous.json --changes delta.json</code></td><td data-i18n="reports-baseline" class="py-2">Nouveaux ports, changements de service et nouvelles CVE.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between"><h2 data-i18n="examples-title" class="font-display font-bold text-xl">Exemples de résultats</h2><span data-i18n="examples-tag" class="text-[10px] text-[var(--ink-faint)]">Rapports</span></div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-5 text-xs">
+        <div><p class="font-semibold mb-2">JSON</p><pre class="bg-[var(--card)] border border-[var(--rule)] p-3 overflow-x-auto">{
+  "service": "apache",
+  "version": "2.4.49",
+  "risk_severity": "high"
+}</pre></div>
+        <div><p class="font-semibold mb-2">SARIF</p><pre class="bg-[var(--card)] border border-[var(--rule)] p-3 overflow-x-auto">{
+  "ruleId": "CVE-2021-41773",
+  "level": "error"
+}</pre></div>
+        <div><p data-i18n="examples-delta" class="font-semibold mb-2">Évolution</p><pre class="bg-[var(--card)] border border-[var(--rule)] p-3 overflow-x-auto">{
+  "new_open_ports": [
+    {"port": 443}
+  ]
+}</pre></div>
+      </div>
+    </section>
+
+    <section class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between">
+        <h2 data-i18n="platform-title" class="font-display font-bold text-xl">Support plateforme</h2>
+        <span data-i18n="platform-tag" class="text-[10px] text-[var(--ink-faint)]">Compatibilité</span>
+      </div>
+      <div class="overflow-x-auto"><table class="doctable w-full text-left text-xs sm:text-sm"><thead><tr class="text-[var(--ink-faint)] uppercase tracking-wide text-[10px]"><th class="py-2 pr-4">OS</th><th data-i18n="platform-support" class="py-2">Support</th></tr></thead><tbody><tr><td class="py-2 pr-4">Linux 5.8+</td><td data-i18n="platform-linux" class="py-2">Scans socket; eBPF/AF_XDP expérimental sur matériel compatible.</td></tr><tr><td class="py-2 pr-4">macOS</td><td data-i18n="platform-macos" class="py-2">Scans TCP Connect; pas d'AF_XDP.</td></tr><tr><td class="py-2 pr-4">Windows</td><td data-i18n="platform-windows" class="py-2">Scans basés sur sockets selon les privilèges disponibles.</td></tr></tbody></table></div>
+    </section>
+
+    <section class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between"><h2 data-i18n="references-title" class="font-display font-bold text-xl">Références</h2><span data-i18n="references-tag" class="text-[10px] text-[var(--ink-faint)]">Écosystème</span></div>
+      <p class="text-sm text-[var(--ink-soft)]"><a class="doclink" href="https://nmap.org/" target="_blank" rel="noreferrer">Nmap</a> · <a class="doclink" href="https://www.rfc-editor.org/rfc/rfc793" target="_blank" rel="noreferrer">RFC 793</a> · <a class="doclink" href="https://ebpf.io/" target="_blank" rel="noreferrer">eBPF</a> · <a class="doclink" href="https://www.kernel.org/doc/html/latest/networking/af_xdp.html" target="_blank" rel="noreferrer">AF_XDP</a> · <a class="doclink" href="https://osv.dev/" target="_blank" rel="noreferrer">OSV</a> · <a class="doclink" href="https://sarifweb.azurewebsites.net/" target="_blank" rel="noreferrer">SARIF</a></p>
+    </section>
+
+    <!-- 5. CLI -->
+    <section id="cli" class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between">
+        <h2 data-i18n="sec5-title" class="font-display font-bold text-xl">6. Référence en ligne de commande</h2>
+        <span class="text-[10px] text-[var(--ink-faint)]">§6</span>
+      </div>
+
+      <div class="space-y-6 text-xs">
+        <figure>
+          <figcaption data-i18n="fig2-caption" class="text-[var(--ink-soft)] mb-1.5">Figure 2 — Cartographie rapide (1000 ports les plus fréquents)</figcaption>
+          <pre class="bg-[var(--card)] border border-[var(--rule)] p-3 overflow-x-auto">sudo tcpcat -sS --top-ports 1000 --rate 100000 target.lan</pre>
+        </figure>
+        <figure>
+          <figcaption data-i18n="fig3-caption" class="text-[var(--ink-soft)] mb-1.5">Figure 3 — Validation de la visibilité firewall/DPI avec un plan de test approuvé</figcaption>
+          <pre class="bg-[var(--card)] border border-[var(--rule)] p-3 overflow-x-auto">sudo tcpcat -Pn -sT -p 1-10000 --evasion aggressive --jitter 0.8 --frag --decoy 8.8.8.8,1.1.1.1 target.lan</pre>
+        </figure>
+        <figure>
+          <figcaption data-i18n="fig4-caption" class="text-[var(--ink-soft)] mb-1.5">Figure 4 — Mode eBPF ultra-rapide sur sous-réseau complet</figcaption>
+          <pre class="bg-[var(--card)] border border-[var(--rule)] p-3 overflow-x-auto">sudo tcpcat --ebpf -p 1-1000 10.0.0.0/16 -w 128 -T 5</pre>
+        </figure>
+        <figure>
+          <figcaption data-i18n="fig5-caption" class="text-[var(--ink-soft)] mb-1.5">Figure 5 — Énumération de versions applicatives, rapport JSON</figcaption>
+          <pre class="bg-[var(--card)] border border-[var(--rule)] p-3 overflow-x-auto">sudo tcpcat -sV -p 22,80,443,3306,5432,27017 192.168.0.0/24 -j report.json</pre>
+        </figure>
+      </div>
+    </section>
+
+    <section class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between"><h2 data-i18n="limits-title" class="font-display font-bold text-xl">Limites connues</h2><span data-i18n="limits-tag" class="text-[10px] text-[var(--ink-faint)]">Important</span></div>
+      <ul data-i18n="limits-body" class="space-y-3 text-sm text-[var(--ink-soft)] list-disc pl-5"><li>eBPF/AF_XDP nécessite Linux, un noyau et une carte réseau compatibles.</li><li>Une bannière et une version détectées ne constituent pas une preuve de vulnérabilité exploitable.</li><li>Une correspondance CVE <code>version-based</code> exige une validation par l'équipe responsable.</li><li>Les réseaux, hôtes et protections peuvent filtrer ou modifier les résultats de scan.</li><li>Les fonctions avancées dépendent des privilèges locaux et du chemin réseau.</li></ul>
+    </section>
+
+    <section class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between"><h2 data-i18n="contribute-title" class="font-display font-bold text-xl">Contribuer</h2><span data-i18n="contribute-tag" class="text-[10px] text-[var(--ink-faint)]">Open source</span></div>
+      <p data-i18n="contribute-body" class="text-sm text-[var(--ink-soft)] mb-4">Les contributions sont bienvenues pour les détecteurs de services, signatures CVE hors ligne, tests, documentation et compatibilité plateforme. Exécutez la suite avant une pull request.</p>
+      <pre class="text-xs bg-[var(--card)] border border-[var(--rule)] p-3 overflow-x-auto">go test ./...
+go build ./cmd/tcpcat</pre>
+    </section>
+
+    <!-- APPENDIX A -->
+    <section id="folklore" class="fade-in mb-20 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between">
+        <h2 class="font-display font-bold text-xl"><span data-i18n="appendix-title">Annexe A. Folklore réseau</span> <span data-i18n="appendix-sub" class="text-[var(--ink-faint)] font-normal text-sm">(informatif, non normatif)</span></h2>
+        <span data-i18n="appendix-tag" class="text-[10px] text-[var(--ink-faint)]">Ann. A</span>
+      </div>
+      <p data-i18n="appendix-quote" class="text-xs text-[var(--ink-faint)] italic mb-6">« Il n'y a pas d'endroit comme le 127.0.0.1. » — dans la tradition des RFC humoristiques (cf. RFC 2549, RFC 1149).</p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 text-xs">
+        <div class="border border-[var(--rule)] p-4 bg-[var(--card)]">
+          <p data-i18n="a1-h" class="font-semibold mb-1.5">A.1 — RFC 768, le dilemme du datagramme</p>
+          <p data-i18n="a1-p" class="text-[var(--ink-soft)] italic">« Je te raconterais bien une blague sur l'UDP... mais je ne suis pas certain que tu la reçoives, et honnêtement je me fiche de savoir si tu l'as comprise. »</p>
+        </div>
+        <div class="border border-[var(--rule)] p-4 bg-[var(--card)]">
+          <p data-i18n="a2-h" class="font-semibold mb-1.5">A.2 — RFC 793, le barman TCP</p>
+          <p data-i18n="a2-p" class="text-[var(--ink-soft)]">Un paquet entre dans un bar : SYN — « Je voudrais une bière. » SYN-ACK — « Tu veux une bière ? » ACK — « Oui, une bière. » Le barman répond RST (port 80 fermé).</p>
+        </div>
+        <div class="border border-[var(--rule)] p-4 bg-[var(--card)]">
+          <p data-i18n="a3-h" class="font-semibold mb-1.5">A.3 — Extension du modèle OSI</p>
+          <p data-i18n="a3-p" class="text-[var(--ink-soft)]">Layer 8 exception : erreur critique identifiée entre la chaise et le clavier. « Avez-vous essayé d'éteindre et de rallumer la table de routage BGP ? »</p>
+        </div>
+        <div class="border border-[var(--rule)] p-4 bg-[var(--card)]">
+          <p data-i18n="a4-h" class="font-semibold mb-1.5">A.4 — Wireshark à 3h du matin</p>
+          <p data-i18n="a4-p" class="text-[var(--ink-soft)]">Filtre <code>!(arp or dns or mdns or ssdp)</code> → 0 paquet. « Qui diffuse du SSDP sur le VLAN de prod à 3h du matin ?! »</p>
+        </div>
+        <div class="border border-[var(--rule)] p-4 bg-[var(--card)]">
+          <p data-i18n="a5-h" class="font-semibold mb-1.5">A.5 — ICMP Echo Request</p>
+          <p data-i18n="a5-p" class="text-[var(--ink-soft)]">64 bytes, icmp_seq=1, ttl=116 — la seule relation stable et sans engagement dans ta vie.</p>
+        </div>
+        <div class="border border-[var(--rule)] p-4 bg-[var(--card)]">
+          <p data-i18n="a6-h" class="font-semibold mb-1.5">A.6 — MTU 1500 vs bit DF</p>
+          <p data-i18n="a6-p" class="text-[var(--ink-soft)]">ICMP type 3, code 4 : « Fragmentation Needed and DF bit set. » Le trou noir des paquets orphelins — <code>tcpcat --frag</code> le contourne nativement.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. SECURITY -->
+    <section id="securite" class="fade-in mb-16 scroll-mt-20">
+      <div class="doc-rule-strong pt-2 mb-6 flex items-baseline justify-between">
+        <h2 data-i18n="sec6-title" class="font-display font-bold text-xl">7. Considérations de sécurité</h2>
+        <span class="text-[10px] text-[var(--ink-faint)]">§7</span>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-6 items-start">
+        <div data-i18n="stamp-badge" class="stamp shrink-0 px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-center">
+          Usage<br>autorisé<br>uniquement
+        </div>
+        <p data-i18n="sec6-body" class="text-sm text-[var(--ink-soft)]">
+          <strong class="text-[var(--ink)]">tcpcat</strong> est strictement réservé aux audits de sécurité défensifs, tests d'intrusion autorisés et à l'administration d'infrastructures sous mandat explicite. Tout accès ou maintien non autorisé dans un système de traitement automatisé de données est passible de sanctions pénales (art. 323-1 et suivants du Code pénal, CFAA, RGPD). Les auteurs déclinent toute responsabilité en cas d'utilisation illicite.
+        </p>
+      </div>
+      <p data-i18n="legal-notice" class="text-xs text-[var(--ink-soft)] mt-6 border-t border-[var(--rule)] pt-4">Le projet est non commercial et ne fournit aucun service de scan hébergé. Les utilisateurs doivent respecter les sanctions, contrôles à l'export et lois applicables. Ce document n'est pas un avis juridique ni une certification de conformité. Voir <a class="doclink" href="{{ url_for('notice.notice') }}">NOTICE.md</a>.</p>
+    </section>
+
+  </main>
+
+  <!-- footer / author's address -->
+  <footer class="border-t border-[var(--ink)] bg-[var(--paper-flat)] py-10">
+    <div class="max-w-3xl mx-auto px-5 sm:px-8 text-xs text-[var(--ink-soft)]">
+      <p data-i18n="footer-label" class="font-semibold text-[var(--ink)] uppercase tracking-wide text-[10px] mb-2">Adresse de l'auteur</p>
+      <p>NycolazSec<br>
+      <a href="https://github.com/NycolazSec/tcpcat" class="doclink" target="_blank">github.com/NycolazSec/tcpcat</a></p>
+      <p data-i18n="footer-copyright" class="mt-6 pt-4 border-t border-[var(--rule)] text-[10px] text-[var(--ink-faint)]">
+        Licence Apache-2.0 — Moteur de reconnaissance open source. Ce document est fourni « tel quel », sans garantie d'aucune sorte.
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    // --- scroll reveal ---
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.fade-in').forEach(el => io.observe(el));
+
+    // --- language toggle (FR default / EN) ---
+    const translations = {
+      "status-1": "eBPF AF_XDP engine: active",
+      "status-2": "Peak throughput ≈ 1,000,000 pps/core",
+      "status-3": "RFC 793 compliant — authorized use only",
+      "nav-1": "Abstract",
+      "nav-2": "Capabilities",
+      "nav-3": "Visibility",
+      "nav-4": "Architecture",
+      "nav-audit": "Audit",
+      "nav-6": "CLI",
+      "meta-wg": "Open-source community project",
+      "meta-rfc": "Technical Note: 1337",
+      "meta-obs": "References: Nmap, RFC 793, eBPF/AF_XDP",
+      "meta-date": "September 2026",
+      "meta-cat": "Category: Informational — authorized network assessment",
+      "meta-issn": "Community documentation — non-commercial",
+      "title": "tcpcat — high-performance network reconnaissance<br class=\"hidden sm:block\"> and IDS/IPS visibility testing",
+      "subtitle": "Community technical note — v1.0",
+      "badge-platforms": "Linux · macOS · Windows",
+      "badge-community": "Community project",
+      "memo-label": "Status of This Memo",
+      "memo-body": "This document introduces <strong class=\"text-[var(--ink)]\">tcpcat</strong>, a network reconnaissance engine written in Go. This community note is not an IETF RFC and does not replace Nmap; it describes a complementary approach focused on performance, reporting, and authorized assessment. The project is distributed under the Apache-2.0 license.",
+      "abstract-label": "Abstract",
+      "abstract-body": "tcpcat pairs a multi-protocol scanning engine with eBPF/AF_XDP acceleration on Linux. Its packet and timing variation controls help authorized teams assess IDS/IPS visibility. A WebAssembly-sandboxed detection engine handles CVE correlation.",
+      "quick-title": "Quick Start",
+      "quick-tag": "Local",
+      "quick-cli": "Explore the CLI",
+      "quick-report": "Export a report",
+      "quick-build": "Build from source",
+      "toc-label": "Table of Contents",
+      "toc-1": "1. Introduction and specifications",
+      "toc-2": "2. System capabilities",
+      "toc-3": "3. IDS/IPS visibility testing",
+      "toc-4": "4. Assessment pipeline",
+      "toc-5": "5. Comparative benchmark",
+      "toc-6": "6. Command-line reference",
+      "toc-7": "7. Security considerations",
+      "toc-appendix": "Appendix A. Network folklore (informational)",
+      "toc-8": "Author's address",
+      "sec1-title": "1. Introduction and specifications",
+      "sec1-body": "tcpcat exposes the entire TCP/IP stack at the network driver level. Rather than going through BSD sockets, every packet is built, sent, and read directly in kernel space. The table below summarizes values measured in a test environment.",
+      "stat-1-label": "Throughput vs. legacy tools",
+      "stat-2-label": "Variation controls (phase 4)",
+      "stat-2-val": "29 techniques",
+      "stat-3-label": "Peak throughput / core",
+      "fig1-caption": "Figure 1 — TCP header (RFC 793 §3.1). Fields configurable during a tcpcat assessment:",
+      "fig1-tag4": "Sequence Number (jitter)",
+      "sec2-title": "2. System capabilities",
+      "sec2-1-h": "2.1 L2–L7 reconnaissance",
+      "sec2-1-p": "Multi-protocol enumeration (TCP, UDP, ICMP), L3/L4 topology mapping with software fingerprinting, and asynchronous DNS / mDNS / NetBIOS discovery.",
+      "sec2-2-h": "2.2 Linux kernel eBPF / AF_XDP",
+      "sec2-2-p": "Direct packet access at the driver level — full bypass of the socket layer. Wire-speed throughput without meaningful CPU overhead.",
+      "sec2-3-h": "2.3 Programmable intelligence (WASM)",
+      "sec2-3-p": "Sandboxed detection engine in WebAssembly. Protocol dissectors can be written in Rust, C, Go, or AssemblyScript.",
+      "sec3-title": "3. IDS/IPS visibility testing",
+      "sec3-intro": "Variation controls spanning the OSI stack, selected with <code>--evasion</code>, to validate logging and alerting in authorized environments.",
+      "th-1": "Profile",
+      "th-2": "Variation",
+      "th-3": "Use",
+      "th-4": "Overhead",
+      "th-5": "Recommended use",
+      "td-off-3": "Authorized inventory",
+      "td-off-5": "Quick mapping",
+      "td-light-3": "Production audit",
+      "td-light-5": "Reduced impact",
+      "td-mod-3": "Controlled validation",
+      "td-mod-5": "Monitored environments",
+      "td-agg-3": "Approved test plan",
+      "td-agg-5": "Lab or controlled environment",
+      "td-st-3": "Visibility scenario",
+      "td-st-5": "Governed validation",
+      "l3-h": "Network layer (L3)",
+      "l3-p": "IPv4 fragmentation and adaptive TTL strategy mutation.",
+      "l4-h": "Transport layer (L4)",
+      "l4-p": "TCP window tuning, randomized ephemeral ports, flag crafting.",
+      "l5-h": "Session layer (L5)",
+      "l5-p": "Timing jitter with a tunable variance coefficient (0.0–1.0).",
+      "l7-h": "Application layer (L7)",
+      "l7-p": "Distributed decoy-swarm orchestration over raw sockets.",
+      "sec4-title": "5. Comparative benchmark",
+      "sec4-intro": "Enumeration of ports 1–1024, same network load and same target infrastructure.",
+      "architecture-title": "4. Assessment Pipeline",
+      "architecture-tag": "Flow",
+      "architecture-body": "Targets, services, and findings move through these controls before usable reports are produced.",
+      "benchmark-note": "Indicative lab results. Consult the repository for methodology, hardware, and reproducibility limits.",
+      "native": "native",
+      "bench-1": "80 ms — 23.8× faster",
+      "bench-2-label": "Nmap (standard SYN scan)",
+      "audit-title": "Authorized Audit",
+      "audit-tag": "Guide",
+      "audit-body": "The <code>safe-production</code> profile provides a conservative starting point for an explicitly approved scope. JSON, SARIF, and JSONL reports support follow-up and integration with security tooling.",
+      "reports-title": "Reports and Tracking",
+      "reports-tag": "Outputs",
+      "reports-format": "Format",
+      "reports-purpose": "Purpose",
+      "reports-json": "Detailed results, services, and vulnerability assessment.",
+      "reports-sarif": "Findings for CI/CD and SARIF-compatible tools.",
+      "reports-audit": "Append-only record of authorized executions.",
+      "reports-baseline": "New ports, service changes, and newly detected CVEs.",
+      "examples-title": "Result Examples",
+      "examples-tag": "Reports",
+      "examples-delta": "Change tracking",
+      "platform-title": "Platform Support",
+      "platform-tag": "Compatibility",
+      "platform-support": "Support",
+      "platform-linux": "Socket scans; experimental eBPF/AF_XDP on compatible hardware.",
+      "platform-macos": "TCP Connect scans; no AF_XDP.",
+      "platform-windows": "Socket-based scans according to available privileges.",
+      "references-title": "References",
+      "references-tag": "Ecosystem",
+      "limits-title": "Known Limitations",
+      "limits-tag": "Important",
+      "limits-body": "<li>eBPF/AF_XDP requires Linux, a compatible kernel, and compatible network hardware.</li><li>A detected banner and version are not proof of an exploitable vulnerability.</li><li>A <code>version-based</code> CVE match requires validation by the responsible team.</li><li>Networks, hosts, and security controls can filter or alter scan results.</li><li>Advanced features depend on local privileges and the network path.</li>",
+      "contribute-title": "Contribute",
+      "contribute-tag": "Open source",
+      "contribute-body": "Contributions are welcome for service detectors, offline CVE signatures, tests, documentation, and platform support. Run the suite before opening a pull request.",
+      "sec5-title": "6. Command-line reference",
+      "fig2-caption": "Figure 2 — Quick mapping (1000 most common ports)",
+      "fig3-caption": "Figure 3 — Firewall/DPI visibility validation with an approved test plan",
+      "fig4-caption": "Figure 4 — Ultra-fast eBPF mode on a full subnet",
+      "fig5-caption": "Figure 5 — Service version enumeration, JSON report",
+      "appendix-title": "Appendix A. Network folklore",
+      "appendix-sub": "(informational, non-normative)",
+      "appendix-tag": "App. A",
+      "appendix-quote": "\u201cThere's no place like 127.0.0.1.\u201d — in the tradition of humorous RFCs (cf. RFC 2549, RFC 1149).",
+      "a1-h": "A.1 — RFC 768, the datagram dilemma",
+      "a1-p": "\u201cI would tell you a joke about UDP, but I'm not sure you'd get it — and honestly I don't care whether you did.\u201d",
+      "a2-h": "A.2 — RFC 793, the TCP bartender",
+      "a2-p": "A packet walks into a bar: SYN — \u201cI'd like a beer.\u201d SYN-ACK — \u201cYou want a beer?\u201d ACK — \u201cYes, a beer.\u201d The bartender replies RST (port 80 closed).",
+      "a3-h": "A.3 — OSI model extension",
+      "a3-p": "Layer 8 exception: critical error identified between chair and keyboard. \u201cHave you tried turning the BGP routing table off and on again?\u201d",
+      "a4-h": "A.4 — Wireshark at 3 a.m.",
+      "a4-p": "Filter <code>!(arp or dns or mdns or ssdp)</code> → 0 packets. \u201cWho's broadcasting SSDP on the prod VLAN at 3 a.m.?!\u201d",
+      "a5-h": "A.5 — ICMP echo request",
+      "a5-p": "64 bytes, icmp_seq=1, ttl=116 — the only stable, no-strings-attached relationship in your life.",
+      "a6-h": "A.6 — MTU 1500 vs. the DF bit",
+      "a6-p": "ICMP type 3, code 4: \u201cFragmentation Needed and DF bit set.\u201d A useful scenario for evaluating how authorized monitoring records fragmented traffic.",
+      "sec6-title": "7. Security considerations",
+      "stamp-badge": "Authorized<br>use<br>only",
+      "sec6-body": "<strong class=\"text-[var(--ink)]\">tcpcat</strong> is strictly reserved for defensive security audits, authorized penetration tests, and infrastructure administration under an explicit mandate. Any unauthorized access to or persistence within an automated data processing system is subject to criminal penalties (French Penal Code art. 323-1 et seq., CFAA, GDPR). The authors accept no liability for unlawful use.",
+      "legal-notice": "The project is non-commercial and provides no hosted scanning service. Users must comply with applicable sanctions, export controls, and laws. This document is not legal advice or a compliance certification. See <a class=\"doclink\" href=\"NOTICE.md\">NOTICE.md</a>.",
+      "footer-label": "Author's Address",
+      "footer-copyright": "Apache-2.0 license — open-source reconnaissance engine. This document is provided \u201cas is,\u201d without warranty of any kind."
+    };
+
+    const frOriginal = {};
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      frOriginal[el.getAttribute('data-i18n')] = el.innerHTML;
+    });
+
+    function setLang(lang){
+      document.documentElement.lang = lang;
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (lang === 'en' && translations[key] !== undefined) {
+          el.innerHTML = translations[key];
+        } else {
+          el.innerHTML = frOriginal[key];
+        }
+      });
+      document.getElementById('btn-fr').setAttribute('aria-pressed', String(lang === 'fr'));
+      document.getElementById('btn-en').setAttribute('aria-pressed', String(lang === 'en'));
+    }
+
+    document.getElementById('btn-fr').addEventListener('click', () => setLang('fr'));
+    document.getElementById('btn-en').addEventListener('click', () => setLang('en'));
+  </script>
+
+</body>
+</html>
