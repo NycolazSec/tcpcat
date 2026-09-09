@@ -59,8 +59,12 @@ func FragmentPacket(rawFrame []byte, mtu int) [][]byte {
 
 func computeIPChecksum(header []byte) uint16 {
 	var sum uint32
-	for i := 0; i < len(header); i += 2 {
+	n := len(header)
+	for i := 0; i+1 < n; i += 2 {
 		sum += uint32(header[i])<<8 | uint32(header[i+1])
+	}
+	if n%2 == 1 {
+		sum += uint32(header[n-1]) << 8
 	}
 	sum = (sum >> 16) + (sum & 0xffff)
 	sum += sum >> 16

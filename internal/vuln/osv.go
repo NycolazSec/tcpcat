@@ -65,7 +65,7 @@ func (s *OSVScanner) GetForSoftware(software, version string) ([]Vulnerability, 
 		return nil, fmt.Errorf("osv: could not decode response: %w", err)
 	}
 
-	if osvResp.Vulns == nil || len(osvResp.Vulns) == 0 {
+	if len(osvResp.Vulns) == 0 {
 		return nil, nil
 	}
 

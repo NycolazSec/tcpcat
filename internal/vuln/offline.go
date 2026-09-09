@@ -103,7 +103,7 @@ func UpdateOfflineDB(newData []byte) error {
 	}
 
 	dir := filepath.Dir(userDBPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("could not create config directory: %w", err)
 	}
 
@@ -117,7 +117,7 @@ func UpdateOfflineDB(newData []byte) error {
 		return fmt.Errorf("could not format JSON data: %w", err)
 	}
 
-	if err := os.WriteFile(userDBPath, formattedData, 0644); err != nil {
+	if err := os.WriteFile(userDBPath, formattedData, 0600); err != nil {
 		return fmt.Errorf("could not write offline database: %w", err)
 	}
 	fmt.Printf("[*] Offline database successfully updated: %s\n", userDBPath)
@@ -161,11 +161,11 @@ func AddSoftwareToOfflineDB(software, version string, newVulns []Vulnerability) 
 	}
 
 	dir := filepath.Dir(userDBPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("could not create config directory: %w", err)
 	}
 
-	if err := os.WriteFile(userDBPath, formattedData, 0644); err != nil {
+	if err := os.WriteFile(userDBPath, formattedData, 0600); err != nil {
 		return fmt.Errorf("could not write offline database: %w", err)
 	}
 	fmt.Printf("[*] Entry '%s %s' added/updated in offline database: %s\n", software, version, userDBPath)

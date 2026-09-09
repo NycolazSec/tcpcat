@@ -16,9 +16,9 @@ func ICMPPing(ip string, timeout time.Duration) bool {
 
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("ping", "-n", "1", "-w", fmt.Sprintf("%d", timeoutSec*1000), ip)
+		cmd = exec.Command("ping", "-n", "1", "-w", fmt.Sprintf("%d", timeoutSec*1000), ip) // #nosec G204 -- ip is the user's own scan target passed as an argv element (no shell is invoked), not attacker-controlled input
 	} else {
-		cmd = exec.Command("ping", "-c", "1", "-W", fmt.Sprintf("%d", timeoutSec), ip)
+		cmd = exec.Command("ping", "-c", "1", "-W", fmt.Sprintf("%d", timeoutSec), ip) // #nosec G204 -- ip is the user's own scan target passed as an argv element (no shell is invoked), not attacker-controlled input
 	}
 
 	done := make(chan error, 1)

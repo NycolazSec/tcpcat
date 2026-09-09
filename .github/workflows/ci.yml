@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main, master ]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Build & Test
@@ -17,11 +20,81 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
+          go-version: "1.25.0"
           cache: true
+
+      - name: Check formatting (gofmt)
+        run: |
+          fmt_out="$(gofmt -l .)"
+          if [ -n "$fmt_out" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$fmt_out"
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
 
       - name: Run Unit Tests
         run: go test -v -race ./...
 
       - name: Build Binary Check
         run: go build -v ./cmd/tcpcat
+
+  lint:
+    name: Static Analysis (golangci-lint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.0"
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+  security:
+    name: Security Scan (gosec + govulncheck)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.0"
+          cache: true
+
+      # G104 (unchecked error on non-critical calls like Close), G115 (int-to-uint
+      # truncation in raw packet/binary-protocol construction), G304 (file path
+      # from variable) and G404 (math/rand) are expected in a raw-packet scanning
+      # CLI: paths and ports come from the operator's own flags rather than
+      # untrusted network input, the truncating conversions are bounded/validated
+      # protocol field widths, and math/rand only drives non-cryptographic timing
+      # jitter and decoy traffic, never a secret or token.
+      - name: Run gosec
+        uses: securego/gosec@master
+        with:
+          args: "-exclude=G104,G115,G304,G404 -fmt sarif -out gosec-results.sarif ./..."
+
+      - name: Upload gosec SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gosec-results.sarif
+
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: "1.25.0"

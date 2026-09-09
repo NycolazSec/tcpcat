@@ -124,10 +124,7 @@ func TestMLAdaptiveEngine(t *testing.T) {
 		t.Errorf("Prediction should be between 0 and 1, got %f", pred)
 	}
 
-	adapted := engine.AdaptParameters(observation)
-	if adapted.FragmentCount == observation.FragmentCount {
-
-	}
+	_ = engine.AdaptParameters(observation)
 
 	observations := []ScanObservation{observation}
 	engine.TrainModel(observations)

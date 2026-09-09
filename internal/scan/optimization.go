@@ -157,17 +157,11 @@ func OptimizeHashMap(targetCount int) HashMapConfig {
 
 	maxEntries := uint32(float64(targetCount) * 1.2)
 
-	for {
-		powerOfTwo := uint32(1)
-		for powerOfTwo < maxEntries {
-			powerOfTwo *= 2
-		}
-		if powerOfTwo == maxEntries {
-			break
-		}
-		maxEntries = powerOfTwo
-		break
+	powerOfTwo := uint32(1)
+	for powerOfTwo < maxEntries {
+		powerOfTwo *= 2
 	}
+	maxEntries = powerOfTwo
 
 	return HashMapConfig{
 		MaxEntries:  maxEntries,

@@ -365,6 +365,12 @@ func main() {
 						allVulnerabilities, err = offlineScanner.GetForSoftware(r.Service, r.Version)
 					}
 
+					if err != nil {
+						r.Assessment.Status = "error"
+						r.Assessment.Reason = fmt.Sprintf("Vulnerability lookup failed for %s %s: %v", r.Service, r.Version, err)
+						continue
+					}
+
 					initialCount := len(allVulnerabilities)
 					vulnerabilities := vuln.FilterRelevantCVEs(allVulnerabilities, r.OS)
 					filteredCount := initialCount - len(vulnerabilities)

@@ -306,7 +306,10 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 	targetIP := net.ParseIP(ip)
 	srcPort := getSrcPort(opts)
 
-	relayIP := net.ParseIP(opts.RelayServer)
+	var relayIP net.IP
+	if opts != nil {
+		relayIP = net.ParseIP(opts.RelayServer)
+	}
 
 	effectiveSrcIP := localIP.To4()
 	if spoofedSrcIP != nil {
@@ -421,7 +424,10 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 	targetIP := net.ParseIP(ip)
 	srcPort := getSrcPort(opts)
 
-	relayIP := net.ParseIP(opts.RelayServer)
+	var relayIP net.IP
+	if opts != nil {
+		relayIP = net.ParseIP(opts.RelayServer)
+	}
 
 	effectiveSrcIP := localIP.To4()
 	if spoofedSrcIP != nil {

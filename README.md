@@ -21,6 +21,17 @@
 **High-Performance Network Analysis Platform**  
 *eBPF Kernel-Space Operations · Multilayered Evasion · WASM Detection Scripting*
 
+[![CI](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml/badge.svg)](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/NycolazSec/tcpcat)](https://goreportcard.com/report/github.com/NycolazSec/tcpcat)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/releases)
+<!--
+OpenSSF Best Practices badge: register this project at
+https://www.bestpractices.dev/en/projects/new, complete the self-assessment,
+then replace PROJECT_ID below with the numeric id it assigns.
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/PROJECT_ID/badge)](https://www.bestpractices.dev/projects/PROJECT_ID)
+-->
+
 </div>
 
 ---
@@ -336,6 +347,16 @@ Advanced options such as decoy traffic, fragmentation, and packet variation are 
 See [NOTICE.md](NOTICE.md) for the project's dual-use, authorized-use, sanctions, export-control, web-interface, contribution, and no-warranty guidance. This document is informational and is not legal advice or a compliance certification.
 
 The authors assume **zero liability** for misuse.
+
+---
+
+## Contributing
+
+Bug reports and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
+for the development setup, coding guidelines, and pre-PR checklist, and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations. Security
+vulnerabilities should be reported privately per [SECURITY.md](SECURITY.md),
+not as public issues. See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ---
 

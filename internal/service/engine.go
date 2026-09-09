@@ -40,7 +40,7 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 	}
 	defer conn.Close()
 
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	buf := make([]byte, 512)
 	n, _ := conn.Read(buf)
 
@@ -73,7 +73,7 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 		var probeConn net.Conn = conn
 
 		if isTLS {
-			tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify}
+			tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify} // #nosec G402 -- opt-in via caller flag; banner grabbing must complete the handshake against untrusted/self-signed target certs
 			tlsClient := tls.Client(conn, tlsConfig)
 
 			if err := tlsClient.SetDeadline(time.Now().Add(timeout)); err != nil {
@@ -87,7 +87,7 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 		}
 
 		if (isTLS && probeConn != conn) || !isTLS {
-			probeConn.SetDeadline(time.Now().Add(timeout))
+			_ = probeConn.SetDeadline(time.Now().Add(timeout))
 			probe := fmt.Sprintf("GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\nAccept: */*\r\nConnection: close\r\n\r\n", ip)
 			_, errWrite := probeConn.Write([]byte(probe))
 			if errWrite == nil {
@@ -160,7 +160,17 @@ func extractServerHeader(httpResp string) (banner string, software string, versi
 		}
 	}
 	if i := strings.Index(bodyLower, "<center>nginx/"); i != -1 {
-
+		signature := httpResp[i+len("<center>"):]
+		if j := strings.Index(signature, "<"); j != -1 {
+			banner = signature[:j]
+			parts := strings.Split(banner, "/")
+			if len(parts) > 1 {
+				software = "nginx"
+				version = strings.TrimSpace(parts[1])
+				os = extractOSFromBanner(banner)
+				return
+			}
+		}
 	}
 
 	return "", "", "", "unknown"

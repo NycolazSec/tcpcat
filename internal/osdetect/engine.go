@@ -25,12 +25,12 @@ func GenerateSignature(frame []byte, ipStart int, tcpStart int) string {
 	optionsBytes := frame[tcpStart+20 : tcpStart+int(dataOffset)]
 	parsedOptions := parseTCPOptions(optionsBytes)
 
-	guessedOS := "Unknown"
+	var guessedOS string
 	if ttl <= 64 {
 		guessedOS = "Linux/Unix"
 	} else if ttl <= 128 {
 		guessedOS = "Windows"
-	} else if ttl <= 255 {
+	} else {
 		guessedOS = "Cisco/Solaris"
 	}
 

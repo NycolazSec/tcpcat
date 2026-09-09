@@ -66,5 +66,5 @@ func ExportXML(filePath string, target string, results []scan.TargetResult, dura
 	}
 
 	content := append([]byte(xml.Header), data...)
-	return os.WriteFile(filePath, content, 0644)
+	return os.WriteFile(filePath, content, 0600)
 }

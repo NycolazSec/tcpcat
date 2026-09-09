@@ -38,7 +38,7 @@ type PacketAnalysis struct {
 }
 
 func RunDeepInspect(ip string, port int, osiVerbosity int, hexDump bool, protocolTrace bool, timingAnalysis bool) {
-	target := fmt.Sprintf("%s:%d", ip, port)
+	target := net.JoinHostPort(ip, fmt.Sprintf("%d", port))
 	fmt.Printf("\n%s%s[DEEP INSPECT] %s:%d%s\n", colorBold, colorCyan, ip, port, colorReset)
 	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", colorCyan, colorReset)
 
@@ -73,7 +73,7 @@ func RunDeepInspect(ip string, port int, osiVerbosity int, hexDump bool, protoco
 			banner = banner[:120] + "..."
 		}
 	}
-	conn.SetReadDeadline(time.Time{})
+	_ = conn.SetReadDeadline(time.Time{})
 
 	seqNum := uint32(rand.Uint32())
 	ttl := 64

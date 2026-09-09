@@ -27,5 +27,5 @@ func ExportJSON(filePath string, target string, results []scan.TargetResult, dur
 		return fmt.Errorf("json serialization error: %w", err)
 	}
 
-	return os.WriteFile(filePath, data, 0644)
+	return os.WriteFile(filePath, data, 0600)
 }

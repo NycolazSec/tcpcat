@@ -154,7 +154,7 @@ func (e *ScriptingEngine) executeWasmScript(name string, compiledMod wazero.Comp
 		return nil, fmt.Errorf("failed to allocate memory for IP: %w", err)
 	}
 	ipPtr := results[0]
-	defer deallocFunc.Call(ctx, ipPtr, ipSize)
+	defer func() { _, _ = deallocFunc.Call(ctx, ipPtr, ipSize) }()
 
 	if !mem.Write(uint32(ipPtr), []byte(ip)) {
 		return nil, fmt.Errorf("failed to write IP to Wasm memory")
@@ -171,7 +171,7 @@ func (e *ScriptingEngine) executeWasmScript(name string, compiledMod wazero.Comp
 	if resultPtr == 0 || resultLen == 0 {
 		return nil, nil
 	}
-	defer deallocFunc.Call(ctx, uint64(resultPtr), uint64(resultLen))
+	defer func() { _, _ = deallocFunc.Call(ctx, uint64(resultPtr), uint64(resultLen)) }()
 
 	resultBytes, ok := mem.Read(resultPtr, resultLen)
 	if !ok {

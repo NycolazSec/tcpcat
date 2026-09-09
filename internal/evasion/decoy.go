@@ -116,7 +116,7 @@ func (dse *DecoySwarmEngine) GenerateDecoyPattern(totalPackets int, ports []uint
 		}
 	}
 
-	return packets[:len(packets)]
+	return packets
 }
 
 func (dse *DecoySwarmEngine) BandwidthDistribute(totalPPS int) map[string]int {

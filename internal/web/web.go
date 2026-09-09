@@ -64,7 +64,15 @@ func Run(addr string) error {
 	mux.HandleFunc("/api/status", s.handleStatus)
 
 	fmt.Printf("[*] Web interface available at http://%s\n", addr)
-	return http.ListenAndServe(addr, mux)
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	return srv.ListenAndServe()
 }
 
 func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {

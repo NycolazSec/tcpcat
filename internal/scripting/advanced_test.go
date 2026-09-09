@@ -59,7 +59,9 @@ func TestServiceDetection(t *testing.T) {
 			{Pattern: "OpenSSH", ServiceName: "SSH", Confidence: 0.95},
 		},
 	}
-	detectors.Register(sshDetector)
+	if err := detectors.Register(sshDetector); err != nil {
+		t.Fatalf("Failed to register ssh detector: %v", err)
+	}
 
 	httpDetector := &ServiceDetectionScript{
 		Name:    "http",
@@ -68,7 +70,9 @@ func TestServiceDetection(t *testing.T) {
 			{Pattern: "Apache", ServiceName: "Apache HTTP", Confidence: 0.90},
 		},
 	}
-	detectors.Register(httpDetector)
+	if err := detectors.Register(httpDetector); err != nil {
+		t.Fatalf("Failed to register http detector: %v", err)
+	}
 
 	service, confidence := detectors.Detect("OpenSSH_7.4", 22)
 
@@ -133,7 +137,9 @@ func TestFindApplicableExploits(t *testing.T) {
 		CVSS:     7.5,
 		Affected: []string{"7.4", "7.5"},
 	}
-	framework.RegisterExploit(exploit)
+	if err := framework.RegisterExploit(exploit); err != nil {
+		t.Fatalf("Failed to register exploit: %v", err)
+	}
 
 	applicable := framework.FindApplicableExploits("7.4")
 
@@ -146,7 +152,7 @@ func TestPayloadGeneratorCreation(t *testing.T) {
 	gen := NewPayloadGenerator()
 
 	if gen == nil {
-		t.Error("PayloadGenerator should not be nil")
+		t.Fatal("PayloadGenerator should not be nil")
 	}
 
 	if len(gen.Templates) != 0 {
@@ -167,7 +173,9 @@ func TestMultipleDetectorConflict(t *testing.T) {
 			{Pattern: "Apache", ServiceName: "WebServer", Confidence: 0.80},
 		},
 	}
-	detectors.Register(detector1)
+	if err := detectors.Register(detector1); err != nil {
+		t.Fatalf("Failed to register detector1: %v", err)
+	}
 
 	detector2 := &ServiceDetectionScript{
 		Name: "detector2",
@@ -175,7 +183,9 @@ func TestMultipleDetectorConflict(t *testing.T) {
 			{Pattern: "Apache", ServiceName: "Apache", Confidence: 0.95},
 		},
 	}
-	detectors.Register(detector2)
+	if err := detectors.Register(detector2); err != nil {
+		t.Fatalf("Failed to register detector2: %v", err)
+	}
 
 	service, confidence := detectors.Detect("Apache/2.4", 80)
 
@@ -198,7 +208,7 @@ func BenchmarkServiceDetection(b *testing.B) {
 				{Pattern: "Service", ServiceName: "Service", Confidence: 0.9},
 			},
 		}
-		detectors.Register(detector)
+		_ = detectors.Register(detector)
 	}
 
 	b.ResetTimer()
@@ -220,7 +230,7 @@ func BenchmarkExploitLookup(b *testing.B) {
 			CVSS:     7.5,
 			Affected: []string{"1.0.0"},
 		}
-		framework.RegisterExploit(exploit)
+		_ = framework.RegisterExploit(exploit)
 	}
 
 	b.ResetTimer()

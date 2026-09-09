@@ -42,3 +42,9 @@ dist/
 *.dmg
 *.deb
 *.pkg
+*.local-backup
+/tcpcat
+
+# Python cache (public/ website)
+__pycache__/
+*.pyc

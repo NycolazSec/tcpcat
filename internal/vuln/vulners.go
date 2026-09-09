@@ -62,7 +62,7 @@ func (s *VulnersScanner) GetForSoftware(software, version string) ([]Vulnerabili
 		Type:     "software",
 	}
 
-	jsonBody, err := json.Marshal(reqBody)
+	jsonBody, err := json.Marshal(reqBody) // #nosec G117 -- apiKey is the caller-supplied Vulners API credential, required in the request body to authenticate this outbound call
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize Vulners request: %w", err)
 	}
