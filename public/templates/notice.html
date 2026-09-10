@@ -73,22 +73,22 @@
 <body class="paper-grid">
 
   <header class="sticky top-0 z-40 bg-[var(--paper)] border-b border-[var(--rule-strong)]">
-    <div class="max-w-5xl mx-auto px-5 sm:px-8 h-14 flex items-center justify-between gap-3">
+    <div class="max-w-5xl mx-auto px-5 sm:px-8 py-2 sm:h-14 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
       <a href="{{ url_for('undex') }}" class="font-display font-bold text-lg tracking-tight flex items-baseline gap-2 shrink-0">
         tcpcat<span class="text-[var(--stamp)]">.</span>
         <span class="hidden sm:inline text-[10px] font-mono font-normal tracking-widest text-[var(--ink-faint)] uppercase" data-i18n="brand-tag">Notice</span>
       </a>
-      <nav class="flex gap-3 text-[11px] uppercase tracking-wide overflow-x-auto no-scrollbar">
+      <div class="lang-switch flex shrink-0 order-2 sm:order-3" role="group" aria-label="Language / Langue">
+        <button type="button" id="btn-en" aria-pressed="true">EN</button>
+        <button type="button" id="btn-fr" aria-pressed="false">FR</button>
+      </div>
+      <nav class="order-3 sm:order-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 flex flex-wrap sm:flex-nowrap gap-3 text-[11px] uppercase tracking-wide sm:overflow-x-auto no-scrollbar">
         <a href="{{ url_for('undex') }}" data-i18n="nav-home" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Home</a>
         <a href="{{ url_for('internals.internals') }}" data-i18n="nav-internals" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Internals</a>
         <a href="{{ url_for('release.release') }}" data-i18n="nav-releases" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Releases</a>
         <a href="{{ url_for('notice.notice') }}" data-i18n="nav-notice" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Notice</a>
         <a href="https://github.com/NycolazSec/tcpcat" target="_blank" class="nav-external hidden sm:inline text-[var(--wire)] transition-colors duration-200 whitespace-nowrap">GitHub ↗</a>
       </nav>
-      <div class="lang-switch flex shrink-0" role="group" aria-label="Language / Langue">
-        <button type="button" id="btn-en" aria-pressed="true">EN</button>
-        <button type="button" id="btn-fr" aria-pressed="false">FR</button>
-      </div>
     </div>
   </header>
 

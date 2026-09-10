@@ -47,28 +47,28 @@
 
   <!-- doc nav -->
   <header class="sticky top-0 z-40 bg-[var(--paper)] border-b border-[var(--rule-strong)]">
-    <div class="max-w-5xl mx-auto px-5 sm:px-8 h-14 flex items-center justify-between gap-3">
+    <div class="max-w-5xl mx-auto px-5 sm:px-8 py-2 sm:h-14 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
       <a href="#top" class="font-display font-bold text-lg tracking-tight flex items-baseline gap-2 shrink-0">
         tcpcat<span class="text-[var(--stamp)]">.</span>
         <span class="hidden sm:inline text-[10px] font-mono font-normal tracking-widest text-[var(--ink-faint)] uppercase">Technical&nbsp;Note&nbsp;1337</span>
       </a>
-      <nav class="flex gap-3 text-[11px] uppercase tracking-wide overflow-x-auto no-scrollbar">
+      <div class="lang-switch flex shrink-0 order-2 sm:order-3" role="group" aria-label="Langue / Language">
+        <button type="button" id="btn-fr" aria-pressed="true">FR</button>
+        <button type="button" id="btn-en" aria-pressed="false">EN</button>
+      </div>
+      <nav class="order-3 sm:order-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 flex flex-wrap sm:flex-nowrap gap-3 text-[11px] uppercase tracking-wide sm:overflow-x-auto no-scrollbar">
         <a href="#resume" data-i18n="nav-1" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Résumé</a>
         <a href="#capacites" data-i18n="nav-2" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Capacités</a>
         <a href="#evasion" data-i18n="nav-3" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Visibilité</a>
         <a href="#architecture" data-i18n="nav-4" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Architecture</a>
         <a href="#audit" data-i18n="nav-audit" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Audit</a>
         <a href="#cli" data-i18n="nav-6" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">CLI</a>
-        <span class="text-[var(--rule-strong)]">|</span>
+        <span class="hidden sm:inline text-[var(--rule-strong)]">|</span>
         <a href="{{ url_for('internals.internals') }}" data-i18n="nav-internals" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Internals</a>
         <a href="{{ url_for('release.release') }}" data-i18n="nav-release" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Releases</a>
         <a href="{{ url_for('notice.notice') }}" data-i18n="nav-notice" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Notice</a>
         <a href="https://github.com/NycolazSec/tcpcat" target="_blank" class="nav-external hidden sm:inline text-[var(--wire)] transition-colors duration-200 whitespace-nowrap">GitHub ↗</a>
       </nav>
-      <div class="lang-switch flex shrink-0" role="group" aria-label="Langue / Language">
-        <button type="button" id="btn-fr" aria-pressed="true">FR</button>
-        <button type="button" id="btn-en" aria-pressed="false">EN</button>
-      </div>
     </div>
   </header>
 
