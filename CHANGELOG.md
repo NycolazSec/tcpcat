@@ -60,6 +60,15 @@ Full diffs for every release are available via GitHub's
   full mirror of the NVD -- `UpdateOfflineDB`/`AddSoftwareToOfflineDB`
   remain the way to layer a fuller feed into the user's own copy of the
   database.
+- ARP-based local subnet discovery, layered onto the existing AF_XDP host
+  discovery path: `DiscoverHostsXDP` now also fires a raw ARP request for
+  any candidate IP that falls inside the scanning interface's own subnet
+  (tracked via a new `localSubnet` alongside the existing `localIP`), and
+  `xdpRxLoop` recognizes ARP replies (EtherType `0x0806`) instead of
+  silently dropping every non-IPv4 frame as before. A host with every
+  routable probe (ICMP/TCP/UDP) firewalled off still has to answer ARP to
+  receive any traffic at all on its own local segment, so this catches
+  hosts the existing ICMP/SYN/ACK probes would otherwise miss.
 - AF_XDP-accelerated host discovery (`internal/scan/xdp_discovery.go`):
   `DiscoverHostsXDP` fires ICMP Echo, TCP SYN/443, and TCP ACK/80 probes
   over the existing zero-copy AF_XDP path instead of shelling out to `ping`

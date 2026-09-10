@@ -7,6 +7,34 @@ import (
 	"net"
 )
 
+// constructARPRequestFrame builds an Ethernet+ARP "who has dstIP" request,
+// broadcast at the link layer since the requester doesn't know the target's
+// MAC yet -- that's the whole point of asking. Used for host discovery
+// within the local subnet, where ARP gets an answer from any powered-on
+// host even one with every routable probe (ICMP/TCP/UDP) firewalled off.
+func constructARPRequestFrame(srcMAC net.HardwareAddr, srcIP, dstIP net.IP) []byte {
+	const arpLen = 28
+	frame := make([]byte, 14+arpLen)
+
+	copy(frame[0:6], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+	copy(frame[6:12], srcMAC)
+	binary.BigEndian.PutUint16(frame[12:14], 0x0806)
+
+	arpStart := 14
+	binary.BigEndian.PutUint16(frame[arpStart:arpStart+2], 1)        // Hardware type: Ethernet
+	binary.BigEndian.PutUint16(frame[arpStart+2:arpStart+4], 0x0800) // Protocol type: IPv4
+	frame[arpStart+4] = 6                                            // Hardware address length
+	frame[arpStart+5] = 4                                            // Protocol address length
+	binary.BigEndian.PutUint16(frame[arpStart+6:arpStart+8], 1)      // Operation: request
+	copy(frame[arpStart+8:arpStart+14], srcMAC)
+	copy(frame[arpStart+14:arpStart+18], srcIP.To4())
+	// Target hardware address (frame[arpStart+18:arpStart+24]) stays zeroed:
+	// unknown, that's exactly what this request is resolving.
+	copy(frame[arpStart+24:arpStart+28], dstIP.To4())
+
+	return frame
+}
+
 func constructSYNFrame(srcMAC, dstMAC net.HardwareAddr, srcIP, dstIP net.IP, srcPort, dstPort uint16) []byte {
 	frame := make([]byte, 54)
 

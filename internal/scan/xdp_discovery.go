@@ -11,11 +11,14 @@ import (
 )
 
 // DiscoverHostsXDP fires ICMP Echo, TCP SYN/443, and TCP ACK/80 probes for
-// every candidate IP over the already-initialized AF_XDP engine, then
+// every candidate IP over the already-initialized AF_XDP engine -- plus an
+// ARP request for any candidate that falls inside the interface's own
+// subnet, since a host with every routable probe firewalled off still has
+// to answer ARP to receive any traffic at all on its local segment -- then
 // collects whichever hosts answered any of them before timeout elapses.
 // xdpRxLoop records the replies into xdpDiscovery as they arrive, so this
 // function only has to fire the probes and wait: no per-host blocking dial,
-// no shelling out to ping, and no state beyond that one shared map.
+// no shelling out to ping/arping, and no state beyond that one shared map.
 func DiscoverHostsXDP(ips []string, timeout time.Duration) []string {
 	xsk, ok := GlobalXsk.(*xdp.Socket)
 	if !ok || xsk == nil {
@@ -43,6 +46,9 @@ func DiscoverHostsXDP(ips []string, timeout time.Duration) []string {
 			constructICMPEchoFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, icmpID, uint16(i)),
 			constructSYNFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, discoverySrcPort, 443),
 			constructACKFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, discoverySrcPort, 80),
+		}
+		if localSubnet != nil && localSubnet.Contains(targetIP) {
+			frames = append(frames, constructARPRequestFrame(localMAC, localIP.To4(), targetIP))
 		}
 
 		xdpTxLock.Lock()

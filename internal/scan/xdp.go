@@ -26,23 +26,24 @@ var xdpLink link.Link
 var localMAC net.HardwareAddr
 var gatewayMAC net.HardwareAddr
 var localIP net.IP
+var localSubnet *net.IPNet // the interface's own network, for deciding when ARP (rather than routing through the gateway) can reach a discovery target directly
 
 var xdpTxLock sync.Mutex
 var xdpResults sync.Map
 var xdpDiscovery sync.Map // IP string -> true, populated by xdpRxLoop for host discovery
 var xdpRunning bool
 
-func getDefaultNetworkInfo() (string, net.IP, error) {
+func getDefaultNetworkInfo() (string, net.IP, *net.IPNet, error) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	defer func() { _ = conn.Close() }()
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 
 	for _, i := range ifaces {
@@ -52,18 +53,20 @@ func getDefaultNetworkInfo() (string, net.IP, error) {
 		}
 		for _, addr := range addrs {
 			var ip net.IP
+			var ipNet *net.IPNet
 			switch v := addr.(type) {
 			case *net.IPNet:
 				ip = v.IP
+				ipNet = v
 			case *net.IPAddr:
 				ip = v.IP
 			}
 			if ip != nil && ip.Equal(localAddr.IP) {
-				return i.Name, ip, nil
+				return i.Name, ip, ipNet, nil
 			}
 		}
 	}
-	return "", nil, fmt.Errorf("failed to detect default network interface")
+	return "", nil, nil, fmt.Errorf("failed to detect default network interface")
 }
 
 func getGatewayMAC(ifaceName string) (net.HardwareAddr, error) {
@@ -92,11 +95,12 @@ func InitXDPEngine() (any, error) {
 
 	queueID := 0
 
-	ifaceName, ip, err := getDefaultNetworkInfo()
+	ifaceName, ip, ipNet, err := getDefaultNetworkInfo()
 	if err != nil {
 		return nil, fmt.Errorf("network interface detection error: %v", err)
 	}
 	localIP = ip
+	localSubnet = ipNet
 
 	mac, err := getGatewayMAC(ifaceName)
 	if err == nil {
@@ -198,10 +202,25 @@ func xdpRxLoop() {
 		rxDescs := xsk.Receive(numRx)
 		for _, desc := range rxDescs {
 			frame := xsk.GetFrame(desc)
-			if len(frame) < 14+20 {
+			if len(frame) < 14 {
 				continue
 			}
-			if binary.BigEndian.Uint16(frame[12:14]) != 0x0800 {
+			etherType := binary.BigEndian.Uint16(frame[12:14])
+
+			if etherType == 0x0806 { // ARP
+				if len(frame) < 14+28 {
+					continue
+				}
+				arpStart := 14
+				op := binary.BigEndian.Uint16(frame[arpStart+6 : arpStart+8])
+				if op == 2 { // reply
+					senderIP := net.IP(frame[arpStart+14 : arpStart+18])
+					xdpDiscovery.Store(senderIP.String(), true)
+				}
+				continue
+			}
+
+			if etherType != 0x0800 || len(frame) < 14+20 {
 				continue
 			}
 
