@@ -9,37 +9,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='nav.css') }}">
 <style>
-  :root{
-    --paper:      #eef1ec;
-    --paper-flat: #e6e9e3;
-    --card:       #f6f7f3;
-    --ink:        #171a17;
-    --ink-soft:   #545b52;
-    --ink-faint:  #8b9188;
-    --rule:       #c6ccc1;
-    --rule-strong:#9aa294;
-    --stamp:      #9c2b21;
-    --wire:       #1f5c6f;
-  }
-  *{box-sizing:border-box;}
   body{
-    background:var(--paper);
-    color:var(--ink);
-    font-family:'IBM Plex Mono', ui-monospace, monospace;
     font-size:14px;
     line-height:1.7;
-    margin:0;
   }
-  .paper-grid{
-    background-image:
-      linear-gradient(to right, rgba(23,26,23,0.045) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(23,26,23,0.045) 1px, transparent 1px);
-    background-size: 28px 28px;
-  }
-  .font-display{font-family:'Space Grotesk', 'IBM Plex Mono', monospace;}
-  ::selection{background:var(--stamp); color:#fff;}
   .wrap{max-width:720px; margin:0 auto; padding:0 24px;}
   main{padding:56px 0 96px;}
   .meta{
@@ -48,25 +24,29 @@
     margin-bottom:40px;
   }
   .meta div:nth-child(even){text-align:right;}
-  h1{
+  /* Scoped under .wrap (rather than bare element selectors) so these
+     survive Tailwind's Play CDN preflight reset, which is injected at
+     runtime and lands after this stylesheet in the cascade regardless of
+     tag order -- a bare `p{margin:...}` loses to its same-specificity
+     `p{margin:0}` reset there. */
+  .wrap h1{
     font-family:'Space Grotesk', monospace; font-weight:700;
     font-size:28px; line-height:1.2; margin:0 0 8px;
   }
   .subtitle{color:var(--ink-faint); font-size:11px; text-transform:uppercase; letter-spacing:.12em; margin:0 0 48px;}
   .stamp{
-    display:inline-block; border:1.5px solid var(--stamp); color:var(--stamp);
-    transform:rotate(-2deg); font-size:10px; text-transform:uppercase;
+    display:inline-block; font-size:10px; text-transform:uppercase;
     letter-spacing:.08em; padding:6px 10px; font-weight:600; margin-bottom:40px;
   }
-  section{margin-bottom:36px; padding-top:28px; border-top:1px solid var(--rule);}
-  section:first-of-type{border-top:1.5px solid var(--ink); padding-top:32px;}
-  h2{
+  .wrap section{margin-bottom:36px; padding-top:28px; border-top:1px solid var(--rule);}
+  .wrap section:first-of-type{border-top:1.5px solid var(--ink); padding-top:32px;}
+  .wrap h2{
     font-family:'Space Grotesk', monospace; font-weight:600;
     font-size:16px; margin:0 0 12px; display:flex; align-items:baseline; gap:10px;
   }
   h2 .n{color:var(--ink-faint); font-family:'IBM Plex Mono', monospace; font-weight:500; font-size:12px;}
-  p{margin:0 0 12px; color:var(--ink);}
-  p:last-child{margin-bottom:0;}
+  .wrap p{margin:0 0 12px; color:var(--ink);}
+  .wrap p:last-child{margin-bottom:0;}
   strong{color:var(--ink);}
   code{
     font-family:'IBM Plex Mono', monospace; background:var(--card);
@@ -86,7 +66,7 @@
   @media (max-width:640px){
     .meta{grid-template-columns:1fr;}
     .meta div:nth-child(even){text-align:left;}
-    h1{font-size:22px;}
+    .wrap h1{font-size:22px;}
   }
 </style>
 </head>

@@ -1,0 +1,47 @@
+/* Shared design tokens and foundational rules for every tcpcat.io page,
+   lifted verbatim from index.html so /internals, /release, and /notice
+   start from the exact same base instead of three near-identical copies
+   that can quietly drift apart. Each page's own <style> block still adds
+   its page-specific type scale, spacing, and components on top of this. */
+
+:root{
+  --paper:      #eef1ec;
+  --paper-flat: #e6e9e3;
+  --card:       #f6f7f3;
+  --ink:        #171a17;
+  --ink-soft:   #545b52;
+  --ink-faint:  #8b9188;
+  --rule:       #c6ccc1;
+  --rule-strong:#9aa294;
+  --stamp:      #9c2b21;
+  --wire:       #1f5c6f;
+  --amber:      #8a5e10;
+}
+
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'IBM Plex Mono', ui-monospace, monospace;
+}
+.paper-grid{
+  background-image:
+    linear-gradient(to right, rgba(23,26,23,0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(23,26,23,0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.font-display{font-family:'Space Grotesk', 'IBM Plex Mono', monospace;}
+::selection{background:var(--stamp); color:#fff;}
+.stamp{
+  border:1.5px solid var(--stamp);
+  color:var(--stamp);
+  transform:rotate(-2deg);
+}
+a.doclink{color:var(--wire); text-decoration:underline; text-underline-offset:2px; text-decoration-color:rgba(31,92,111,0.4);}
+a.doclink:hover{text-decoration-color:var(--wire);}
+code, pre{font-family:'IBM Plex Mono', monospace;}
+
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto;}
+}
