@@ -145,6 +145,7 @@ func ParseFlags() (*Options, error) {
 		"-T":               true,
 		"--vulners-apikey": true,
 		"--rate":           true,
+		"--max-retries":    true,
 		"--aws-region":     true,
 		"--aws-tags":       true,
 		"--web-addr":       true,

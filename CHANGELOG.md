@@ -125,6 +125,12 @@ Full diffs for every release are available via GitHub's
   build-and-test job.
 
 ### Fixed
+- `config/options.go`: `--max-retries <n>` wasn't registered in the CLI's
+  custom `valueFlags` pairing table (unlike `--rate`/`-T`/etc.), so its
+  pre-parser left `<n>` as a bare positional argument and shifted whatever
+  flag followed `--max-retries` into its place -- `--max-retries 0 -T 5`
+  failed with `invalid value "-T" for flag -max-retries: parse error`
+  instead of setting `MaxRetries=0` and `Timing=5`.
 - `internal/scan/deep_inspect.go`: build the dial target with
   `net.JoinHostPort` so IPv6 targets are addressed correctly.
 - `internal/scan/xdp.go`: avoid dereferencing `opts.RelayServer` before the
