@@ -159,55 +159,18 @@
     <h1>Releases</h1>
     <p class="subtitle">Version history &amp; changelog — semantic versioning</p>
 
-    <div class="timeline">
-
-      <!-- ⬇ Latest release — edit or duplicate this block for each new version -->
-      <div class="release latest">
-        <div class="rel-head">
-          <span class="rel-version">v1.0.0</span>
-          <span class="rel-date">September 2026</span>
-          <span class="rel-badge">Latest</span>
-        </div>
-        <p class="rel-summary">First stable release. eBPF/AF_XDP acceleration, WASM detection engine, and the <code>safe-production</code> assessment profile.</p>
-        <ul class="changes">
-          <li><span class="change-tag add">Added</span><span>eBPF/AF_XDP packet capture path for wire-speed scans.</span></li>
-          <li><span class="change-tag add">Added</span><span>WASM protocol dissector sandbox (Rust, C, Go, AssemblyScript).</span></li>
-          <li><span class="change-tag add">Added</span><span><code>--scope-file</code>, <code>--profile safe-production</code>, and <code>--audit-log</code> options.</span></li>
-          <li><span class="change-tag add">Added</span><span>JSON, SARIF, and JSONL report output.</span></li>
-        </ul>
-        <div class="assets">
-          Binaries: linux/amd64, linux/arm64 · Signed checksums (<code>SHA256SUMS</code>) available on the
-          <a href="https://github.com/NycolazSec/tcpcat/releases/tag/v1.0.0" target="_blank">GitHub release page</a>.
-        </div>
-      </div>
-
-      <!-- ⬇ Older release — example structure -->
-      <div class="release">
-        <div class="rel-head">
-          <span class="rel-version">v0.9.0</span>
-          <span class="rel-date">August 2026</span>
-        </div>
-        <p class="rel-summary">Beta. Core scanning engine, IDS/IPS visibility profiles, and initial CLI.</p>
-        <ul class="changes">
-          <li><span class="change-tag add">Added</span><span>L3–L7 variation controls (<code>--evasion</code>) for authorized visibility testing.</span></li>
-          <li><span class="change-tag chg">Changed</span><span>Default scan timeout reduced for faster authorized inventories.</span></li>
-          <li><span class="change-tag fix">Fixed</span><span>IPv6 fragmentation edge case in the topology mapper.</span></li>
-        </ul>
-      </div>
-
-      <div class="release">
-        <div class="rel-head">
-          <span class="rel-version">v0.1.0</span>
-          <span class="rel-date">June 2026</span>
-        </div>
-        <p class="rel-summary">Initial public prototype.</p>
-        <ul class="changes">
-          <li><span class="change-tag add">Added</span><span>Multi-protocol enumeration: TCP, UDP, ICMP.</span></li>
-          <li><span class="change-tag add">Added</span><span>Asynchronous DNS / mDNS / NetBIOS discovery.</span></li>
-        </ul>
-      </div>
-
+    <!-- Populated automatically from the GitHub Releases API — see the
+         script at the bottom of this page. No manual edits needed here. -->
+    <div class="timeline" id="timeline">
+      <p id="timeline-status" style="color:var(--ink-faint); font-size:12px;">Loading releases from GitHub…</p>
     </div>
+
+    <noscript>
+      <p style="font-size:12px; color:var(--ink-soft);">
+        JavaScript is disabled, so this page can't fetch releases automatically. See the
+        <a class="doclink" href="https://github.com/NycolazSec/tcpcat/releases" target="_blank">GitHub releases page</a> instead.
+      </p>
+    </noscript>
   </main>
 
   <footer>
@@ -216,6 +179,133 @@
       <span>Full history: <a class="doclink" href="https://github.com/NycolazSec/tcpcat/releases" target="_blank">github.com/NycolazSec/tcpcat/releases</a></span>
     </div>
   </footer>
+
+  <script>
+    (function () {
+      const REPO = 'NycolazSec/tcpcat';
+      const timeline = document.getElementById('timeline');
+      const status = document.getElementById('timeline-status');
+
+      const TYPE_TAG = { feat: 'add', fix: 'fix', perf: 'add', docs: 'chg', ci: 'chg', chore: 'chg', refactor: 'chg', test: 'chg', style: 'chg' };
+      const TAG_LABEL = { add: 'Added', fix: 'Fixed', chg: 'Changed', brk: 'Breaking' };
+
+      function parseCommitLine(line) {
+        // GoReleaser body lines look like: "* <sha> <commit subject>"
+        const withoutSha = line.replace(/^\*\s*[0-9a-f]{7,40}\s+/i, '').replace(/^\*\s*/, '');
+        const conv = withoutSha.match(/^([a-zA-Z]+)(\([^)]*\))?(!)?:\s*(.*)$/);
+        if (!conv) return { tag: 'chg', text: withoutSha };
+        const [, type, , breaking, rest] = conv;
+        const tag = breaking ? 'brk' : (TYPE_TAG[type.toLowerCase()] || 'chg');
+        return { tag, text: rest || withoutSha };
+      }
+
+      function formatDate(iso) {
+        if (!iso) return '';
+        return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+      }
+
+      function buildCard(release, isLatest) {
+        const card = document.createElement('div');
+        card.className = 'release' + (isLatest ? ' latest' : '');
+
+        const head = document.createElement('div');
+        head.className = 'rel-head';
+
+        const version = document.createElement('span');
+        version.className = 'rel-version';
+        version.textContent = release.tag_name || release.name || 'untagged';
+        head.appendChild(version);
+
+        const date = document.createElement('span');
+        date.className = 'rel-date';
+        date.textContent = formatDate(release.published_at || release.created_at);
+        head.appendChild(date);
+
+        if (isLatest) {
+          const badge = document.createElement('span');
+          badge.className = 'rel-badge';
+          badge.textContent = 'Latest';
+          head.appendChild(badge);
+        } else if (release.prerelease) {
+          const badge = document.createElement('span');
+          badge.className = 'rel-badge';
+          badge.style.borderColor = 'var(--tag-chg)';
+          badge.style.color = 'var(--tag-chg)';
+          badge.textContent = 'Pre-release';
+          head.appendChild(badge);
+        }
+        card.appendChild(head);
+
+        const lines = (release.body || '')
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l.startsWith('*'));
+
+        if (lines.length) {
+          const ul = document.createElement('ul');
+          ul.className = 'changes';
+          lines.forEach((line) => {
+            const { tag, text } = parseCommitLine(line);
+            const li = document.createElement('li');
+            const tagEl = document.createElement('span');
+            tagEl.className = 'change-tag ' + tag;
+            tagEl.textContent = TAG_LABEL[tag];
+            const textEl = document.createElement('span');
+            textEl.textContent = text;
+            li.appendChild(tagEl);
+            li.appendChild(textEl);
+            ul.appendChild(li);
+          });
+          card.appendChild(ul);
+        } else if (release.body) {
+          const p = document.createElement('p');
+          p.className = 'rel-summary';
+          p.textContent = release.body;
+          card.appendChild(p);
+        }
+
+        const assetCount = (release.assets || []).length;
+        const assets = document.createElement('div');
+        assets.className = 'assets';
+        assets.textContent = assetCount
+          ? assetCount + ' build asset' + (assetCount === 1 ? '' : 's') + ' available — '
+          : '';
+        const link = document.createElement('a');
+        link.href = release.html_url;
+        link.target = '_blank';
+        link.rel = 'noreferrer';
+        link.textContent = 'View on GitHub';
+        assets.appendChild(link);
+        card.appendChild(assets);
+
+        return card;
+      }
+
+      fetch('https://api.github.com/repos/' + REPO + '/releases', {
+        headers: { Accept: 'application/vnd.github+json' },
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error('GitHub API responded with ' + res.status);
+          return res.json();
+        })
+        .then((releases) => {
+          if (!Array.isArray(releases) || releases.length === 0) {
+            throw new Error('no releases published yet');
+          }
+          timeline.innerHTML = '';
+          releases.forEach((release, i) => timeline.appendChild(buildCard(release, i === 0)));
+        })
+        .catch((err) => {
+          status.textContent = 'Could not load releases automatically (' + err.message + '). ';
+          const link = document.createElement('a');
+          link.className = 'doclink';
+          link.href = 'https://github.com/' + REPO + '/releases';
+          link.target = '_blank';
+          link.textContent = 'See the full list on GitHub →';
+          status.appendChild(link);
+        });
+    })();
+  </script>
 
 </body>
 </html>
