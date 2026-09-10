@@ -9,15 +9,41 @@ import (
 )
 
 const offlineDBJSON = `{
-	"apache": {
-		"2.4.49": [
-			{
-				"id": "CVE-2021-41773",
-				"title": "Path traversal and file disclosure in Apache HTTP Server 2.4.49.",
-				"cvss": 7.5
-			}
-		]
-	},
+  "apache": {
+    "2.4.49": [
+      {
+        "id": "CVE-2021-41773",
+        "title": "Path traversal and file disclosure in Apache HTTP Server 2.4.49.",
+        "cvss": 7.5
+      },
+      {
+        "id": "CVE-2021-42013",
+        "title": "Incomplete fix for CVE-2021-41773 allows path traversal and remote code execution.",
+        "cvss": 9.8
+      }
+    ],
+    "2.4.50": [
+      {
+        "id": "CVE-2021-42013",
+        "title": "Incomplete fix for CVE-2021-41773 allows path traversal and remote code execution.",
+        "cvss": 9.8
+      }
+    ],
+    "2.4.38": [
+      {
+        "id": "CVE-2019-0211",
+        "title": "Local privilege escalation via unprivileged child process code execution (scoreboard).",
+        "cvss": 7.8
+      }
+    ],
+    "2.4.26": [
+      {
+        "id": "CVE-2017-9798",
+        "title": "Optionsbleed: uninitialized/freed memory disclosure via the OPTIONS method.",
+        "cvss": 5.9
+      }
+    ]
+  },
   "nginx": {
     "1.10.3": [
       {
@@ -30,6 +56,13 @@ const offlineDBJSON = `{
         "title": "Privilege escalation in nginx packages on Debian-based systems.",
         "cvss": 7.8
       }
+    ],
+    "1.20.0": [
+      {
+        "id": "CVE-2021-23017",
+        "title": "Off-by-one heap write in the DNS resolver allows cache poisoning or code execution.",
+        "cvss": 9.8
+      }
     ]
   },
   "openssh": {
@@ -38,6 +71,59 @@ const offlineDBJSON = `{
         "id": "CVE-2016-10009",
         "title": "Untrusted search path vulnerability in ssh-agent.",
         "cvss": 5.0
+      }
+    ],
+    "7.7p1": [
+      {
+        "id": "CVE-2018-15473",
+        "title": "Username enumeration via a crafted authentication request.",
+        "cvss": 5.3
+      }
+    ],
+    "9.3p1": [
+      {
+        "id": "CVE-2023-38408",
+        "title": "Remote code execution via forwarded ssh-agent and a crafted PKCS#11 provider path.",
+        "cvss": 9.8
+      }
+    ],
+    "9.6p1": [
+      {
+        "id": "CVE-2024-6387",
+        "title": "regreSSHion: signal handler race condition allows unauthenticated remote code execution.",
+        "cvss": 8.1
+      }
+    ]
+  },
+  "redis": {
+    "6.2.6": [
+      {
+        "id": "CVE-2022-24735",
+        "title": "Lua sandbox escape allows execution of arbitrary Lua code loaded from a crafted script.",
+        "cvss": 7.2
+      },
+      {
+        "id": "CVE-2022-24736",
+        "title": "Crafted Lua script triggers a NULL pointer dereference and denial of service.",
+        "cvss": 7.5
+      }
+    ]
+  },
+  "mysql": {
+    "5.5.23": [
+      {
+        "id": "CVE-2012-2122",
+        "title": "Authentication bypass: repeated login attempts have a high probability of succeeding regardless of password on platforms where memcmp() can return values outside -128..127.",
+        "cvss": 7.5
+      }
+    ]
+  },
+  "vsftpd": {
+    "2.3.4": [
+      {
+        "id": "CVE-2011-2523",
+        "title": "Backdoor in downloads of vsftpd 2.3.4 source: a crafted username containing \":)\" opens a shell on port 6200.",
+        "cvss": 10.0
       }
     ]
   }

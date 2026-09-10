@@ -52,6 +52,47 @@ func TestOfflineScannerGetForSoftwareUnknown(t *testing.T) {
 	}
 }
 
+func TestOfflineScannerGetForSoftwareExpandedEntries(t *testing.T) {
+	s, err := NewOfflineScanner()
+	if err != nil {
+		t.Fatalf("NewOfflineScanner() error = %v", err)
+	}
+
+	tests := []struct {
+		software string
+		version  string
+		wantID   string
+	}{
+		{"apache", "2.4.50", "CVE-2021-42013"},
+		{"apache", "2.4.38", "CVE-2019-0211"},
+		{"apache", "2.4.26", "CVE-2017-9798"},
+		{"nginx", "1.20.0", "CVE-2021-23017"},
+		{"openssh", "7.7p1", "CVE-2018-15473"},
+		{"openssh", "9.3p1", "CVE-2023-38408"},
+		{"openssh", "9.6p1", "CVE-2024-6387"},
+		{"redis", "6.2.6", "CVE-2022-24735"},
+		{"mysql", "5.5.23", "CVE-2012-2122"},
+		{"vsftpd", "2.3.4", "CVE-2011-2523"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.software+"_"+tt.version, func(t *testing.T) {
+			vulns, err := s.GetForSoftware(tt.software, tt.version)
+			if err != nil {
+				t.Fatalf("GetForSoftware(%q, %q) error = %v", tt.software, tt.version, err)
+			}
+			found := false
+			for _, v := range vulns {
+				if v.ID == tt.wantID {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("GetForSoftware(%q, %q) = %+v, want an entry with ID %q", tt.software, tt.version, vulns, tt.wantID)
+			}
+		})
+	}
+}
+
 func TestGetUserOfflineDBPath(t *testing.T) {
 	dir := withIsolatedUserConfigDir(t)
 

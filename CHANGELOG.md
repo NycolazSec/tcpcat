@@ -49,6 +49,17 @@ Full diffs for every release are available via GitHub's
   actually score higher against its own signature than every other table
   entry does, so the larger table can't introduce ties that make `Match`'s
   result depend on iteration order instead of the observed signature.
+- Expanded offline vulnerability database (`internal/vuln/offline.go`):
+  grew from 4 CVE entries across 3 products to 13 entries across 6
+  (apache, nginx, openssh, redis, mysql, vsftpd), covering well-known,
+  publicly documented CVEs -- e.g. Apache's CVE-2021-42013 (the RCE bypass
+  of CVE-2021-41773's incomplete fix, affecting both 2.4.49 and 2.4.50),
+  OpenSSH's CVE-2024-6387 ("regreSSHion") and CVE-2023-38408, Redis's
+  CVE-2022-24735/24736 Lua sandbox escapes, and vsftpd 2.3.4's well-known
+  backdoor (CVE-2011-2523). This is still a hand-picked seed list, not a
+  full mirror of the NVD -- `UpdateOfflineDB`/`AddSoftwareToOfflineDB`
+  remain the way to layer a fuller feed into the user's own copy of the
+  database.
 - AF_XDP-accelerated host discovery (`internal/scan/xdp_discovery.go`):
   `DiscoverHostsXDP` fires ICMP Echo, TCP SYN/443, and TCP ACK/80 probes
   over the existing zero-copy AF_XDP path instead of shelling out to `ping`

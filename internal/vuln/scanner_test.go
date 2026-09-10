@@ -61,11 +61,14 @@ func TestOfflineScannerFindsApacheHTTPD249Vulnerability(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetForSoftware() error = %v", err)
 	}
-	if len(vulns) != 1 {
-		t.Fatalf("found %d vulnerabilities, want 1", len(vulns))
+	// 2.4.49 carries both the original path-traversal CVE and the incomplete
+	// fix's own CVE (CVE-2021-42013), which affects both 2.4.49 and 2.4.50.
+	if len(vulns) != 2 {
+		t.Fatalf("found %d vulnerabilities, want 2", len(vulns))
 	}
-	if vulns[0].ID != "CVE-2021-41773" {
-		t.Errorf("vulnerability ID = %q, want CVE-2021-41773", vulns[0].ID)
+	ids := map[string]bool{vulns[0].ID: true, vulns[1].ID: true}
+	if !ids["CVE-2021-41773"] || !ids["CVE-2021-42013"] {
+		t.Errorf("vulnerability IDs = %v, want CVE-2021-41773 and CVE-2021-42013", ids)
 	}
 }
 
