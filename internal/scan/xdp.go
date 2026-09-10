@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,39 @@ var xdpTxLock sync.Mutex
 var xdpResults sync.Map
 var xdpDiscovery sync.Map // IP string -> true, populated by xdpRxLoop for host discovery
 var xdpRunning bool
+var xdpSockets []*xdp.Socket // one per bound RX queue; xdpSockets[0] is also GlobalXsk, the sole TX path
+
+// getInterfaceRXQueueCount reads the number of RX queues an interface
+// exposes from sysfs. A NIC with RSS enabled spreads inbound traffic
+// across several hardware queues by flow hash, so an AF_XDP socket bound
+// to queue 0 alone only ever sees whichever fraction of replies happens to
+// hash there -- the rest are invisible to user space, not merely dropped
+// after arriving. Falls back to 1 (today's single-queue behavior) if the
+// count can't be determined, e.g. inside a container or on a NIC that
+// doesn't expose per-queue sysfs entries at all.
+func getInterfaceRXQueueCount(ifaceName string) int {
+	return countRXQueueDirs(filepath.Join("/sys/class/net", ifaceName, "queues"))
+}
+
+// countRXQueueDirs counts "rx-*" entries under a network interface's sysfs
+// queues directory, split out from getInterfaceRXQueueCount so it can be
+// unit-tested against a fake directory tree instead of the real sysfs path.
+func countRXQueueDirs(queuesDir string) int {
+	entries, err := os.ReadDir(queuesDir)
+	if err != nil {
+		return 1
+	}
+	count := 0
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "rx-") {
+			count++
+		}
+	}
+	if count < 1 {
+		return 1
+	}
+	return count
+}
 
 func getDefaultNetworkInfo() (string, net.IP, *net.IPNet, error) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
@@ -93,8 +127,6 @@ func InitXDPEngine() (any, error) {
 		return GlobalXsk, nil
 	}
 
-	queueID := 0
-
 	ifaceName, ip, ipNet, err := getDefaultNetworkInfo()
 	if err != nil {
 		return nil, fmt.Errorf("network interface detection error: %v", err)
@@ -142,28 +174,49 @@ func InitXDPEngine() (any, error) {
 	xdpLink = l
 	log.Println("[+] eBPF assembly hook attached successfully at physical level.")
 
-	xsk, err := xdp.NewSocket(iface.Index, queueID, nil)
-	if err != nil {
-		_ = l.Close()
-		coll.Close()
-		return nil, fmt.Errorf("failed to create AF_XDP socket: %v", err)
+	numQueues := getInterfaceRXQueueCount(ifaceName)
+
+	xdpSockets = make([]*xdp.Socket, 0, numQueues)
+	for q := 0; q < numQueues; q++ {
+		xsk, err := xdp.NewSocket(iface.Index, q, nil)
+		if err != nil {
+			if q == 0 {
+				_ = l.Close()
+				coll.Close()
+				return nil, fmt.Errorf("failed to create AF_XDP socket: %v", err)
+			}
+			// Queue 0 (required) is already up; sysfs can overstate how many
+			// queues actually support their own AF_XDP socket (e.g. some
+			// virtual NICs), so just scan with fewer queues than expected
+			// rather than failing the whole engine over an extra one.
+			log.Printf("[!] Could not bind AF_XDP socket to queue %d (%v); continuing with %d queue(s)", q, err, len(xdpSockets))
+			break
+		}
+
+		key := uint32(q)
+		val := uint32(xsk.FD())
+		if err := xskMap.Put(&key, &val); err != nil {
+			_ = xsk.Close()
+			if q == 0 {
+				_ = l.Close()
+				coll.Close()
+				return nil, fmt.Errorf("échec du pontage FD dans xsks_map: %v", err)
+			}
+			log.Printf("[!] Could not map AF_XDP socket for queue %d into xsks_map (%v); continuing with %d queue(s)", q, err, len(xdpSockets))
+			break
+		}
+
+		xdpSockets = append(xdpSockets, xsk)
 	}
 
-	key := uint32(queueID)
-	val := uint32(xsk.FD())
-	if err := xskMap.Put(&key, &val); err != nil {
-		_ = xsk.Close()
-		_ = l.Close()
-		coll.Close()
-		return nil, fmt.Errorf("échec du pontage FD dans xsks_map: %v", err)
-	}
-
-	log.Println("[+] Pont Zéro-Copie (Ring Buffer) établi. Moteur prêt à l'emploi.")
+	log.Printf("[+] Pont Zéro-Copie (Ring Buffer) établi sur %d file(s) RX. Moteur prêt à l'emploi.", len(xdpSockets))
 
 	xdpRunning = true
-	go xdpRxLoop()
+	for _, xsk := range xdpSockets {
+		go xdpRxLoop(xsk)
+	}
 
-	return xsk, nil
+	return xdpSockets[0], nil
 }
 
 func ShutdownXDPEngine() {
@@ -178,16 +231,19 @@ func ShutdownXDPEngine() {
 			log.Println("[-] Hook eBPF XDP détaché avec succès.")
 		}
 	}
+	for _, xsk := range xdpSockets {
+		_ = xsk.Close()
+	}
+	xdpSockets = nil
 }
 
-func xdpRxLoop() {
+// xdpRxLoop drains one AF_XDP socket's RX ring. On a multi-queue NIC,
+// InitXDPEngine starts one of these per queue (each bound to its own
+// xsks_map slot) since a NIC's RSS hashing can steer replies to any queue,
+// not just the one the scan's own probes happen to transmit from; all of
+// them feed the same shared xdpResults/xdpDiscovery maps.
+func xdpRxLoop(xsk *xdp.Socket) {
 	for xdpRunning {
-		xsk, ok := GlobalXsk.(*xdp.Socket)
-		if !ok || xsk == nil {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-
 		freeFill := xsk.NumFreeFillSlots()
 		if freeFill > 0 {
 			fillDescs := xsk.GetDescs(freeFill)

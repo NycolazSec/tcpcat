@@ -69,6 +69,19 @@ Full diffs for every release are available via GitHub's
   routable probe (ICMP/TCP/UDP) firewalled off still has to answer ARP to
   receive any traffic at all on its own local segment, so this catches
   hosts the existing ICMP/SYN/ACK probes would otherwise miss.
+- Multi-queue AF_XDP: `InitXDPEngine` no longer hardcodes `queueID := 0`.
+  It now reads the interface's actual RX queue count from sysfs
+  (`getInterfaceRXQueueCount`) and binds one AF_XDP socket per queue, each
+  mapped into `xsks_map` at its own index, with one `xdpRxLoop` goroutine
+  per queue feeding the same shared results maps. Previously, a NIC with
+  RSS enabled (routine on multi-core cloud VMs and real server hardware)
+  would spread inbound replies across several hardware queues by flow
+  hash, and a socket bound to queue 0 alone only ever saw whichever
+  fraction happened to land there -- the rest were never delivered to
+  user space at all, not merely dropped after arriving. Falls back to a
+  single queue (today's exact behavior) wherever the count can't be read
+  or a later queue's socket fails to bind, so this can't turn into a
+  regression on a single-queue NIC or in a container.
 - AF_XDP-accelerated host discovery (`internal/scan/xdp_discovery.go`):
   `DiscoverHostsXDP` fires ICMP Echo, TCP SYN/443, and TCP ACK/80 probes
   over the existing zero-copy AF_XDP path instead of shelling out to `ping`
