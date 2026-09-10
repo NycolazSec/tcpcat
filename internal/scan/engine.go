@@ -232,9 +232,9 @@ func (e *Engine) dispatchScan(ip string, port int, opts *config.Options) TargetR
 
 func (e *Engine) runBypassSequence(ip string, port int, originalRes TargetResult, opts *config.Options) TargetResult {
 	if !opts.UdpScan {
-		ackRes := ScanAckPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer))
+		ackRes := ScanAckPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
 		if ackRes.State == StateUnfiltered {
-			finRes := ScanStealthPort(ip, port, ScanFin, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer))
+			finRes := ScanStealthPort(ip, port, ScanFin, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
 			if finRes.State == StateClosed {
 				finRes.Reason = "Bypass: ACK->unfiltered, FIN->closed"
 				return finRes
@@ -261,7 +261,7 @@ func (e *Engine) runBypassSequence(ip string, port int, originalRes TargetResult
 	}
 
 	if !opts.UdpScan {
-		winRes := ScanWindowPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer))
+		winRes := ScanWindowPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
 		if winRes.State == StateOpen {
 			winRes.Reason = "Bypass: Window scan detected open port"
 			return winRes
@@ -284,11 +284,11 @@ func (e *Engine) runPrimaryScan(ip string, port int, opts *config.Options) Targe
 func (e *Engine) runScanWithOptions(ip string, port int, opts *config.Options) TargetResult {
 	if GlobalXsk != nil {
 		if opts.UdpScan {
-			return ScanXDPUDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP)
+			return ScanXDPUDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, e.rtt)
 		}
 		isOtherRawScan := opts.AckScan || opts.WindowScan || opts.NullScan || opts.FinScan || opts.XmasScan
 		if opts.SynScan || !isOtherRawScan {
-			return ScanXDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP)
+			return ScanXDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, e.rtt)
 		}
 	}
 
@@ -296,25 +296,25 @@ func (e *Engine) runScanWithOptions(ip string, port int, opts *config.Options) T
 		return ScanIdlePort(ip, port, opts.ZombieHost, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer))
 	}
 	if opts.AckScan {
-		return ScanAckPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer))
+		return ScanAckPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
 	}
 	if opts.WindowScan {
-		return ScanWindowPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer))
+		return ScanWindowPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
 	}
 	if opts.UdpScan {
-		return ScanUDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer))
+		return ScanUDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
 	}
 	if opts.SynScan {
-		return ScanSYNPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer))
+		return ScanSYNPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
 	}
 	if opts.NullScan {
-		return ScanStealthPort(ip, port, ScanNull, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer))
+		return ScanStealthPort(ip, port, ScanNull, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
 	}
 	if opts.FinScan {
-		return ScanStealthPort(ip, port, ScanFin, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer))
+		return ScanStealthPort(ip, port, ScanFin, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
 	}
 	if opts.XmasScan {
-		return ScanStealthPort(ip, port, ScanXmas, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer))
+		return ScanStealthPort(ip, port, ScanXmas, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
 	}
 
 	return ScanConnectPooled(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.connPool)

@@ -9,7 +9,7 @@ import (
 	"tcpcat/internal/evasion"
 )
 
-func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP) TargetResult {
+func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator) TargetResult {
 	res := TargetResult{
 		IP:   targetIP,
 		Port: port,
@@ -31,7 +31,8 @@ func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.D
 		}
 	}
 
-	scanner, err := newRawTCPScanner(targetIP, port, opts, timeout, spoofedSrcIP)
+	attemptTimeout := probeTimeout(rtt, timeout)
+	scanner, err := newRawTCPScanner(targetIP, port, opts, attemptTimeout, spoofedSrcIP)
 	if err != nil {
 		res.State = StateFiltered
 		res.Reason = err.Error()
@@ -39,29 +40,36 @@ func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.D
 	}
 	defer scanner.Close()
 
-	err = scanner.Send(0x02)
-	if err != nil {
-		res.State = StateFiltered
-		res.Reason = fmt.Sprintf("Send failed: %v", err)
+	attempts := probeAttempts(opts)
+	for attempt := 0; attempt < attempts; attempt++ {
+		err = scanner.Send(0x02)
+		if err != nil {
+			res.State = StateFiltered
+			res.Reason = fmt.Sprintf("Send failed: %v", err)
+			return res
+		}
+
+		resp, recvErr := scanner.Receive()
+		res.Latency = scanner.Latency()
+		res.LatencyMs = float64(res.Latency.Microseconds()) / 1000.0
+
+		if recvErr != nil {
+			res.State = StateFiltered
+			res.Reason = "No response / Timeout"
+			continue
+		}
+		if rtt != nil {
+			rtt.Sample(res.Latency)
+		}
+
+		if resp.Flags&0x12 == 0x12 {
+			res.State = StateOpen
+			res.Reason = "SYN-ACK Received"
+		} else if resp.Flags&0x04 != 0 {
+			res.State = StateClosed
+			res.Reason = "RST Received"
+		}
 		return res
-	}
-
-	resp, err := scanner.Receive()
-	res.Latency = scanner.Latency()
-	res.LatencyMs = float64(res.Latency.Microseconds()) / 1000.0
-
-	if err != nil {
-		res.State = StateFiltered
-		res.Reason = "No response / Timeout"
-		return res
-	}
-
-	if resp.Flags&0x12 == 0x12 {
-		res.State = StateOpen
-		res.Reason = "SYN-ACK Received"
-	} else if resp.Flags&0x04 != 0 {
-		res.State = StateClosed
-		res.Reason = "RST Received"
 	}
 	return res
 }

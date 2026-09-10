@@ -20,11 +20,11 @@ func ShutdownXDPEngine() {
 
 }
 
-func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP) TargetResult {
+func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, rtt *RTTEstimator) TargetResult {
 	return TargetResult{IP: ip, Port: port, State: StateFiltered, Reason: "XDP non supporté"}
 }
 
-func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP) TargetResult {
+func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, rtt *RTTEstimator) TargetResult {
 	return TargetResult{IP: ip, Port: port, State: StateFiltered, Reason: "XDP non supporté"}
 }
 

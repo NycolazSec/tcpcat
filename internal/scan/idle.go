@@ -15,21 +15,28 @@ func getZombieIPID(zombieIP string, zombiePort int, opts *config.Options, timeou
 	}
 	defer scanner.Close()
 
-	err = scanner.Send(0x10)
-	if err != nil {
-		return 0, fmt.Errorf("send to zombie failed: %v", err)
+	// The zombie is a third party we're not otherwise profiling, so this
+	// retries on the caller's fixed timeout rather than the shared RTT
+	// estimator (which tracks the actual scan target, not the zombie).
+	attempts := probeAttempts(opts)
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		if err := scanner.Send(0x10); err != nil {
+			return 0, fmt.Errorf("send to zombie failed: %v", err)
+		}
+
+		resp, recvErr := scanner.Receive()
+		if recvErr != nil {
+			lastErr = fmt.Errorf("no response from zombie")
+			continue
+		}
+		if resp.Flags&0x04 != 0 {
+			return resp.IPID, nil
+		}
+		return 0, fmt.Errorf("zombie did not respond with RST")
 	}
 
-	resp, err := scanner.Receive()
-	if err != nil {
-		return 0, fmt.Errorf("no response from zombie")
-	}
-
-	if resp.Flags&0x04 != 0 {
-		return resp.IPID, nil
-	}
-
-	return 0, fmt.Errorf("zombie did not respond with RST")
+	return 0, lastErr
 }
 
 func sendSpoofedSYN(targetIP string, targetPort int, zombieIP string, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP) error {

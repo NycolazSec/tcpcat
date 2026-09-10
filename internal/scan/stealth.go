@@ -17,7 +17,7 @@ const (
 	ScanXmas
 )
 
-func ScanStealthPort(targetIP string, port int, scanType StealthType, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP) TargetResult {
+func ScanStealthPort(targetIP string, port int, scanType StealthType, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator) TargetResult {
 	res := TargetResult{
 		IP:   targetIP,
 		Port: port,
@@ -49,7 +49,8 @@ func ScanStealthPort(targetIP string, port int, scanType StealthType, opts *conf
 		}
 	}
 
-	scanner, err := newRawTCPScanner(targetIP, port, opts, timeout, spoofedSrcIP)
+	attemptTimeout := probeTimeout(rtt, timeout)
+	scanner, err := newRawTCPScanner(targetIP, port, opts, attemptTimeout, spoofedSrcIP)
 	if err != nil {
 		res.State = StateFiltered
 		res.Reason = err.Error()
@@ -57,26 +58,33 @@ func ScanStealthPort(targetIP string, port int, scanType StealthType, opts *conf
 	}
 	defer scanner.Close()
 
-	err = scanner.Send(flags)
-	if err != nil {
-		res.State = StateFiltered
-		res.Reason = fmt.Sprintf("Send failed: %v", err)
+	attempts := probeAttempts(opts)
+	for attempt := 0; attempt < attempts; attempt++ {
+		err = scanner.Send(flags)
+		if err != nil {
+			res.State = StateFiltered
+			res.Reason = fmt.Sprintf("Send failed: %v", err)
+			return res
+		}
+
+		resp, recvErr := scanner.Receive()
+		res.Latency = scanner.Latency()
+		res.LatencyMs = float64(res.Latency.Microseconds()) / 1000.0
+
+		if recvErr != nil {
+			res.State = StateOpenFiltered
+			res.Reason = "No RST received (RFC 793 Open|Filtered)"
+			continue
+		}
+		if rtt != nil {
+			rtt.Sample(res.Latency)
+		}
+
+		if resp.Flags&0x04 != 0 {
+			res.State = StateClosed
+			res.Reason = "RST Received (Closed)"
+		}
 		return res
-	}
-
-	resp, err := scanner.Receive()
-	res.Latency = scanner.Latency()
-	res.LatencyMs = float64(res.Latency.Microseconds()) / 1000.0
-
-	if err != nil {
-		res.State = StateOpenFiltered
-		res.Reason = "No RST received (RFC 793 Open|Filtered)"
-		return res
-	}
-
-	if resp.Flags&0x04 != 0 {
-		res.State = StateClosed
-		res.Reason = "RST Received (Closed)"
 	}
 	return res
 }

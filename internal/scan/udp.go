@@ -10,8 +10,7 @@ import (
 	"tcpcat/config"
 )
 
-func ScanUDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP) TargetResult {
-	t0 := time.Now()
+func ScanUDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator) TargetResult {
 	targetAddr := net.JoinHostPort(ip, strconv.Itoa(port))
 
 	conn, err := net.DialTimeout("udp", targetAddr, timeout)
@@ -38,56 +37,74 @@ func ScanUDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 	if opts != nil && opts.DataString != "" {
 		payload = []byte(opts.DataString)
 	}
-	_, _ = conn.Write(payload)
 
-	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	attemptTimeout := probeTimeout(rtt, timeout)
+	attempts := probeAttempts(opts)
 	buf := make([]byte, 1024)
-	_, err = conn.Read(buf)
 
-	duration := time.Since(t0)
+	var duration time.Duration
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		t0 := time.Now()
+		_, _ = conn.Write(payload)
+
+		_ = conn.SetReadDeadline(time.Now().Add(attemptTimeout))
+		_, err = conn.Read(buf)
+		duration = time.Since(t0)
+
+		if err == nil {
+			if rtt != nil {
+				rtt.Sample(duration)
+			}
+			return TargetResult{
+				IP:        ip,
+				Port:      port,
+				State:     StateOpen,
+				Latency:   duration,
+				LatencyMs: float64(duration.Microseconds()) / 1000.0,
+				Reason:    "UDP Response Received",
+			}
+		}
+
+		lastErr = err
+		if strings.Contains(err.Error(), "connection refused") {
+			// ICMP port-unreachable is authoritative; a retry can't
+			// change a closed verdict, so don't burn the extra RTTs.
+			break
+		}
+	}
+
 	latencyMs := float64(duration.Microseconds()) / 1000.0
+	errStr := lastErr.Error()
 
-	if err != nil {
-		errStr := err.Error()
-
-		if strings.Contains(errStr, "connection refused") {
-			return TargetResult{
-				IP:        ip,
-				Port:      port,
-				State:     StateClosed,
-				Latency:   duration,
-				LatencyMs: latencyMs,
-				Reason:    "ICMP Port Unreachable",
-			}
+	if strings.Contains(errStr, "connection refused") {
+		return TargetResult{
+			IP:        ip,
+			Port:      port,
+			State:     StateClosed,
+			Latency:   duration,
+			LatencyMs: latencyMs,
+			Reason:    "ICMP Port Unreachable",
 		}
+	}
 
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			return TargetResult{
-				IP:        ip,
-				Port:      port,
-				State:     StateOpenFiltered,
-				Latency:   duration,
-				LatencyMs: latencyMs,
-				Reason:    "No Response (Timeout)",
-			}
-		}
-
+	if netErr, ok := lastErr.(net.Error); ok && netErr.Timeout() {
 		return TargetResult{
 			IP:        ip,
 			Port:      port,
 			State:     StateOpenFiltered,
 			Latency:   duration,
 			LatencyMs: latencyMs,
-			Reason:    fmt.Sprintf("Error: %v", errStr),
+			Reason:    "No Response (Timeout)",
 		}
 	}
 
 	return TargetResult{
 		IP:        ip,
 		Port:      port,
-		State:     StateOpen,
+		State:     StateOpenFiltered,
 		Latency:   duration,
 		LatencyMs: latencyMs,
-		Reason:    "UDP Response Received",
+		Reason:    fmt.Sprintf("Error: %v", errStr),
 	}
 }

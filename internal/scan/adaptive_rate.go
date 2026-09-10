@@ -58,6 +58,11 @@ func (r *RTTEstimator) Sample(rtt time.Duration) {
 // SRTT returns the current smoothed RTT estimate.
 func (r *RTTEstimator) SRTT() time.Duration { return time.Duration(r.srtt.Load()) }
 
+// HasSamples reports whether Sample has been called at least once, so
+// callers can tell an estimate that's still just a floor apart from one
+// actually derived from observed traffic.
+func (r *RTTEstimator) HasSamples() bool { return r.inited.Load() }
+
 // RTO returns a retransmission-timeout-style deadline (SRTT + 4*RTTVAR),
 // floored at min so early, noisy samples can't collapse it to zero.
 func (r *RTTEstimator) RTO(min time.Duration) time.Duration {

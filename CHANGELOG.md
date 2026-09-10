@@ -11,6 +11,13 @@ Full diffs for every release are available via GitHub's
 ## [Unreleased]
 
 ### Added
+- `--max-retries <n>` (default 2): a stateless probe (SYN/ACK/Window/FIN/
+  NULL/Xmas/UDP, over both the raw-socket and AF_XDP paths) is resent up to
+  `n` times before the target is reported filtered, instead of a single
+  packet loss silently misclassifying an open port. Each retry's wait is
+  sized from the shared RTT estimator's RFC 6298-style RTO once it has
+  real samples (`RTTEstimator.RTO`, previously computed but never used),
+  falling back to the `-T` timing template's fixed timeout until then.
 - AF_XDP-accelerated host discovery (`internal/scan/xdp_discovery.go`):
   `DiscoverHostsXDP` fires ICMP Echo, TCP SYN/443, and TCP ACK/80 probes
   over the existing zero-copy AF_XDP path instead of shelling out to `ping`

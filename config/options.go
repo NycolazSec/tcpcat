@@ -94,6 +94,7 @@ type Options struct {
 	Timing         int
 	RateLimit      int
 	AdaptiveRate   bool
+	MaxRetries     int
 	MaxWorkers     int
 	BatchSize      int
 	ConnPoolSize   int
@@ -249,6 +250,7 @@ func ParseFlags() (*Options, error) {
 	flag.IntVar(&opts.ConnPoolSize, "conn-pool", 64, "Max idle TCP connections kept per address (for -sT scans)")
 	flag.IntVar(&opts.RateLimit, "rate", 500, "Max packets per second for discovery and scans")
 	flag.BoolVar(&opts.AdaptiveRate, "adaptive-rate", false, "Adjust send rate automatically from observed RTT/loss (AIMD) instead of a fixed --rate")
+	flag.IntVar(&opts.MaxRetries, "max-retries", 2, "Resend a probe this many times before marking a port filtered (0 disables retries)")
 	flag.BoolVar(&opts.UnsafeNoLimits, "unsafe-no-limits", false, "Disable concurrency limits (DANGEROUS: may cause OOM killer)")
 	flag.BoolVar(&opts.Verbose, "v", false, "Enable verbose output")
 	flag.BoolVar(&opts.InsecureTLS, "k", false, "Allow insecure server connections (alias --insecure)")
@@ -349,6 +351,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s-k, --insecure%s  Allow insecure SSL/TLS connections\n", Yellow, Reset)
 		fmt.Printf("  %s--unsafe-no-limits%s Disable all concurrency limits (DANGEROUS)\n", Yellow, Reset)
 		fmt.Printf("  %s--adaptive-rate%s Adjust send rate from observed RTT/loss instead of a fixed --rate\n", Yellow, Reset)
+		fmt.Printf("  %s--max-retries <n>%s Resend a probe up to <n> times before marking filtered (default 2)\n", Yellow, Reset)
 	}
 
 	flag.Parse()

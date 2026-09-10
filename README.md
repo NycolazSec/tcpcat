@@ -260,6 +260,7 @@ The baseline must be a non-empty JSON report created by tcpcat. A new, empty fil
 -w <count>             Concurrent worker threads (default: 32)
 --rate <pps>           Maximum probe rate (packets/sec), 0=unlimited
 --adaptive-rate        Adjust send rate from observed RTT/loss (AIMD) instead of a fixed --rate
+--max-retries <n>      Resend a probe up to <n> times before marking it filtered (default 2)
 -v                     Verbose output (stack trace on errors)
 ```
 

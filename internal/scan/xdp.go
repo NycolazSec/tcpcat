@@ -315,7 +315,36 @@ func getSrcPort(opts *config.Options) uint16 {
 	return 54321
 }
 
-func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP) TargetResult {
+// transmitXDPFrames sends each frame in order, waiting briefly for TX ring
+// space if it's momentarily full. Returns false (without sending the
+// remaining frames) if a slot never frees up, which the caller reports as
+// TX congestion rather than silently dropping the probe.
+func transmitXDPFrames(xsk *xdp.Socket, frames [][]byte) bool {
+	xdpTxLock.Lock()
+	defer xdpTxLock.Unlock()
+
+	for _, frameBytes := range frames {
+		const maxRetries = 5
+		var descs []xdp.Desc
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			descs = xsk.GetDescs(1)
+			if len(descs) > 0 {
+				break
+			}
+			time.Sleep(time.Microsecond * 50)
+		}
+		if len(descs) == 0 {
+			return false
+		}
+
+		copy(xsk.GetFrame(descs[0]), frameBytes)
+		descs[0].Len = uint32(len(frameBytes))
+		xsk.Transmit(descs)
+	}
+	return true
+}
+
+func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, rtt *RTTEstimator) TargetResult {
 	xsk, ok := GlobalXsk.(*xdp.Socket)
 	if !ok || xsk == nil {
 		return TargetResult{IP: ip, Port: port, State: StateClosed, Reason: "XDP engine offline"}
@@ -373,22 +402,14 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 		framesToSend = [][]byte{rawFrame}
 	}
 
-	t0 := time.Now()
-	xdpTxLock.Lock()
+	key := fmt.Sprintf("%s:%d", targetIP.String(), port)
+	attemptTimeout := probeTimeout(rtt, timeout)
+	attempts := probeAttempts(opts)
+	var lastLatency time.Duration
 
-	for _, frameBytes := range framesToSend {
-		maxRetries := 5
-		var descs []xdp.Desc
-		for attempt := 0; attempt < maxRetries; attempt++ {
-			descs = xsk.GetDescs(1)
-			if len(descs) > 0 {
-				break
-			}
-			time.Sleep(time.Microsecond * 50)
-		}
-
-		if len(descs) == 0 {
-			xdpTxLock.Unlock()
+	for attempt := 0; attempt < attempts; attempt++ {
+		t0 := time.Now()
+		if !transmitXDPFrames(xsk, framesToSend) {
 			return TargetResult{
 				IP:     ip,
 				Port:   port,
@@ -397,39 +418,34 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 			}
 		}
 
-		frameLen := len(frameBytes)
-		copy(xsk.GetFrame(descs[0]), frameBytes)
-		descs[0].Len = uint32(frameLen)
-		xsk.Transmit(descs)
-	}
-
-	xdpTxLock.Unlock()
-
-	key := fmt.Sprintf("%s:%d", targetIP.String(), port)
-	deadline := time.Now().Add(timeout)
-
-	for time.Now().Before(deadline) {
-		if val, ok := xdpResults.LoadAndDelete(key); ok {
-			resp := val.(xdpResponse)
-			state := resp.state
-			reason := "SYN-ACK Received (AF_XDP)"
-			latency := time.Since(t0)
-
-			osName := resp.osName
-			if state == StateOpen && resp.osSig != "" {
-				reason = fmt.Sprintf("SYN-ACK [%s]", resp.osSig)
-				if osName != "" {
-					reason = fmt.Sprintf("%s, guessed OS: %s (%.0f%% confidence)", reason, osName, resp.osConfidence*100)
+		deadline := time.Now().Add(attemptTimeout)
+		for time.Now().Before(deadline) {
+			if val, ok := xdpResults.LoadAndDelete(key); ok {
+				resp := val.(xdpResponse)
+				state := resp.state
+				reason := "SYN-ACK Received (AF_XDP)"
+				latency := time.Since(t0)
+				if rtt != nil {
+					rtt.Sample(latency)
 				}
-			} else if state == StateClosed {
-				reason = "RST Received (AF_XDP)"
+
+				osName := resp.osName
+				if state == StateOpen && resp.osSig != "" {
+					reason = fmt.Sprintf("SYN-ACK [%s]", resp.osSig)
+					if osName != "" {
+						reason = fmt.Sprintf("%s, guessed OS: %s (%.0f%% confidence)", reason, osName, resp.osConfidence*100)
+					}
+				} else if state == StateClosed {
+					reason = "RST Received (AF_XDP)"
+				}
+				return TargetResult{
+					IP: ip, Port: port, State: state, Reason: reason,
+					OS: osName, Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
+				}
 			}
-			return TargetResult{
-				IP: ip, Port: port, State: state, Reason: reason,
-				OS: osName, Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
-			}
+			time.Sleep(5 * time.Millisecond)
 		}
-		time.Sleep(5 * time.Millisecond)
+		lastLatency = time.Since(t0)
 	}
 
 	return TargetResult{
@@ -437,13 +453,12 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 		Port:      port,
 		State:     StateFiltered,
 		Reason:    "No Response (Timeout)",
-		Latency:   time.Since(t0),
-		LatencyMs: float64(time.Since(t0).Microseconds()) / 1000.0,
+		Latency:   lastLatency,
+		LatencyMs: float64(lastLatency.Microseconds()) / 1000.0,
 	}
-
 }
 
-func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP) TargetResult {
+func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, rtt *RTTEstimator) TargetResult {
 	xsk, ok := GlobalXsk.(*xdp.Socket)
 	if !ok || xsk == nil {
 		return TargetResult{IP: ip, Port: port, State: StateClosed, Reason: "XDP engine offline"}
@@ -520,20 +535,14 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 		framesToSend = [][]byte{rawFrame}
 	}
 
-	xdpTxLock.Lock()
-	for _, frameBytes := range framesToSend {
-		maxRetries := 5
-		var descs []xdp.Desc
-		for attempt := 0; attempt < maxRetries; attempt++ {
-			descs = xsk.GetDescs(1)
-			if len(descs) > 0 {
-				break
-			}
-			time.Sleep(time.Microsecond * 50)
-		}
+	key := fmt.Sprintf("%s:%d", targetIP.String(), port)
+	attemptTimeout := probeTimeout(rtt, timeout)
+	attempts := probeAttempts(opts)
+	var lastLatency time.Duration
 
-		if len(descs) == 0 {
-			xdpTxLock.Unlock()
+	for attempt := 0; attempt < attempts; attempt++ {
+		t0 := time.Now()
+		if !transmitXDPFrames(xsk, framesToSend) {
 			return TargetResult{
 				IP:     ip,
 				Port:   port,
@@ -542,37 +551,38 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 			}
 		}
 
-		frameLen := len(frameBytes)
-		copy(xsk.GetFrame(descs[0]), frameBytes)
-		descs[0].Len = uint32(frameLen)
-		xsk.Transmit(descs)
-	}
-	xdpTxLock.Unlock()
-
-	key := fmt.Sprintf("%s:%d", targetIP.String(), port)
-	deadline := time.Now().Add(timeout)
-
-	for time.Now().Before(deadline) {
-		if val, ok := xdpResults.LoadAndDelete(key); ok {
-			resp := val.(xdpResponse)
-			state := resp.state
-			var reason string
-
-			switch state {
-			case StateOpen:
-				reason = "UDP Response Received (AF_XDP)"
-			case StateClosed:
-				reason = "ICMP Port Unreachable (AF_XDP)"
+		deadline := time.Now().Add(attemptTimeout)
+		for time.Now().Before(deadline) {
+			if val, ok := xdpResults.LoadAndDelete(key); ok {
+				resp := val.(xdpResponse)
+				state := resp.state
+				latency := time.Since(t0)
+				if rtt != nil {
+					rtt.Sample(latency)
+				}
+				var reason string
+				switch state {
+				case StateOpen:
+					reason = "UDP Response Received (AF_XDP)"
+				case StateClosed:
+					reason = "ICMP Port Unreachable (AF_XDP)"
+				}
+				return TargetResult{
+					IP: ip, Port: port, State: state, Reason: reason,
+					Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
+				}
 			}
-			return TargetResult{IP: ip, Port: port, State: state, Reason: reason}
+			time.Sleep(5 * time.Millisecond)
 		}
-		time.Sleep(5 * time.Millisecond)
+		lastLatency = time.Since(t0)
 	}
 
 	return TargetResult{
-		IP:     ip,
-		Port:   port,
-		State:  StateOpenFiltered,
-		Reason: "No Response (Timeout)",
+		IP:        ip,
+		Port:      port,
+		State:     StateOpenFiltered,
+		Reason:    "No Response (Timeout)",
+		Latency:   lastLatency,
+		LatencyMs: float64(lastLatency.Microseconds()) / 1000.0,
 	}
 }
