@@ -26,6 +26,19 @@ Full diffs for every release are available via GitHub's
   target list instead of only the first few hosts. Final results are
   unaffected (`engine.go` still sorts by IP then port). `--no-randomize`
   restores the old strict list-order dispatch.
+- Expanded service detection (`internal/service/engine.go`): passive banner
+  recognition for VNC (`RFB ...`), POP3 (`+OK`), IMAP (`* OK`/`* PREAUTH`),
+  and MySQL (parses the server version straight out of the protocol-10
+  handshake packet MySQL sends unprompted on connect); active protocol
+  probes for services that stay silent until spoken to -- Redis (`INFO`,
+  parsing `redis_version`), Memcached (`version`), PostgreSQL (an
+  `SSLRequest` frontend message, confirming the protocol and whether TLS
+  is offered pre-auth), SMB (an SMB2 `NEGOTIATE` request, reporting the
+  server's chosen dialect from 2.0.2 through 3.1.1), and RDP (an X.224
+  Connection Request carrying an RDP Negotiation Request, reporting the
+  security layer -- Standard/TLS/CredSSP -- the server selects). Every new
+  prober fails closed: a rejected or unrecognized reply just falls back to
+  the existing port-based name guess, never worse than before.
 - AF_XDP-accelerated host discovery (`internal/scan/xdp_discovery.go`):
   `DiscoverHostsXDP` fires ICMP Echo, TCP SYN/443, and TCP ACK/80 probes
   over the existing zero-copy AF_XDP path instead of shelling out to `ping`

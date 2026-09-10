@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -176,7 +177,8 @@ func TestResolveDefaultPortName(t *testing.T) {
 		{21, "ftp"}, {22, "ssh"}, {23, "telnet"}, {25, "smtp"}, {53, "domain"},
 		{80, "http"}, {110, "pop3"}, {143, "imap"}, {443, "https"}, {445, "microsoft-ds"},
 		{3306, "mysql"}, {3389, "ms-wbt-server"}, {5432, "postgresql"}, {6379, "redis"},
-		{8080, "http-proxy"}, {9999, "unknown"},
+		{8080, "http-proxy"}, {5900, "vnc"}, {11211, "memcached"}, {27017, "mongodb"},
+		{9999, "unknown"},
 	}
 	for _, tt := range tests {
 		t.Run(strconv.Itoa(tt.port), func(t *testing.T) {
@@ -362,6 +364,211 @@ func TestDetectServiceTLSHandshakeFailureFallsBack(t *testing.T) {
 
 	if result.Name != "unknown" {
 		t.Errorf("Name = %q, want unknown (8443 has no resolveDefaultPortName case)", result.Name)
+	}
+}
+
+func TestDetectServiceVNCBanner(t *testing.T) {
+	port := startBannerServer(t, "RFB 003.008\n")
+
+	result := DetectService("127.0.0.1", port, 2*time.Second, false)
+
+	if result.Name != "vnc" {
+		t.Errorf("Name = %q, want vnc", result.Name)
+	}
+	if result.Version != "003.008" {
+		t.Errorf("Version = %q, want 003.008", result.Version)
+	}
+}
+
+func TestDetectServicePOP3Banner(t *testing.T) {
+	port := startBannerServer(t, "+OK POP3 ready\r\n")
+
+	result := DetectService("127.0.0.1", port, 2*time.Second, false)
+
+	if result.Name != "pop3" {
+		t.Errorf("Name = %q, want pop3", result.Name)
+	}
+}
+
+func TestDetectServiceIMAPBanner(t *testing.T) {
+	port := startBannerServer(t, "* OK IMAP4rev1 Dovecot ready\r\n")
+
+	result := DetectService("127.0.0.1", port, 2*time.Second, false)
+
+	if result.Name != "imap" {
+		t.Errorf("Name = %q, want imap", result.Name)
+	}
+}
+
+func TestParseMySQLHandshake(t *testing.T) {
+	valid := []byte{0x00, 0x00, 0x00, 0x00, 0x0a}
+	valid = append(valid, []byte("8.0.34")...)
+	valid = append(valid, 0x00, 'x', 'y')
+
+	version, ok := parseMySQLHandshake(valid)
+	if !ok || version != "8.0.34" {
+		t.Errorf("parseMySQLHandshake(valid) = (%q, %v), want (8.0.34, true)", version, ok)
+	}
+
+	if _, ok := parseMySQLHandshake([]byte{0x01, 0x02}); ok {
+		t.Error("expected false for too-short input")
+	}
+	if _, ok := parseMySQLHandshake([]byte{0x00, 0x00, 0x00, 0x00, 0x09, 'x', 0x00}); ok {
+		t.Error("expected false for non-0x0a protocol version byte")
+	}
+}
+
+func TestDetectServiceMySQLHandshake(t *testing.T) {
+	payload := []byte{0x00, 0x00, 0x00, 0x00, 0x0a}
+	payload = append(payload, []byte("8.0.34")...)
+	payload = append(payload, 0x00, 0x00, 0x00, 0x00, 0x01)
+
+	port := startBannerServer(t, string(payload))
+
+	result := DetectService("127.0.0.1", port, 2*time.Second, false)
+
+	if result.Name != "mysql" {
+		t.Errorf("Name = %q, want mysql", result.Name)
+	}
+	if result.Version != "8.0.34" {
+		t.Errorf("Version = %q, want 8.0.34", result.Version)
+	}
+}
+
+// dialToStub starts a listener that, on its first accepted connection,
+// drains whatever the client writes and then writes back response, and
+// returns a client connection dialed to it -- used to unit-test the
+// active-probe functions directly without needing to bind their real
+// (sometimes privileged) well-known ports.
+func dialToStub(t *testing.T, response []byte) net.Conn {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		buf := make([]byte, 1024)
+		_, _ = conn.Read(buf)
+		_, _ = conn.Write(response)
+	}()
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn
+}
+
+func TestProbeRedisParsesVersion(t *testing.T) {
+	body := "redis_version:7.2.4\r\nredis_mode:standalone\r\n"
+	resp := fmt.Sprintf("$%d\r\n%s\r\n", len(body), body)
+
+	got, ok := probeRedis(dialToStub(t, []byte(resp)), 2*time.Second)
+	if !ok {
+		t.Fatal("probeRedis() ok = false, want true")
+	}
+	if got.Name != "redis" || got.Version != "7.2.4" {
+		t.Errorf("probeRedis() = %+v, want Name=redis Version=7.2.4", got)
+	}
+}
+
+func TestProbeRedisRejectsNonRESP(t *testing.T) {
+	if _, ok := probeRedis(dialToStub(t, []byte("not a redis reply")), 2*time.Second); ok {
+		t.Error("probeRedis() ok = true for non-RESP reply, want false")
+	}
+}
+
+func TestProbeMemcachedParsesVersion(t *testing.T) {
+	got, ok := probeMemcached(dialToStub(t, []byte("VERSION 1.6.21\r\n")), 2*time.Second)
+	if !ok || got.Version != "1.6.21" {
+		t.Errorf("probeMemcached() = %+v, %v, want Version=1.6.21, true", got, ok)
+	}
+}
+
+func TestProbeMemcachedRejectsUnknownReply(t *testing.T) {
+	if _, ok := probeMemcached(dialToStub(t, []byte("ERROR\r\n")), 2*time.Second); ok {
+		t.Error("probeMemcached() ok = true for ERROR reply, want false")
+	}
+}
+
+func TestProbePostgresSSLSupported(t *testing.T) {
+	got, ok := probePostgres(dialToStub(t, []byte{'S'}), 2*time.Second)
+	if !ok || got.Name != "postgresql" {
+		t.Errorf("probePostgres() = %+v, %v, want Name=postgresql, true", got, ok)
+	}
+}
+
+func TestProbePostgresSSLNotOffered(t *testing.T) {
+	got, ok := probePostgres(dialToStub(t, []byte{'N'}), 2*time.Second)
+	if !ok || got.Name != "postgresql" {
+		t.Errorf("probePostgres() = %+v, %v, want Name=postgresql, true", got, ok)
+	}
+}
+
+func TestProbePostgresRejectsUnexpectedByte(t *testing.T) {
+	if _, ok := probePostgres(dialToStub(t, []byte{'E'}), 2*time.Second); ok {
+		t.Error("probePostgres() ok = true for unexpected byte, want false")
+	}
+}
+
+func TestProbeSMBParsesDialect(t *testing.T) {
+	resp := make([]byte, 4+64+6)
+	resp[4], resp[5], resp[6], resp[7] = 0xfe, 'S', 'M', 'B'
+	resp[4+64+4] = 0x11 // DialectRevision 0x0311 (SMB 3.1.1), little-endian
+	resp[4+64+5] = 0x03
+
+	got, ok := probeSMB(dialToStub(t, resp), 2*time.Second)
+	if !ok {
+		t.Fatal("probeSMB() ok = false, want true")
+	}
+	if got.Version != "SMB 3.1.1" {
+		t.Errorf("Version = %q, want SMB 3.1.1", got.Version)
+	}
+}
+
+func TestProbeSMBRejectsShortReply(t *testing.T) {
+	if _, ok := probeSMB(dialToStub(t, []byte{0x00, 0x00}), 2*time.Second); ok {
+		t.Error("probeSMB() ok = true for short reply, want false")
+	}
+}
+
+func TestProbeRDPConfirmsWithoutNegotiateResponse(t *testing.T) {
+	resp := []byte{0x03, 0x00, 0x00, 0x0b, 0x06, 0xd0, 0x00, 0x00, 0x12, 0x34, 0x00}
+
+	got, ok := probeRDP(dialToStub(t, resp), 2*time.Second)
+	if !ok || got.Name != "ms-wbt-server" {
+		t.Errorf("probeRDP() = %+v, %v, want Name=ms-wbt-server, true", got, ok)
+	}
+	if got.Version != "" {
+		t.Errorf("Version = %q, want empty (no negotiation response present)", got.Version)
+	}
+}
+
+func TestProbeRDPParsesSelectedProtocol(t *testing.T) {
+	resp := make([]byte, 4+7+8)
+	resp[0], resp[1] = 0x03, 0x00
+	resp[4+7+4] = 0x02 // selectedProtocol = 2 (CredSSP/NLA), little-endian
+
+	got, ok := probeRDP(dialToStub(t, resp), 2*time.Second)
+	if !ok {
+		t.Fatal("probeRDP() ok = false, want true")
+	}
+	if got.Version != "CredSSP (NLA)" {
+		t.Errorf("Version = %q, want CredSSP (NLA)", got.Version)
+	}
+}
+
+func TestProbeRDPRejectsNonTPKT(t *testing.T) {
+	if _, ok := probeRDP(dialToStub(t, []byte{0x00, 0x00, 0x00, 0x00}), 2*time.Second); ok {
+		t.Error("probeRDP() ok = true for non-TPKT reply, want false")
 	}
 }
 
