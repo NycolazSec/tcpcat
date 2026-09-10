@@ -40,9 +40,13 @@ func ttlBucket(ttl uint8) uint8 {
 
 // KnownFingerprints is a small, hand-curated set of common TCP/IP stack
 // signatures (initial TTL, default window, MSS, and TCP option order for a
-// SYN/ACK). It intentionally covers the handful of stacks tcpcat is most
-// likely to meet during authorized assessments rather than attempting to
-// replicate nmap-os-db/p0f in full.
+// SYN/ACK). It intentionally covers the stacks tcpcat is most likely to meet
+// during authorized assessments rather than attempting to replicate
+// nmap-os-db/p0f in full. Entries were only added where the combination of
+// scored fields (TTL bucket, WScale, SACK/TS support, option order) actually
+// differentiates them from the rest of the table -- e.g. no separate "modern
+// macOS" vs "FreeBSD" entries, since both default to a near-identical option
+// order and would just tie against each other.
 var KnownFingerprints = []Fingerprint{
 	{
 		Name: "Linux 3.x-5.x",
@@ -69,11 +73,64 @@ var KnownFingerprints = []Fingerprint{
 		},
 	},
 	{
-		Name: "Cisco IOS / Solaris",
+		Name: "Cisco IOS / IOS-XE",
 		Sig: TCPSignature{
 			TTL: 255, Window: 4128, MSS: 1460, WScale: -1,
 			SACKPerm: false, TSPerm: false,
-			OptOrder: []byte{2},
+			OptOrder: []byte{2}, // MSS only -- typical of network gear's minimal stack
+		},
+	},
+	{
+		// Older 2.4/2.6-era Linux: no timestamps and a much smaller default
+		// window/scale than the 3.x+ default above, but the same MSS/SACK
+		// support and option ordering otherwise.
+		Name: "Linux 2.x",
+		Sig: TCPSignature{
+			TTL: 64, Window: 5840, MSS: 1460, WScale: 2,
+			SACKPerm: true, TSPerm: false,
+			OptOrder: []byte{2, 4, 1, 3}, // MSS, SACK-perm, NOP, WScale (no Timestamps)
+		},
+	},
+	{
+		// Pre-Vista Windows (XP/Server 2003): SACK support but no window
+		// scaling at all, unlike every modern Windows/Linux/macOS stack.
+		Name: "Windows XP / Server 2003",
+		Sig: TCPSignature{
+			TTL: 128, Window: 65535, MSS: 1460, WScale: -1,
+			SACKPerm: true, TSPerm: false,
+			OptOrder: []byte{2, 1, 1, 4}, // MSS, NOP, NOP, SACK-perm
+		},
+	},
+	{
+		// OpenBSD's stack has long shipped with timestamps off by default
+		// (a deliberate fingerprinting/security hardening choice), which is
+		// what separates it from the Linux/macOS/BSD cluster above.
+		Name: "OpenBSD",
+		Sig: TCPSignature{
+			TTL: 64, Window: 16384, MSS: 1460, WScale: 3,
+			SACKPerm: true, TSPerm: false,
+			OptOrder: []byte{2, 4, 3, 1}, // MSS, SACK-perm, WScale, NOP
+		},
+	},
+	{
+		// Solaris/SunOS: TTL 255 like Cisco gear, but a full modern option
+		// set (SACK + Timestamps) is what tells the two apart.
+		Name: "Solaris / SunOS",
+		Sig: TCPSignature{
+			TTL: 255, Window: 24820, MSS: 1460, WScale: 0,
+			SACKPerm: true, TSPerm: true,
+			OptOrder: []byte{2, 3, 4, 8, 1}, // MSS, WScale, SACK-perm, Timestamps, NOP
+		},
+	},
+	{
+		// IBM AIX: SACK and window scaling but no timestamps, at TTL 64
+		// like the Unix-family entries above -- option order is what
+		// distinguishes it from Linux 2.x's otherwise similar field set.
+		Name: "IBM AIX",
+		Sig: TCPSignature{
+			TTL: 64, Window: 16384, MSS: 1460, WScale: 0,
+			SACKPerm: true, TSPerm: false,
+			OptOrder: []byte{2, 1, 3, 4}, // MSS, NOP, WScale, SACK-perm
 		},
 	},
 }

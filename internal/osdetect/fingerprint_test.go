@@ -84,9 +84,10 @@ func TestMatchIdentifiesLinux(t *testing.T) {
 }
 
 func TestMatchLowConfidenceReturnsEmpty(t *testing.T) {
-	// SACKPerm=false + TSPerm=true matches none of the four DB entries'
-	// combinations, and the WScale/MSS/option order below don't appear in
-	// any of them either, so no fingerprint should clear the 0.4 threshold.
+	// The WScale/MSS/option order below don't appear in any KnownFingerprints
+	// entry, and TTL 200 only bucket-matches the TTL-255 entries (Cisco and
+	// Solaris), whose SACK/TS combinations still don't both agree with this
+	// signature -- so no fingerprint should clear the 0.4 threshold.
 	noise := TCPSignature{
 		TTL: 200, Window: 1, MSS: 9999, WScale: 50,
 		SACKPerm: false, TSPerm: true,
@@ -95,6 +96,25 @@ func TestMatchLowConfidenceReturnsEmpty(t *testing.T) {
 	name, confidence := Match(noise)
 	if name != "" || confidence != 0 {
 		t.Errorf("Match(noise) = (%q, %.2f), want (\"\", 0)", name, confidence)
+	}
+}
+
+func TestMatchIdentifiesExpandedFingerprints(t *testing.T) {
+	// Every entry should be recognized as itself when queried with its own
+	// exact signature -- this both documents each addition and guards
+	// against two entries scoring identically against each other (which
+	// would make Match's result depend on table order instead of on the
+	// signature actually observed).
+	for _, fp := range KnownFingerprints {
+		t.Run(fp.Name, func(t *testing.T) {
+			name, confidence := Match(fp.Sig)
+			if name != fp.Name {
+				t.Errorf("Match(%s's own signature) = %q, want %q", fp.Name, name, fp.Name)
+			}
+			if confidence < 0.9 {
+				t.Errorf("confidence for an exact match = %.2f, want >= 0.9", confidence)
+			}
+		})
 	}
 }
 

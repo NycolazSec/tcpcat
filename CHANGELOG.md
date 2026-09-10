@@ -39,6 +39,16 @@ Full diffs for every release are available via GitHub's
   security layer -- Standard/TLS/CredSSP -- the server selects). Every new
   prober fails closed: a rejected or unrecognized reply just falls back to
   the existing port-based name guess, never worse than before.
+- Expanded OS fingerprint database (`internal/osdetect/fingerprint.go`):
+  grew from 4 to 9 curated TCP/IP stack signatures -- split the combined
+  "Cisco IOS / Solaris" entry into two (Cisco's minimal MSS-only stack vs.
+  Solaris's full SACK+Timestamps option set, both at TTL 255), and added
+  Linux 2.x (no timestamps, smaller default window/scale than 3.x+),
+  Windows XP/Server 2003 (SACK but no window scaling at all), OpenBSD
+  (timestamps off by default), and IBM AIX. Every new entry was checked to
+  actually score higher against its own signature than every other table
+  entry does, so the larger table can't introduce ties that make `Match`'s
+  result depend on iteration order instead of the observed signature.
 - AF_XDP-accelerated host discovery (`internal/scan/xdp_discovery.go`):
   `DiscoverHostsXDP` fires ICMP Echo, TCP SYN/443, and TCP ACK/80 probes
   over the existing zero-copy AF_XDP path instead of shelling out to `ping`
