@@ -19,6 +19,6 @@ func PingTCP(ip string, port int, useACK bool, timeout time.Duration) bool {
 		}
 		return false
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	return true
 }

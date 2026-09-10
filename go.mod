@@ -1,14 +1,14 @@
 module tcpcat
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/asavie/xdp v0.3.3
 	github.com/aws/aws-sdk-go-v2/config v1.33.3
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.329.0
 	github.com/cilium/ebpf v0.22.0
-	github.com/tetratelabs/wazero v1.7.2
-	golang.org/x/sys v0.43.0
+	github.com/tetratelabs/wazero v1.12.0
+	golang.org/x/sys v0.48.0
 )
 
 require (

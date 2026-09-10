@@ -50,7 +50,7 @@ func RunDeepInspect(ip string, port int, osiVerbosity int, hexDump bool, protoco
 		fmt.Printf("  %s[!] Could not connect: %v%s\n", colorRed, err, colorReset)
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	localAddr := conn.LocalAddr().(*net.TCPAddr)
 	remoteAddr := conn.RemoteAddr().(*net.TCPAddr)
@@ -89,11 +89,12 @@ func RunDeepInspect(ip string, port int, osiVerbosity int, hexDump bool, protoco
 	fmt.Printf("  Source IP:      %s%s%s\n", colorWhite, localAddr.IP.String(), colorReset)
 	fmt.Printf("  Destination IP: %s%s%s\n", colorWhite, ip, colorReset)
 	fmt.Printf("  TTL:            %s%d%s", colorWhite, ttl, colorReset)
-	if ttl == 64 {
+	switch ttl {
+	case 64:
 		fmt.Printf("  %s← Linux/Unix%s", colorCyan, colorReset)
-	} else if ttl == 128 {
+	case 128:
 		fmt.Printf("  %s← Windows%s", colorCyan, colorReset)
-	} else if ttl == 255 {
+	case 255:
 		fmt.Printf("  %s← Network Device%s", colorCyan, colorReset)
 	}
 	fmt.Println()
@@ -242,10 +243,10 @@ func printTimingAnalysis(ip string, port int, firstRTT time.Duration) {
 
 	for i := 2; i <= 3; i++ {
 		t := time.Now()
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, port), 3*time.Second)
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprintf("%d", port)), 3*time.Second)
 		rtt := time.Since(t)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			rtts = append(rtts, rtt)
 		} else {
 			rtts = append(rtts, 0)

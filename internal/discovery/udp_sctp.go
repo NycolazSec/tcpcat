@@ -13,7 +13,7 @@ func PingUDP(ip string, port int, timeout time.Duration) bool {
 	if err != nil {
 		return false
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	probeData := []byte{0x00}
 	_ = conn.SetDeadline(time.Now().Add(timeout))

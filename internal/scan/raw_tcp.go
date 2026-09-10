@@ -179,7 +179,7 @@ func (s *rawTCPScanner) Latency() time.Duration {
 }
 
 func (s *rawTCPScanner) Close() {
-	syscall.Close(s.fd)
+	_ = syscall.Close(s.fd)
 }
 
 func calcTCPChecksum(srcIP, dstIP net.IP, tcpHeader []byte) uint16 {

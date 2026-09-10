@@ -38,13 +38,13 @@ func Run(target map[string]interface{}) map[string]string {
 func checkHeartbleed(ip string, port int) (bool, error) {
 	deadline := time.Now().Add(2500 * time.Millisecond)
 
-	targetAddr := fmt.Sprintf("%s:%d", ip, port)
+	targetAddr := net.JoinHostPort(ip, fmt.Sprintf("%d", port))
 	dialer := net.Dialer{Deadline: deadline}
 	conn, err := dialer.Dial("tcp", targetAddr)
 	if err != nil {
 		return false, err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	clientHello := []byte{
 		0x16, 0x03, 0x01, 0x00, 0x58, 0x01, 0x00, 0x00, 0x54, 0x03, 0x01, 0x53, 0x43, 0x5b, 0x90, 0x9d,

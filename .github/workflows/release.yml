@@ -13,18 +13,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: "stable"
           cache: true
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: '~> v2'
@@ -36,14 +36,21 @@ jobs:
     name: Build macOS installers
     needs: goreleaser
     runs-on: macos-13
+    # macOS runners are occasionally unavailable for a long time (GitHub-side
+    # queueing, not a build failure). Cap the wait instead of leaving the run
+    # stuck indefinitely, and don't let it fail the release: the goreleaser
+    # job above already published linux/darwin/windows archives and Linux
+    # packages, so a missing .dmg/.pkg here is a soft-fail, not a blocker.
+    timeout-minutes: 20
+    continue-on-error: true
     steps:
       - name: Checkout release tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: "stable"
           cache: true

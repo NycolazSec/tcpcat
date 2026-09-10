@@ -37,7 +37,7 @@ func getDefaultNetworkInfo() (string, net.IP, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	ifaces, err := net.Interfaces()
@@ -140,7 +140,7 @@ func InitXDPEngine() (any, error) {
 
 	xsk, err := xdp.NewSocket(iface.Index, queueID, nil)
 	if err != nil {
-		l.Close()
+		_ = l.Close()
 		coll.Close()
 		return nil, fmt.Errorf("failed to create AF_XDP socket: %v", err)
 	}
@@ -148,8 +148,8 @@ func InitXDPEngine() (any, error) {
 	key := uint32(queueID)
 	val := uint32(xsk.FD())
 	if err := xskMap.Put(&key, &val); err != nil {
-		xsk.Close()
-		l.Close()
+		_ = xsk.Close()
+		_ = l.Close()
 		coll.Close()
 		return nil, fmt.Errorf("échec du pontage FD dans xsks_map: %v", err)
 	}
@@ -558,9 +558,10 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 			state := resp.state
 			var reason string
 
-			if state == StateOpen {
+			switch state {
+			case StateOpen:
 				reason = "UDP Response Received (AF_XDP)"
-			} else if state == StateClosed {
+			case StateClosed:
 				reason = "ICMP Port Unreachable (AF_XDP)"
 			}
 			return TargetResult{IP: ip, Port: port, State: state, Reason: reason}

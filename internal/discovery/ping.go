@@ -49,9 +49,9 @@ func PingHost(ip string, timeout time.Duration) bool {
 	}
 
 	for _, port := range probePorts {
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, port), tcpTimeout)
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprintf("%d", port)), tcpTimeout)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			return true
 		}
 	}

@@ -38,7 +38,7 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 	if err != nil {
 		return info
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	buf := make([]byte, 512)
@@ -70,7 +70,7 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 	isWebPort := port == 80 || port == 443 || port == 8080 || port == 8443 || port == 8000 || port == 8888
 	if isWebPort {
 		isTLS := port == 443 || port == 8443
-		var probeConn net.Conn = conn
+		var probeConn = conn
 
 		if isTLS {
 			tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify} // #nosec G402 -- opt-in via caller flag; banner grabbing must complete the handshake against untrusted/self-signed target certs

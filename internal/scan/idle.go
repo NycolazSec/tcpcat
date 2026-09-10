@@ -90,13 +90,14 @@ func ScanIdlePort(ip string, port int, zombieIP string, opts *config.Options, ti
 	res.LatencyMs = float64(res.Latency.Microseconds()) / 1000.0
 
 	diff := finalID - initialID
-	if diff == 2 {
+	switch diff {
+	case 2:
 		res.State = StateOpen
 		res.Reason = fmt.Sprintf("Idle scan (zombie %s): IPID increased by 2", zombieIP)
-	} else if diff == 1 {
+	case 1:
 		res.State = StateClosed
 		res.Reason = fmt.Sprintf("Idle scan (zombie %s): IPID increased by 1", zombieIP)
-	} else {
+	default:
 		res.State = StateFiltered
 		res.Reason = fmt.Sprintf("Idle scan (zombie %s): IPID difference is %d (unexpected)", zombieIP, diff)
 	}

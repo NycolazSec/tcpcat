@@ -55,7 +55,7 @@ func RunTraceroute(targetIP string, port int, maxHops int, timeout time.Duration
 		}
 
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			hop.IP = targetIP
 			hop.Reached = true
 		} else if strings.Contains(err.Error(), "refused") {
@@ -74,7 +74,7 @@ func RunTraceroute(targetIP string, port int, maxHops int, timeout time.Duration
 		}
 
 		if icmpConn != nil {
-			icmpConn.Close()
+			_ = icmpConn.Close()
 		}
 
 		if hop.IP != "*" {

@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: "stable"
           cache: true
@@ -46,24 +46,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      # Pinned to this module's minimum Go version rather than "stable":
-      # golangci-lint v1.64.x can't decode the export data format emitted by
-      # newer (1.26+) Go compilers, so building it (install-mode: goinstall)
-      # with a too-new toolchain fails just as loudly as a too-old prebuilt
-      # binary does against this module's "go 1.25.0" directive.
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
-          go-version: "1.25"
+          go-version: "stable"
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
-          install-mode: goinstall
           args: --timeout=5m
 
   security:
@@ -74,10 +68,10 @@ jobs:
       security-events: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: "stable"
           cache: true

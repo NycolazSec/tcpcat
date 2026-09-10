@@ -89,7 +89,7 @@ func getRelease(client *http.Client, owner, repository string) (release, error) 
 	if err != nil {
 		return release{}, fmt.Errorf("query latest release: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return release{}, fmt.Errorf("GitHub returned %s", resp.Status)
 	}
@@ -117,7 +117,7 @@ func download(client *http.Client, url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download returned %s", resp.Status)
 	}
@@ -152,7 +152,7 @@ func extractTarGz(data []byte, repository string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open archive: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	reader := tar.NewReader(gz)
 	for {
 		header, err := reader.Next()
@@ -175,9 +175,9 @@ func extractZip(data []byte, repository string) ([]byte, error) {
 		return nil, err
 	}
 	name := temp.Name()
-	defer os.Remove(name)
+	defer func() { _ = os.Remove(name) }()
 	if _, err := temp.Write(data); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return nil, err
 	}
 	if err := temp.Close(); err != nil {
@@ -187,14 +187,14 @@ func extractZip(data []byte, repository string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open archive: %w", err)
 	}
-	defer archive.Close()
+	defer func() { _ = archive.Close() }()
 	for _, file := range archive.File {
 		if filepath.Base(file.Name) == repository {
 			reader, err := file.Open()
 			if err != nil {
 				return nil, err
 			}
-			defer reader.Close()
+			defer func() { _ = reader.Close() }()
 			return io.ReadAll(io.LimitReader(reader, 128<<20))
 		}
 	}
@@ -208,13 +208,13 @@ func replaceExecutable(path string, data []byte) error {
 		return fmt.Errorf("create replacement: %w", err)
 	}
 	tempName := temp.Name()
-	defer os.Remove(tempName)
+	defer func() { _ = os.Remove(tempName) }()
 	if err := temp.Chmod(0755); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return err
 	}
 	if _, err := temp.Write(data); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return err
 	}
 	if err := temp.Close(); err != nil {

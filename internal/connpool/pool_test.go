@@ -12,7 +12,7 @@ func TestPoolGetPut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	addr := ln.Addr().String()
 
@@ -22,7 +22,7 @@ func TestPoolGetPut(t *testing.T) {
 			if err != nil {
 				return
 			}
-			conn.Close()
+			_ = conn.Close()
 		}
 	}()
 
@@ -52,7 +52,7 @@ func TestPoolMaxSize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	addr := ln.Addr().String()
 	go func() {

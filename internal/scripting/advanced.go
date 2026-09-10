@@ -277,7 +277,7 @@ func parseVersionParts(version string) []int {
 
 func (se *ScriptEngineV2) Close() error {
 	if se.runtime != nil {
-		se.runtime.Close(se.ctx)
+		return se.runtime.Close(se.ctx)
 	}
 	return nil
 }

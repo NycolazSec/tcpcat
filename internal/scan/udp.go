@@ -23,7 +23,7 @@ func ScanUDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 			Reason: "Socket Error",
 		}
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if relayIP != nil || spoofedSrcIP != nil {
 		return TargetResult{

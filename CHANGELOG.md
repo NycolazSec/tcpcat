@@ -50,7 +50,41 @@ Full diffs for every release are available via GitHub's
   timeouts instead of `http.ListenAndServe`'s unbounded defaults.
 - Tightened generated scan-report and offline vulnerability database file
   permissions from world-readable (`0644`/`0755`) to owner-only
-  (`0600`/`0700`).
+  (`0600`/`0700`); extended the same tightening to the previously-missed
+  `internal/output/grepable.go`, `normal.go`, and `script_kiddie.go`
+  exporters.
+- Checked ~30 previously-ignored error returns (mostly `Close()` on
+  connections, files, and archive readers, plus a few unchecked
+  `fmt.Fprintf` writes) flagged by `golangci-lint`'s default `errcheck` and
+  `staticcheck` linters after upgrading to golangci-lint v2; simplified a
+  few `if`/`else if` chains into tagged `switch` statements per
+  `staticcheck`'s `QF1003`.
+- `internal/discovery/ping.go` and `internal/scan/deep_inspect.go`: two more
+  dial targets built with `fmt.Sprintf("%s:%d", ...)` instead of
+  `net.JoinHostPort`, same IPv6-breaking pattern as the `deep_inspect.go`
+  fix above.
+- Split `internal/scan/xdp_craft.go`: the AF_XDP frame builders
+  (`constructSYNFrame` and friends) are Linux-only and now live in the new,
+  `//go:build linux`-tagged `internal/scan/xdp_frames.go`; the shared
+  `xdpChecksum` helper (also used by the cross-platform raw-socket scanner)
+  stays behind with no build tag.
+
+### Changed
+- CI: `golangci-lint-action` v6 → v9, which pulls golangci-lint v2 by
+  default; the Go toolchain used for linting is `"stable"` again instead of
+  pinned to `"1.25"`, since v2 (unlike the old v1.64.x prebuilt binary) can
+  read the export data of current Go compilers.
+- Bumped `actions/checkout` v4 → v7, `actions/setup-go` v5 → v7, and
+  `goreleaser/goreleaser-action` v6 → v7 across both workflows; bumped
+  `golang.org/x/sys` v0.43.0 → v0.48.0 and `github.com/tetratelabs/wazero`
+  v1.7.2 → v1.12.0, which raises this module's minimum Go version to
+  `1.26.0`.
+- `release.yml`: the `macos-installers` job now has `timeout-minutes: 20`
+  and `continue-on-error: true`, so a GitHub-side macOS runner queue stall
+  (observed repeatedly on this project) no longer requires a manual cancel
+  and can no longer mark an otherwise-successful release as failed; the
+  Linux/macOS/Windows archives and Linux packages from the `goreleaser` job
+  are unaffected either way.
 
 ## [1.0.1]
 

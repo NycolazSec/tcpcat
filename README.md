@@ -76,7 +76,7 @@ Real-time CVE correlation across multiple intelligence feeds (Vulners API, Googl
 ## Installation & Prerequisites
 
 **Requirements:**
-- Go 1.20+
+- Go 1.26+
 - Linux kernel 5.8+ (for eBPF/XDP, optional but recommended)
 - CAP_SYS_ADMIN or root (for raw socket operations)
 - gcc/clang (for eBPF compilation, optional)

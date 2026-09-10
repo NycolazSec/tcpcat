@@ -12,7 +12,7 @@ func LoadFromFile(filePath string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open target file '%s': %w", filePath, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var targets []string
 	scanner := bufio.NewScanner(file)

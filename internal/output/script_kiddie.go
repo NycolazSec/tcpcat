@@ -10,11 +10,11 @@ import (
 )
 
 func ExportScriptKiddie(filePath string, target string, results []scan.TargetResult, duration time.Duration) error {
-	file, err := os.Create(filePath)
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", filePath, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	rawText := fmt.Sprintf("tcpcat scan report for %s\nCompleted in %v\n\n", target, duration.Round(time.Millisecond))
 	for _, r := range results {

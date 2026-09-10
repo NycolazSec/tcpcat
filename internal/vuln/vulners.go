@@ -18,7 +18,7 @@ type VulnersScanner struct {
 
 func NewVulnersScanner(apiKey string) (*VulnersScanner, error) {
 	if apiKey == "" {
-		return nil, fmt.Errorf("Vulners API key is required")
+		return nil, fmt.Errorf("vulners API key is required")
 	}
 	return &VulnersScanner{
 		apiKey: apiKey,
@@ -71,7 +71,7 @@ func (s *VulnersScanner) GetForSoftware(software, version string) ([]Vulnerabili
 	if err != nil {
 		return nil, fmt.Errorf("failed to call Vulners API: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var vulnersResp vulnersResponse
 	if err := json.NewDecoder(resp.Body).Decode(&vulnersResp); err != nil {
@@ -79,7 +79,7 @@ func (s *VulnersScanner) GetForSoftware(software, version string) ([]Vulnerabili
 	}
 
 	if vulnersResp.Result != "OK" {
-		return nil, fmt.Errorf("Vulners API returned an error: %s", vulnersResp.Result)
+		return nil, fmt.Errorf("vulners API returned an error: %s", vulnersResp.Result)
 	}
 
 	var vulnerabilities []Vulnerability

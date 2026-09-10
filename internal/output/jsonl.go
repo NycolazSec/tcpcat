@@ -52,7 +52,7 @@ func ExportAuditJSONL(filePath, target string, options AuditOptions, results []s
 	if err != nil {
 		return fmt.Errorf("open audit log: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	if _, err := file.Write(append(data, '\n')); err != nil {
 		return fmt.Errorf("write audit record: %w", err)
 	}

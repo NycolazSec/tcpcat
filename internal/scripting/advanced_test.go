@@ -17,13 +17,13 @@ func TestScriptEngineV2Creation(t *testing.T) {
 		t.Error("Engine should not be nil")
 	}
 
-	defer engine.Close()
+	defer func() { _ = engine.Close() }()
 }
 
 func TestCustomServiceDetectorsRegistration(t *testing.T) {
 	ctx := context.Background()
 	engine, _ := NewScriptEngineV2(ctx)
-	defer engine.Close()
+	defer func() { _ = engine.Close() }()
 
 	detectors := NewCustomServiceDetectors(engine)
 
@@ -48,7 +48,7 @@ func TestCustomServiceDetectorsRegistration(t *testing.T) {
 func TestServiceDetection(t *testing.T) {
 	ctx := context.Background()
 	engine, _ := NewScriptEngineV2(ctx)
-	defer engine.Close()
+	defer func() { _ = engine.Close() }()
 
 	detectors := NewCustomServiceDetectors(engine)
 
@@ -84,7 +84,7 @@ func TestServiceDetection(t *testing.T) {
 func TestExploitModuleRegistration(t *testing.T) {
 	ctx := context.Background()
 	engine, _ := NewScriptEngineV2(ctx)
-	defer engine.Close()
+	defer func() { _ = engine.Close() }()
 
 	framework := NewExploitFrameworkV2(engine)
 
@@ -127,7 +127,7 @@ func TestBuiltInExploitsAvailable(t *testing.T) {
 func TestFindApplicableExploits(t *testing.T) {
 	ctx := context.Background()
 	engine, _ := NewScriptEngineV2(ctx)
-	defer engine.Close()
+	defer func() { _ = engine.Close() }()
 
 	framework := NewExploitFrameworkV2(engine)
 
@@ -163,7 +163,7 @@ func TestPayloadGeneratorCreation(t *testing.T) {
 func TestMultipleDetectorConflict(t *testing.T) {
 	ctx := context.Background()
 	engine, _ := NewScriptEngineV2(ctx)
-	defer engine.Close()
+	defer func() { _ = engine.Close() }()
 
 	detectors := NewCustomServiceDetectors(engine)
 
@@ -197,7 +197,7 @@ func TestMultipleDetectorConflict(t *testing.T) {
 func BenchmarkServiceDetection(b *testing.B) {
 	ctx := context.Background()
 	engine, _ := NewScriptEngineV2(ctx)
-	defer engine.Close()
+	defer func() { _ = engine.Close() }()
 
 	detectors := NewCustomServiceDetectors(engine)
 
@@ -220,7 +220,7 @@ func BenchmarkServiceDetection(b *testing.B) {
 func BenchmarkExploitLookup(b *testing.B) {
 	ctx := context.Background()
 	engine, _ := NewScriptEngineV2(ctx)
-	defer engine.Close()
+	defer func() { _ = engine.Close() }()
 
 	framework := NewExploitFrameworkV2(engine)
 

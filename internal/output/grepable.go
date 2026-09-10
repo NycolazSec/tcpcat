@@ -10,13 +10,15 @@ import (
 )
 
 func ExportGrepable(filePath string, target string, results []scan.TargetResult, duration time.Duration) error {
-	file, err := os.Create(filePath)
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", filePath, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
-	fmt.Fprintf(file, "# tcpcat 5.0 scan report for %s\n", target)
+	if _, err := fmt.Fprintf(file, "# tcpcat 5.0 scan report for %s\n", target); err != nil {
+		return fmt.Errorf("write grepable report: %w", err)
+	}
 
 	var portEntries []string
 	for _, r := range results {
@@ -28,8 +30,12 @@ func ExportGrepable(filePath string, target string, results []scan.TargetResult,
 	}
 
 	portsStr := strings.Join(portEntries, ", ")
-	fmt.Fprintf(file, "Host: %s ()\tPorts: %s\tStatus: Up\n", target, portsStr)
-	fmt.Fprintf(file, "# tcpcat done -- 1 IP address scanned in %v\n", duration.Round(time.Millisecond))
+	if _, err := fmt.Fprintf(file, "Host: %s ()\tPorts: %s\tStatus: Up\n", target, portsStr); err != nil {
+		return fmt.Errorf("write grepable report: %w", err)
+	}
+	if _, err := fmt.Fprintf(file, "# tcpcat done -- 1 IP address scanned in %v\n", duration.Round(time.Millisecond)); err != nil {
+		return fmt.Errorf("write grepable report: %w", err)
+	}
 
 	return nil
 }

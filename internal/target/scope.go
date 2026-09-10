@@ -13,7 +13,7 @@ func FilterByScope(targetIPs []string, scopeFile string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open scope file %q: %w", scopeFile, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	allowedIPs := make(map[string]struct{})
 	var allowedNetworks []*net.IPNet

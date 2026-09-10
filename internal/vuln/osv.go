@@ -53,7 +53,7 @@ func (s *OSVScanner) GetForSoftware(software, version string) ([]Vulnerability, 
 	if err != nil {
 		return nil, fmt.Errorf("osv: request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -148,7 +148,7 @@ func extractCVSSScore(severities []osvSeverity, dbSpecific json.RawMessage) floa
 		}
 	}
 
-	var maxScore float64 = 0.0
+	var maxScore = 0.0
 	for _, s := range severities {
 		if s.Type == "CVSS_V3" && s.Score != "" {
 			score := ParseAndCalculateCVSSv3(s.Score)

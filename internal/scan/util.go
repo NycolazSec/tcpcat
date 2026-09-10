@@ -9,7 +9,7 @@ func getLocalIPv4() net.IP {
 	if err != nil {
 		return net.ParseIP("127.0.0.1").To4()
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	return localAddr.IP.To4()
 }

@@ -137,7 +137,7 @@ func (e *ScriptingEngine) executeWasmScript(name string, compiledMod wazero.Comp
 	if err != nil {
 		return nil, fmt.Errorf("instantiation failed: %w", err)
 	}
-	defer instance.Close(ctx)
+	defer func() { _ = instance.Close(ctx) }()
 
 	runFunc := instance.ExportedFunction("run")
 	allocFunc := instance.ExportedFunction("allocate")

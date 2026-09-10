@@ -51,7 +51,7 @@ func (p *Pool) Get(addr string) (net.Conn, error) {
 			return ic.conn, nil
 		}
 
-		ic.conn.Close()
+		_ = ic.conn.Close()
 
 		p.mu.Lock()
 		conns = p.idle[addr]
@@ -66,7 +66,7 @@ func (p *Pool) Put(addr string, conn net.Conn) {
 	defer p.mu.Unlock()
 
 	if len(p.idle[addr]) >= p.maxSize {
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
 	p.idle[addr] = append(p.idle[addr], &idleConn{conn: conn, idleSince: time.Now()})
@@ -78,7 +78,7 @@ func (p *Pool) Close() {
 	defer p.mu.Unlock()
 	for addr, conns := range p.idle {
 		for _, ic := range conns {
-			ic.conn.Close()
+			_ = ic.conn.Close()
 		}
 		delete(p.idle, addr)
 	}
@@ -100,7 +100,7 @@ func (p *Pool) reaper() {
 					if now.Sub(ic.idleSince) < p.idleTimeout {
 						live = append(live, ic)
 					} else {
-						ic.conn.Close()
+						_ = ic.conn.Close()
 					}
 				}
 				if len(live) == 0 {

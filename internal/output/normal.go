@@ -9,16 +9,24 @@ import (
 )
 
 func ExportNormal(filePath string, target string, results []scan.TargetResult, duration time.Duration) error {
-	file, err := os.Create(filePath)
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", filePath, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
-	fmt.Fprintf(file, "# tcpcat 5.0 scan report for %s\n", target)
-	fmt.Fprintf(file, "# Scan completed in %v\n\n", duration.Round(time.Millisecond))
-	fmt.Fprintf(file, "%-10s %-10s %-15s %s\n", "PORT", "STATE", "SERVICE", "BANNER")
-	fmt.Fprintf(file, "---------------------------------------------------\n")
+	if _, err := fmt.Fprintf(file, "# tcpcat 5.0 scan report for %s\n", target); err != nil {
+		return fmt.Errorf("write report: %w", err)
+	}
+	if _, err := fmt.Fprintf(file, "# Scan completed in %v\n\n", duration.Round(time.Millisecond)); err != nil {
+		return fmt.Errorf("write report: %w", err)
+	}
+	if _, err := fmt.Fprintf(file, "%-10s %-10s %-15s %s\n", "PORT", "STATE", "SERVICE", "BANNER"); err != nil {
+		return fmt.Errorf("write report: %w", err)
+	}
+	if _, err := fmt.Fprintf(file, "---------------------------------------------------\n"); err != nil {
+		return fmt.Errorf("write report: %w", err)
+	}
 
 	for _, r := range results {
 		portStr := fmt.Sprintf("%d/tcp", r.Port)
@@ -26,7 +34,9 @@ func ExportNormal(filePath string, target string, results []scan.TargetResult, d
 		if svc == "" {
 			svc = "unknown"
 		}
-		fmt.Fprintf(file, "%-10s %-10s %-15s %s\n", portStr, r.State, svc, r.Banner)
+		if _, err := fmt.Fprintf(file, "%-10s %-10s %-15s %s\n", portStr, r.State, svc, r.Banner); err != nil {
+			return fmt.Errorf("write report: %w", err)
+		}
 	}
 
 	return nil

@@ -76,7 +76,7 @@ func ScanConnectPooled(hostIP string, port int, opts *config.Options, timeout ti
 	if pool != nil && !useEvasion && !hasPayload {
 		pool.Put(targetAddr, conn)
 	} else {
-		conn.Close()
+		_ = conn.Close()
 	}
 
 	res.State = StateOpen

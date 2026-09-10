@@ -52,7 +52,7 @@ func TestRawSocketInit(t *testing.T) {
 		t.Skipf("Test ignoré (privilèges root/sudo requis) : %v", err)
 		return
 	}
-	defer sock.Close()
+	defer func() { _ = sock.Close() }()
 
 	if sock.fd <= 0 {
 		t.Errorf("Descripteur de fichier de socket invalide : %d", sock.fd)
