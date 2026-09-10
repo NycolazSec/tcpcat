@@ -31,9 +31,13 @@ type rawTCPScanner struct {
 }
 
 func newRawTCPScanner(targetIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP) (*rawTCPScanner, error) {
-	dstIP := net.ParseIP(targetIP).To4()
+	parsed := net.ParseIP(targetIP)
+	dstIP := parsed.To4()
 	if dstIP == nil {
-		return nil, fmt.Errorf("invalid IPv4 address")
+		if parsed != nil {
+			return nil, fmt.Errorf("raw-socket scans (SYN/ACK/Window/NULL/FIN/Xmas) only support IPv4; use -sT or -sU for an IPv6 target")
+		}
+		return nil, fmt.Errorf("invalid IP address: %q", targetIP)
 	}
 
 	srcIP := getLocalIPv4()

@@ -16,6 +16,28 @@ func TestParseTargetSingleIP(t *testing.T) {
 	}
 }
 
+func TestParseTargetSingleIPv6(t *testing.T) {
+	got, err := ParseTarget("2001:db8::1")
+	if err != nil {
+		t.Fatalf("ParseTarget() error = %v", err)
+	}
+	want := []string{"2001:db8::1"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestParseTargetIPv6Loopback(t *testing.T) {
+	got, err := ParseTarget("::1")
+	if err != nil {
+		t.Fatalf("ParseTarget() error = %v", err)
+	}
+	want := []string{"::1"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 func TestParseTargetEmpty(t *testing.T) {
 	got, err := ParseTarget("   ")
 	if err != nil {
@@ -122,6 +144,37 @@ func TestExpandCIDRSlash32(t *testing.T) {
 	want := []string{"10.0.0.5"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestExpandCIDRIPv6Small(t *testing.T) {
+	got, err := expandCIDR("2001:db8::/126")
+	if err != nil {
+		t.Fatalf("expandCIDR() error = %v", err)
+	}
+	want := []string{"2001:db8::", "2001:db8::1", "2001:db8::2", "2001:db8::3"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestExpandCIDRIPv6TooLargeIsRejected(t *testing.T) {
+	// /64 has 2^64 host addresses -- must be rejected rather than hanging
+	// forever trying to enumerate them.
+	if _, err := expandCIDR("2001:db8::/64"); err == nil {
+		t.Fatal("expected an error for an oversized IPv6 CIDR")
+	}
+}
+
+func TestExpandCIDRIPv6AtSizeLimitIsAccepted(t *testing.T) {
+	// Exactly maxIPv6CIDRHostBits (20) host bits: right at the boundary,
+	// should still be accepted (not >, only strictly-greater is rejected).
+	got, err := expandCIDR("2001:db8::/108")
+	if err != nil {
+		t.Fatalf("expandCIDR() error = %v", err)
+	}
+	if len(got) != 1<<20 {
+		t.Fatalf("got %d addresses, want %d", len(got), 1<<20)
 	}
 }
 

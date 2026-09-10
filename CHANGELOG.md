@@ -82,6 +82,26 @@ Full diffs for every release are available via GitHub's
   single queue (today's exact behavior) wherever the count can't be read
   or a later queue's socket fails to bind, so this can't turn into a
   regression on a single-queue NIC or in a container.
+- IPv6 target support for the connect scan, UDP scan, and service
+  detection paths (`internal/target`): `ParseTarget` now accepts literal
+  IPv6 addresses directly instead of silently dropping them via a
+  leftover `.To4()` filter, and falls back to a hostname's AAAA records
+  when it has no A records instead of erroring with "no IPv4 address
+  found". `expandCIDR` now expands IPv6 CIDRs too, capped at 20 host bits
+  (~1M addresses, e.g. a /108) since a wider IPv6 prefix has vastly more
+  addresses than any scan -- or this process's memory -- could hold,
+  unlike IPv4's bounded 32-bit space. `-sT`, `-sU`, and `-sV` need no
+  changes themselves; they already dialed generically via
+  `net.JoinHostPort`/`net.Dial`. Also fixed the evasion `CustomDialer`'s
+  `--ttl` option, which set `IP_TTL` (the IPv4 sockopt) unconditionally
+  and so silently no-op'd on an IPv6 connection; it now sets
+  `IPV6_UNICAST_HOPS` when dialing over IPv6.
+  The raw-socket scan techniques (`-sS/-sA/-sW/-sN/-sF/-sX`) and `--ebpf`
+  remain IPv4-only -- their packet-crafting layers would need a genuinely
+  new IPv6 header/checksum implementation this couldn't be validated
+  without live IPv6 network testing -- but now say so clearly
+  ("raw-socket scans ... only support IPv4; use -sT or -sU for an IPv6
+  target") instead of the previous bare "invalid IPv4 address".
 - AF_XDP-accelerated host discovery (`internal/scan/xdp_discovery.go`):
   `DiscoverHostsXDP` fires ICMP Echo, TCP SYN/443, and TCP ACK/80 probes
   over the existing zero-copy AF_XDP path instead of shelling out to `ping`

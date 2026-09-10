@@ -4,6 +4,7 @@ package evasion
 
 import (
 	"net"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -34,7 +35,15 @@ func (d *CustomDialer) Dial(network, address string) (net.Conn, error) {
 				_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
 
 				if d.Config != nil && d.Config.TTL > 0 {
-					_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TTL, d.Config.TTL)
+					if strings.Contains(network, "6") {
+						// network is the resolved "tcp6"/"udp6" etc. Dialer.Control
+						// passes in -- IP_TTL is the wrong sockopt level for an
+						// IPv6 socket (it silently no-ops there); the IPv6
+						// equivalent is IPV6_UNICAST_HOPS at IPPROTO_IPV6.
+						_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_UNICAST_HOPS, d.Config.TTL)
+					} else {
+						_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TTL, d.Config.TTL)
+					}
 				}
 			})
 		},

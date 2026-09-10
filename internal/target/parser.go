@@ -22,9 +22,7 @@ func ParseTarget(target string) ([]string, error) {
 	}
 
 	if ip := net.ParseIP(target); ip != nil {
-		if ip4 := ip.To4(); ip4 != nil {
-			return []string{ip4.String()}, nil
-		}
+		return []string{ip.String()}, nil
 	}
 
 	ips, err := net.LookupIP(target)
@@ -32,18 +30,26 @@ func ParseTarget(target string) ([]string, error) {
 		return nil, fmt.Errorf("could not resolve target '%s': %w", target, err)
 	}
 
-	var resolved []string
+	// Prefer A records when both exist, matching the connect/UDP/service-
+	// detection scan paths' existing IPv4-first behavior, but fall back to
+	// AAAA (IPv6-only hosts) instead of erroring outright.
+	var v4, v6 []string
 	for _, ip := range ips {
 		if ip4 := ip.To4(); ip4 != nil {
-			resolved = append(resolved, ip4.String())
+			v4 = append(v4, ip4.String())
+		} else {
+			v6 = append(v6, ip.String())
 		}
 	}
 
-	if len(resolved) == 0 {
-		return nil, fmt.Errorf("no IPv4 address found for '%s'", target)
+	if len(v4) > 0 {
+		return v4, nil
+	}
+	if len(v6) > 0 {
+		return v6, nil
 	}
 
-	return resolved, nil
+	return nil, fmt.Errorf("no address found for '%s'", target)
 }
 
 func ParseTargets(targets []string) ([]string, error) {
@@ -58,10 +64,24 @@ func ParseTargets(targets []string) ([]string, error) {
 	return allIPs, nil
 }
 
+// maxIPv6CIDRHostBits caps how many host bits (and so how many addresses)
+// expandCIDR is willing to materialize for an IPv6 prefix. Unlike IPv4's
+// 32-bit space, a /64 or wider IPv6 prefix has vastly more addresses than
+// any scan -- or this process's memory -- could hold, so anything wider
+// than this errors out instead of trying to enumerate 2^(128-n) addresses
+// into a slice. 20 host bits caps a single CIDR at ~1M addresses (e.g. a
+// /108), already a large scan by IPv4 standards.
+const maxIPv6CIDRHostBits = 20
+
 func expandCIDR(cidr string) ([]string, error) {
 	_, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid CIDR format '%s': %w", cidr, err)
+	}
+
+	ones, bits := ipnet.Mask.Size()
+	if bits == 128 && bits-ones > maxIPv6CIDRHostBits {
+		return nil, fmt.Errorf("IPv6 CIDR '%s' is too large to expand (%d host bits, max %d supported) -- use a narrower prefix", cidr, bits-ones, maxIPv6CIDRHostBits)
 	}
 
 	var ips []string
@@ -70,9 +90,7 @@ func expandCIDR(cidr string) ([]string, error) {
 	copy(currIP, ipnet.IP)
 
 	for ipnet.Contains(currIP) {
-		if ip4 := currIP.To4(); ip4 != nil {
-			ips = append(ips, ip4.String())
-		}
+		ips = append(ips, currIP.String())
 		incIP(currIP)
 	}
 

@@ -186,6 +186,12 @@ The baseline must be a non-empty JSON report created by tcpcat. A new, empty fil
 <target>              IP address, FQDN, CIDR network, or range
 -iL <file>           Batch targets from file (one per line)
 ```
+IPv6 literals, IPv6 CIDRs (capped at a /108, ~1M hosts, to avoid trying to
+enumerate an infeasible address count), and hostnames that only resolve to
+AAAA records are all accepted. `-sT`/`-sU`/service detection work over IPv6
+exactly as over IPv4; the raw-socket scan techniques below (`-sS/-sA/-sW/
+-sN/-sF/-sX`) and `--ebpf` remain IPv4-only and return a clear error if
+pointed at an IPv6 target instead of silently misbehaving.
 
 ### Discovery Methods
 ```
