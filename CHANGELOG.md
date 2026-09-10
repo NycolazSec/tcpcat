@@ -125,6 +125,36 @@ Full diffs for every release are available via GitHub's
   build-and-test job.
 
 ### Fixed
+- `internal/scan/raw_tcp.go`: **on Linux, the raw-socket SYN/ACK/Window/
+  NULL/FIN/Xmas scan path (`-sS/-sA/-sW/-sN/-sF/-sX`) could never actually
+  see a reply.** Every probe's socket was opened with `IPPROTO_RAW`, which
+  Linux documents as send-only (`raw(7)`) -- it implies `IP_HDRINCL` for
+  crafting a custom header on the way out, but the kernel gives it no
+  receive queue at all, so every reply, including a genuine SYN-ACK from
+  an open port, was silently invisible and every scan bottomed out at
+  `filtered`/timeout regardless of the real target state. This had nothing
+  to do with target reachability or timing -- it reproduced 100% of the
+  time against a target confirmed open by nmap from the same host. Fixed
+  by receiving through a dedicated shared socket opened with
+  `IPPROTO_TCP` instead (sending is unaffected, still `IPPROTO_RAW`); that
+  socket now demultiplexes replies to whichever in-flight probe is
+  waiting for them (keyed by target IP + probed port + our source port),
+  the same shared-receiver design `internal/scan/xdp.go`'s `xdpRxLoop`
+  already used for the AF_XDP path. This also fixes a real concurrency
+  gap the old per-job-socket code had: a raw socket receives a copy of
+  *all* matching traffic on the interface regardless of which job opened
+  it, and the old per-socket filter never checked the reply's source IP,
+  so two concurrent probes to the same port on different hosts could
+  cross-match. Verified against real raw sockets in a `--cap-add=NET_RAW`
+  Docker container (this machine has no interactive `sudo`) with a live
+  listener on one side and `-sS/-sA/-sW/-sN/-sF` from the other, cross-
+  checked against `nmap`'s own result for the same target/port. As a side
+  effect of no longer keeping one raw socket open per concurrent worker,
+  a scan's wall-clock time also stops scaling with worker count for a
+  reason unrelated to network conditions -- previously every open raw
+  socket received (and had to filter) a copy of all matching traffic on
+  the interface, so N concurrent workers meant N-times the per-packet
+  filtering overhead system-wide.
 - `config/options.go`: `--max-retries <n>` wasn't registered in the CLI's
   custom `valueFlags` pairing table (unlike `--rate`/`-T`/etc.), so its
   pre-parser left `<n>` as a bare positional argument and shifted whatever
