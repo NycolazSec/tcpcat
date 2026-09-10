@@ -85,12 +85,17 @@ func IsVersionAffected(targetVersion string, affected []osvAffected) bool {
 	for _, a := range affected {
 		for _, r := range a.Ranges {
 			if r.Type == "SEMVER" {
+				// Events are ordered per the OSV schema (introduced, then an
+				// optional later fixed, possibly repeating). A version is
+				// affected once it reaches an "introduced" boundary, and
+				// stops being affected once it reaches (not merely
+				// approaches) the "fixed" boundary that follows it.
 				isIntroduced := false
 				for _, event := range r.Events {
 					if event.Introduced != "" && CompareVersions(targetVersion, event.Introduced) >= 0 {
 						isIntroduced = true
 					}
-					if event.Fixed != "" && CompareVersions(targetVersion, event.Fixed) < 0 {
+					if event.Fixed != "" && CompareVersions(targetVersion, event.Fixed) >= 0 {
 						isIntroduced = false
 					}
 				}
