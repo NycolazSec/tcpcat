@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='nav.css') }}">
 <style>
   :root{
     --paper:      #eef1ec;
@@ -66,24 +67,6 @@
   code, pre{font-family:'IBM Plex Mono', monospace;}
   .no-scrollbar::-webkit-scrollbar{display:none;}
   .no-scrollbar{-ms-overflow-style:none; scrollbar-width:none;}
-  .lang-switch{border:1px solid var(--rule-strong); font-size:10px; letter-spacing:.05em; border-radius:5px; overflow:hidden;}
-  .lang-switch button{padding:3px 8px; font-family:'IBM Plex Mono', monospace; text-transform:uppercase; border:none; cursor:pointer; transition:background-color .18s ease, color .18s ease;}
-  .lang-switch button[aria-pressed="true"]{background:var(--ink); color:var(--paper);}
-  .lang-switch button[aria-pressed="false"]{color:var(--ink-soft); background:transparent;}
-  .lang-switch button[aria-pressed="false"]:hover{background:var(--paper-flat); color:var(--ink);}
-  header nav a{position:relative;}
-  header nav a:not(.nav-external)::after{
-    content:''; position:absolute; left:0; right:0; bottom:-3px; height:1.5px;
-    background:var(--stamp); transform:scaleX(0); transform-origin:left;
-    transition:transform .22s cubic-bezier(.4,0,.2,1);
-  }
-  header nav a:not(.nav-external):hover::after{transform:scaleX(1);}
-  header{animation:tcpcat-header-in .5s cubic-bezier(.2,.7,.2,1) both;}
-  @keyframes tcpcat-header-in{from{opacity:0; transform:translateY(-6px);} to{opacity:1; transform:translateY(0);}}
-  @media (prefers-reduced-motion: reduce){
-    header{animation:none;}
-    header nav a::after{transition:none;}
-  }
   .colophon-box{max-width:100%; min-width:0;}
 </style>
 </head>
