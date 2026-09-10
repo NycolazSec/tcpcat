@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='nav.css') }}">
 <style>
   :root{
     --paper:      #eef1ec;
@@ -45,10 +46,11 @@
   }
   .wrap{max-width:720px; margin:0 auto; padding:0 24px;}
   header .bar{
-    height:56px; display:flex; align-items:center; justify-content:space-between;
-    max-width:720px; margin:0 auto; padding:0 24px;
+    min-height:56px; display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:10px 18px;
+    max-width:1180px; margin:0 auto; padding:10px 24px;
   }
-  .brand{font-family:'Space Grotesk', monospace; font-weight:700; font-size:18px; text-decoration:none; color:var(--ink); display:flex; align-items:baseline; gap:8px;}
+  .brand{font-family:'Space Grotesk', monospace; font-weight:700; font-size:18px; text-decoration:none; color:var(--ink); display:flex; align-items:baseline; gap:8px; flex:none;}
   .brand .dot{color:var(--stamp);}
   .brand .tag{font-family:'IBM Plex Mono', monospace; font-size:10px; font-weight:400; letter-spacing:.08em; color:var(--ink-faint); text-transform:uppercase;}
   main{padding:56px 0 96px;}
@@ -103,71 +105,119 @@
 <body class="paper-grid">
 
   <header>
-    <div class="bar">
-      <a href="{{ url_for('undex') }}" class="brand">tcpcat<span class="dot">.</span><span class="tag">Notice</span></a>
-      <a href="{{ url_for('undex') }}" class="doclink" style="font-size:11px; text-transform:uppercase; letter-spacing:.05em;">← Back</a>
+    <div class="bar site-header-bar">
+      <a href="{{ url_for('undex') }}" class="brand">tcpcat<span class="dot">.</span><span class="tag" data-i18n="brand-tag">Notice</span></a>
+      <nav class="site-nav" aria-label="Site pages">
+        <a href="{{ url_for('undex') }}" class="site-nav-link {{ 'is-active' if active=='home' else '' }}" data-i18n="nav-home">Home</a>
+        <a href="{{ url_for('internals.internals') }}" class="site-nav-link {{ 'is-active' if active=='internals' else '' }}" data-i18n="nav-internals">Internals</a>
+        <a href="{{ url_for('release.release') }}" class="site-nav-link {{ 'is-active' if active=='release' else '' }}" data-i18n="nav-releases">Releases</a>
+        <a href="{{ url_for('notice.notice') }}" class="site-nav-link {{ 'is-active' if active=='notice' else '' }}" data-i18n="nav-notice">Notice</a>
+        <span class="site-nav-divider"></span>
+        <a href="https://github.com/NycolazSec/tcpcat" target="_blank" rel="noreferrer" class="site-nav-link site-nav-external">GitHub ↗</a>
+      </nav>
+      <div class="lang-switch" role="group" aria-label="Language / Langue">
+        <button type="button" id="btn-en" aria-pressed="true">EN</button>
+        <button type="button" id="btn-fr" aria-pressed="false">FR</button>
+      </div>
     </div>
   </header>
 
   <main class="wrap">
 
     <div class="meta">
-      <div>Document type: Legal &amp; authorized use notice</div>
+      <div data-i18n="meta-doctype">Document type: Legal &amp; authorized use notice</div>
       <div>N. — NycolazSec</div>
-      <div>Project: tcpcat</div>
+      <div data-i18n="meta-project">Project: tcpcat</div>
       <div>github.com/NycolazSec/tcpcat</div>
-      <div>Status: non-commercial, community project</div>
-      <div>September 2026</div>
+      <div data-i18n="meta-status">Status: non-commercial, community project</div>
+      <div data-i18n="meta-date">September 2026</div>
     </div>
 
-    <h1>Legal and Authorized Use Notice</h1>
-    <p class="subtitle">Read before deploying, distributing, or using tcpcat</p>
+    <h1 data-i18n="title">Legal and Authorized Use Notice</h1>
+    <p class="subtitle" data-i18n="subtitle">Read before deploying, distributing, or using tcpcat</p>
 
-    <span class="stamp">Authorized use only</span>
+    <span class="stamp" data-i18n="stamp">Authorized use only</span>
 
     <section>
-      <h2><span class="n">1</span>Project Status</h2>
-      <p>tcpcat is a dual-use, open-source network assessment tool maintained as a non-commercial community passion project. It is not sold as a commercial product and does not provide hosted scanning, managed assessments, paid support, customer accounts, or a service operated on behalf of users.</p>
-      <p>The project is intended for learning, network administration, defensive security research, and authorized security testing.</p>
+      <h2><span class="n">1</span><span data-i18n="s1-h">Project Status</span></h2>
+      <p data-i18n="s1-p1">tcpcat is a dual-use, open-source network assessment tool maintained as a non-commercial community passion project. It is not sold as a commercial product and does not provide hosted scanning, managed assessments, paid support, customer accounts, or a service operated on behalf of users.</p>
+      <p data-i18n="s1-p2">The project is intended for learning, network administration, defensive security research, and authorized security testing.</p>
     </section>
 
     <section>
-      <h2><span class="n">2</span>Authorization Required</h2>
-      <p>Users must obtain explicit authorization before scanning systems or networks they do not own or administer. The operator is responsible for selecting lawful targets, defining the approved scope, choosing an appropriate maintenance window, and respecting network policies, contracts, privacy requirements, and applicable laws.</p>
-      <p>For approved assessments, use a documented scope and, where appropriate, the <code>--scope-file</code>, <code>--profile safe-production</code>, and <code>--audit-log</code> options.</p>
+      <h2><span class="n">2</span><span data-i18n="s2-h">Authorization Required</span></h2>
+      <p data-i18n="s2-p1">Users must obtain explicit authorization before scanning systems or networks they do not own or administer. The operator is responsible for selecting lawful targets, defining the approved scope, choosing an appropriate maintenance window, and respecting network policies, contracts, privacy requirements, and applicable laws.</p>
+      <p data-i18n="s2-p2">For approved assessments, use a documented scope and, where appropriate, the <code>--scope-file</code>, <code>--profile safe-production</code>, and <code>--audit-log</code> options.</p>
     </section>
 
     <section>
-      <h2><span class="n">3</span>Dual-Use Capabilities</h2>
-      <p>Features such as SYN, UDP, ACK, decoy traffic, fragmentation, source-port selection, timing variation, and packet inspection have legitimate uses in authorized network administration and IDS/IPS visibility testing. They can also be misused. tcpcat does not endorse unauthorized access, disruption, credential theft, persistence, or concealment of unlawful activity.</p>
-      <p>These features do not guarantee IDS/IPS bypass, reduced detection, access to a target, or successful exploitation of a vulnerability.</p>
+      <h2><span class="n">3</span><span data-i18n="s3-h">Dual-Use Capabilities</span></h2>
+      <p data-i18n="s3-p1">Features such as SYN, UDP, ACK, decoy traffic, fragmentation, source-port selection, timing variation, and packet inspection have legitimate uses in authorized network administration and IDS/IPS visibility testing. They can also be misused. tcpcat does not endorse unauthorized access, disruption, credential theft, persistence, or concealment of unlawful activity.</p>
+      <p data-i18n="s3-p2">These features do not guarantee IDS/IPS bypass, reduced detection, access to a target, or successful exploitation of a vulnerability.</p>
     </section>
 
     <section>
-      <h2><span class="n">4</span>Sanctions and Export Controls</h2>
-      <p>The project does not make a representation that use, distribution, or access to tcpcat is compliant with the laws of every jurisdiction. Users are responsible for complying with applicable sanctions, export-control rules, import restrictions, and local regulations, including rules that may apply to their organization, destination, or use case.</p>
-      <div class="callout">This notice is not legal advice and does not constitute an OFAC, export-control, or regulatory compliance certification. Obtain qualified legal advice when your distribution or use may be subject to sanctions or export controls.</div>
+      <h2><span class="n">4</span><span data-i18n="s4-h">Sanctions and Export Controls</span></h2>
+      <p data-i18n="s4-p1">The project does not make a representation that use, distribution, or access to tcpcat is compliant with the laws of every jurisdiction. Users are responsible for complying with applicable sanctions, export-control rules, import restrictions, and local regulations, including rules that may apply to their organization, destination, or use case.</p>
+      <div class="callout" data-i18n="s4-callout">This notice is not legal advice and does not constitute an OFAC, export-control, or regulatory compliance certification. Obtain qualified legal advice when your distribution or use may be subject to sanctions or export controls.</div>
     </section>
 
     <section>
-      <h2><span class="n">5</span>No Warranty or Compliance Guarantee</h2>
-      <p>tcpcat is provided under the Apache-2.0 license and without warranty, to the extent permitted by law. A detected banner or version is not proof that a vulnerability is exploitable. A <code>version-based</code> CVE match requires validation by the responsible team, and scan results may contain false positives, false negatives, or effects caused by filtering and network conditions.</p>
-      <p>The authors do not guarantee compliance with OFAC, EAR, GDPR, computer-misuse laws, or any other regulation. Users remain responsible for their own legal and operational decisions.</p>
+      <h2><span class="n">5</span><span data-i18n="s5-h">No Warranty or Compliance Guarantee</span></h2>
+      <p data-i18n="s5-p1">tcpcat is provided under the Apache-2.0 license and without warranty, to the extent permitted by law. A detected banner or version is not proof that a vulnerability is exploitable. A <code>version-based</code> CVE match requires validation by the responsible team, and scan results may contain false positives, false negatives, or effects caused by filtering and network conditions.</p>
+      <p data-i18n="s5-p2">The authors do not guarantee compliance with OFAC, EAR, GDPR, computer-misuse laws, or any other regulation. Users remain responsible for their own legal and operational decisions.</p>
     </section>
 
     <section>
-      <h2><span class="n">6</span>Contributions</h2>
-      <p>Contributions should preserve authorized-use documentation and must not intentionally add functionality whose primary purpose is unauthorized access, disruption, credential theft, persistence, or concealment of unlawful activity. Pull requests should include relevant tests and documentation updates.</p>
+      <h2><span class="n">6</span><span data-i18n="s6-h">Contributions</span></h2>
+      <p data-i18n="s6-p1">Contributions should preserve authorized-use documentation and must not intentionally add functionality whose primary purpose is unauthorized access, disruption, credential theft, persistence, or concealment of unlawful activity. Pull requests should include relevant tests and documentation updates.</p>
     </section>
 
   </main>
 
   <footer>
     <div class="wrap">
-      <span>tcpcat — Apache-2.0 license</span>
-      <span>Provided "as is," without warranty of any kind</span>
+      <span data-i18n="footer-license">tcpcat — Apache-2.0 license</span>
+      <span data-i18n="footer-warranty">Provided "as is," without warranty of any kind</span>
     </div>
   </footer>
+
+  <script src="{{ url_for('static', filename='lang-toggle.js') }}"></script>
+  <script>
+    TcpcatI18n.init({
+      "brand-tag": "Mentions",
+      "nav-home": "Accueil",
+      "nav-internals": "Internals",
+      "nav-releases": "Releases",
+      "nav-notice": "Mentions",
+      "meta-doctype": "Type de document : mentions légales et d'usage autorisé",
+      "meta-project": "Projet : tcpcat",
+      "meta-status": "Statut : projet communautaire, non commercial",
+      "meta-date": "Septembre 2026",
+      "title": "Mentions légales et d'usage autorisé",
+      "subtitle": "À lire avant de déployer, distribuer ou utiliser tcpcat",
+      "stamp": "Usage autorisé uniquement",
+      "s1-h": "Statut du projet",
+      "s1-p1": "tcpcat est un outil d'évaluation réseau open source à double usage, maintenu comme un projet communautaire non commercial, par passion. Il n'est pas vendu comme produit commercial et ne fournit ni scan hébergé, ni évaluations gérées, ni support payant, ni comptes clients, ni service opéré pour le compte d'utilisateurs.",
+      "s1-p2": "Le projet est destiné à l'apprentissage, à l'administration réseau, à la recherche en sécurité défensive et aux tests de sécurité autorisés.",
+      "s2-h": "Autorisation requise",
+      "s2-p1": "Les utilisateurs doivent obtenir une autorisation explicite avant de scanner des systèmes ou réseaux qu'ils ne possèdent pas ou n'administrent pas. L'opérateur est responsable du choix de cibles licites, de la définition du périmètre approuvé, du choix d'une fenêtre de maintenance appropriée, et du respect des politiques réseau, contrats, exigences de confidentialité et lois applicables.",
+      "s2-p2": "Pour les évaluations approuvées, utilisez un périmètre documenté et, si pertinent, les options <code>--scope-file</code>, <code>--profile safe-production</code> et <code>--audit-log</code>.",
+      "s3-h": "Fonctionnalités à double usage",
+      "s3-p1": "Des fonctionnalités comme SYN, UDP, ACK, le trafic leurre, la fragmentation, la sélection de port source, la variation de timing et l'inspection de paquets ont des usages légitimes dans l'administration réseau autorisée et les tests de visibilité IDS/IPS. Elles peuvent aussi être détournées. tcpcat ne cautionne pas l'accès non autorisé, la perturbation, le vol d'identifiants, la persistance ou la dissimulation d'activité illicite.",
+      "s3-p2": "Ces fonctionnalités ne garantissent ni contournement d'IDS/IPS, ni détection réduite, ni accès à une cible, ni exploitation réussie d'une vulnérabilité.",
+      "s4-h": "Sanctions et contrôle des exportations",
+      "s4-p1": "Le projet n'affirme pas que l'usage, la distribution ou l'accès à tcpcat est conforme aux lois de toutes les juridictions. Les utilisateurs sont responsables du respect des sanctions applicables, des règles de contrôle des exportations, des restrictions d'importation et des réglementations locales, y compris celles qui peuvent s'appliquer à leur organisation, leur destination ou leur cas d'usage.",
+      "s4-callout": "Cette notice ne constitue pas un avis juridique ni une certification de conformité OFAC, de contrôle des exportations ou réglementaire. Obtenez un avis juridique qualifié si votre distribution ou usage peut être soumis à des sanctions ou contrôles à l'export.",
+      "s5-h": "Aucune garantie ni conformité assurée",
+      "s5-p1": "tcpcat est fourni sous licence Apache-2.0 et sans garantie, dans la mesure permise par la loi. Une bannière ou une version détectée ne constitue pas la preuve qu'une vulnérabilité est exploitable. Une correspondance CVE <code>version-based</code> nécessite une validation par l'équipe responsable, et les résultats de scan peuvent contenir des faux positifs, des faux négatifs, ou des effets dus au filtrage et aux conditions réseau.",
+      "s5-p2": "Les auteurs ne garantissent pas la conformité avec l'OFAC, l'EAR, le RGPD, les lois sur les atteintes aux systèmes informatiques, ou toute autre réglementation. Les utilisateurs restent responsables de leurs propres décisions juridiques et opérationnelles.",
+      "s6-h": "Contributions",
+      "s6-p1": "Les contributions doivent préserver la documentation d'usage autorisé et ne doivent pas ajouter intentionnellement une fonctionnalité dont l'objectif premier est l'accès non autorisé, la perturbation, le vol d'identifiants, la persistance ou la dissimulation d'activité illicite. Les pull requests doivent inclure les tests et mises à jour de documentation pertinents.",
+      "footer-license": "tcpcat — licence Apache-2.0",
+      "footer-warranty": "Fourni « tel quel », sans garantie d'aucune sorte"
+    }, { defaultLang: 'en', otherLang: 'fr' });
+  </script>
 
 </body>
 </html>

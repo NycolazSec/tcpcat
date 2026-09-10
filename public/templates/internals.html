@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tcpcat — Internals</title>
+<meta name="description" content="tcpcat — how a scan gets from a Go struct to a live packet on the wire and back, kernel-bypass path included.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='nav.css') }}">
+<style>
+  :root{
+    --paper:      #eef1ec;
+    --paper-flat: #e6e9e3;
+    --card:       #f6f7f3;
+    --ink:        #171a17;
+    --ink-soft:   #545b52;
+    --ink-faint:  #8b9188;
+    --rule:       #c6ccc1;
+    --rule-strong:#9aa294;
+    --stamp:      #9c2b21;
+    --wire:       #1f5c6f;
+    --kernel-ink: #7a4e0c;
+    --kernel-bg:  #f3e6c8;
+    --kernel-edge:#d8b876;
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Mono', ui-monospace, monospace;
+    font-size:14px;
+    line-height:1.7;
+    margin:0;
+  }
+  .paper-grid{
+    background-image:
+      linear-gradient(to right, rgba(23,26,23,0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(23,26,23,0.045) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .font-display{font-family:'Space Grotesk', 'IBM Plex Mono', monospace;}
+  ::selection{background:var(--stamp); color:#fff;}
+  code{
+    font-family:'IBM Plex Mono', ui-monospace, monospace;
+    background:var(--paper-flat); border:1px solid var(--rule);
+    padding:0 4px; border-radius:3px; font-size:.94em; white-space:nowrap;
+  }
+  header{
+    position:sticky; top:0; z-index:10;
+    background:var(--paper);
+    border-bottom:1.5px solid var(--ink);
+  }
+  .bar{
+    min-height:56px; display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:10px 18px;
+    max-width:1180px; margin:0 auto; padding:10px 24px;
+  }
+  .brand{font-family:'Space Grotesk', monospace; font-weight:700; font-size:18px; text-decoration:none; color:var(--ink); display:flex; align-items:baseline; gap:8px; flex:none;}
+  .brand .dot{color:var(--stamp);}
+  .brand .tag{font-family:'IBM Plex Mono', monospace; font-size:10px; font-weight:400; letter-spacing:.08em; color:var(--ink-faint); text-transform:uppercase;}
+  a.doclink{color:var(--wire); text-decoration:underline; text-underline-offset:2px; text-decoration-color:rgba(31,92,111,0.4);}
+  a.doclink:hover{text-decoration-color:var(--wire);}
+  .wrap{max-width:1180px; margin:0 auto; padding:0 24px;}
+  main{padding:56px 0 96px;}
+  .meta{
+    font-size:11px; color:var(--ink-soft);
+    display:grid; grid-template-columns:1fr 1fr; gap:2px 32px;
+    margin-bottom:40px;
+  }
+  .meta div:nth-child(even){text-align:right;}
+  h1{
+    font-family:'Space Grotesk', monospace; font-weight:700;
+    font-size:34px; line-height:1.15; margin:0 0 10px;
+  }
+  .subtitle{color:var(--ink-faint); font-size:11px; text-transform:uppercase; letter-spacing:.12em; margin:0 0 20px;}
+  .dek{color:var(--ink-soft); font-size:14px; line-height:1.6; max-width:70ch; margin:0 0 28px;}
+
+  .legend{
+    display:flex; flex-wrap:wrap; gap:8px 18px;
+    font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-soft);
+    padding:12px 0 28px; border-bottom:1px solid var(--rule);
+    margin-bottom:32px;
+  }
+  .legend span{display:inline-flex; align-items:center; gap:7px;}
+  .swatch{width:11px; height:11px; border-radius:3px; flex:none;}
+
+  .diagram-scroll{overflow-x:auto; padding-bottom:4px;}
+  .diagram{min-width:920px;}
+
+  .box{
+    background:var(--card);
+    border:1.3px solid var(--rule-strong);
+    border-radius:8px;
+    padding:14px 16px;
+  }
+  .box h3{
+    font-family:'Space Grotesk', monospace; font-size:13.5px; font-weight:600;
+    margin:0 0 4px; display:flex; align-items:center; gap:7px;
+  }
+  .box p{font-size:11.5px; line-height:1.55; color:var(--ink-soft); margin:0;}
+  .tag{
+    display:inline-block; font-size:9.5px; text-transform:uppercase;
+    letter-spacing:.07em; padding:2px 7px; border-radius:4px;
+    border:1px solid var(--rule-strong); color:var(--ink-soft);
+    margin-top:8px;
+  }
+
+  .track-label{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:.1em;
+    color:var(--ink-faint); margin:0 0 10px; display:flex; align-items:center; gap:7px;
+  }
+  .track-label .dot2{width:7px; height:7px; border-radius:50%; flex:none;}
+
+  .tracks{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:0 28px;
+    align-items:start;
+  }
+  .track{display:flex; flex-direction:column;}
+  .track .box + .arrow-v{margin-top:2px;}
+
+  .box.load{border-color:var(--wire);}
+  .box.load h3{color:var(--wire);}
+  .box.proc{border-color:var(--wire); background:var(--card);}
+  .box.proc h3{color:var(--wire);}
+
+  .chips{display:flex; gap:8px; margin-top:10px;}
+  .chip{
+    flex:1; border:1.3px dashed var(--rule-strong); border-radius:6px;
+    padding:7px 9px; font-size:10.5px; text-align:center; color:var(--ink-soft);
+  }
+  .chip b{display:block; font-size:11.5px; color:var(--ink); font-weight:600;}
+
+  .arrow-v{display:flex; flex-direction:column; align-items:center; margin:6px 0;}
+  .arrow-v .stem{width:2px; height:20px; background:var(--rule-strong);}
+  .arrow-v .head{
+    width:0; height:0; margin-top:-1px;
+    border-left:5px solid transparent; border-right:5px solid transparent;
+    border-top:7px solid var(--rule-strong);
+  }
+  .arrow-v .cap{
+    font-size:9.5px; color:var(--ink-faint); background:var(--paper);
+    padding:1px 6px; margin:2px 0; text-align:center; white-space:nowrap;
+  }
+
+  .kernel{
+    position:relative;
+    margin-top:8px;
+    background:var(--kernel-bg);
+    border:1.3px solid var(--kernel-edge);
+    border-radius:10px;
+    padding:34px 22px 22px;
+  }
+  .kernel-label{
+    position:absolute; top:10px; left:16px;
+    font-family:'Space Grotesk', monospace; font-weight:700;
+    font-size:11px; letter-spacing:.14em; color:var(--kernel-ink);
+  }
+  .kernel .box{background:var(--paper); border-color:var(--kernel-edge);}
+  .kernel .box h3{color:var(--kernel-ink);}
+
+  .kgrid{
+    display:flex;
+    align-items:stretch;
+    gap:0;
+  }
+  .kgrid .box{flex:1 1 0;}
+  .kgrid .arrow-h{
+    flex:0 0 60px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  }
+  .kgrid .arrow-h .stem{width:26px; height:2px; background:var(--rule-strong);}
+  .kgrid .arrow-h .head{
+    width:0;height:0; margin-left:22px; margin-top:-9px;
+    border-top:5px solid transparent; border-bottom:5px solid transparent;
+    border-left:7px solid var(--rule-strong);
+  }
+  .kgrid .arrow-h .cap{font-size:9px; color:var(--ink-faint); white-space:nowrap;}
+
+  .kernel-row + .kernel-row{margin-top:14px;}
+
+  .updown{
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    width:230px; margin:10px 0 10px 0;
+  }
+  .updown .stem{width:2px; height:22px; background:var(--rule-strong);}
+  .updown .head-up{
+    width:0;height:0; border-left:5px solid transparent; border-right:5px solid transparent;
+    border-bottom:7px solid var(--rule-strong); margin-bottom:-1px;
+  }
+  .updown .head-down{
+    width:0;height:0; border-left:5px solid transparent; border-right:5px solid transparent;
+    border-top:7px solid var(--rule-strong); margin-top:-1px;
+  }
+  .updown .cap{font-size:9px; color:var(--ink-faint); text-align:center;}
+
+  .zerocopy{
+    width:46%; margin:12px 0 0 auto;
+    border:1.6px solid var(--wire); border-radius:8px;
+    background:var(--card); padding:8px 10px; text-align:center;
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+  }
+  .zerocopy .cap{font-size:9.5px; color:var(--wire); font-weight:600; letter-spacing:.02em;}
+  .zerocopy .stem{width:2px; height:16px; background:var(--wire);}
+  .zerocopy .head-up{
+    width:0;height:0; border-left:5px solid transparent; border-right:5px solid transparent;
+    border-bottom:7px solid var(--wire); margin-bottom:-1px;
+  }
+  .zerocopy .head-down{
+    width:0;height:0; border-left:5px solid transparent; border-right:5px solid transparent;
+    border-top:7px solid var(--wire); margin-top:-1px;
+  }
+
+  .passthrough{
+    margin-top:14px; display:flex; align-items:center; gap:10px;
+    font-size:10.5px; color:var(--ink-faint);
+  }
+  .passthrough .stem-h{flex:none; width:34px; height:2px; background:var(--rule);}
+  .passthrough .box{padding:8px 12px;}
+  .passthrough .box p{font-size:10.5px;}
+
+  .pipeline-intro{
+    display:flex; align-items:center; gap:10px; margin:30px 0 14px;
+  }
+  .pipeline-intro .stem{flex:none; width:2px; height:22px; background:var(--stamp);}
+  .pipeline-intro h2{
+    font-family:'Space Grotesk', monospace; font-size:15px; font-weight:700; margin:0;
+  }
+  .pipeline-intro p{font-size:11.5px; color:var(--ink-soft); margin:2px 0 0;}
+
+  .pipeline{
+    display:grid;
+    grid-template-columns: 1fr 22px 1fr 22px 1fr 22px 1fr 22px 1fr 22px 1fr 22px 1fr;
+    gap:0;
+    align-items:stretch;
+  }
+  .pstep{
+    background:var(--card);
+    border:1.3px solid var(--stamp);
+    border-radius:8px;
+    padding:12px 13px;
+    position:relative;
+  }
+  .pstep .n{
+    font-family:'Space Grotesk', monospace; font-size:10px; color:var(--stamp);
+    font-weight:700; letter-spacing:.06em; margin-bottom:5px; display:block;
+  }
+  .pstep h4{font-size:12px; margin:0 0 4px; font-weight:600;}
+  .pstep p{font-size:10px; color:var(--ink-soft); line-height:1.45; margin:0;}
+  .pconnect{display:flex; align-items:center; justify-content:center; width:20px;}
+  .pconnect .head{
+    width:0;height:0; border-top:5px solid transparent; border-bottom:5px solid transparent;
+    border-left:7px solid var(--stamp);
+  }
+
+  .fallback-note{
+    margin-top:30px; display:flex; gap:12px; align-items:flex-start;
+    border-top:1px solid var(--rule); padding-top:20px;
+  }
+  .fallback-note .mark{
+    flex:none; width:26px; height:26px; border-radius:50%;
+    border:1.3px solid var(--ink-faint); color:var(--ink-faint);
+    display:flex; align-items:center; justify-content:center;
+    font-size:13px; font-family:'Space Grotesk', monospace; font-weight:700;
+  }
+  .fallback-note p{font-size:11.5px; color:var(--ink-soft); line-height:1.6; margin:0; max-width:70ch;}
+
+  footer{
+    border-top:1.5px solid var(--ink); padding:24px 0 40px;
+    font-size:11px; color:var(--ink-faint);
+  }
+  footer .wrap{display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;}
+
+  @media (max-width:640px){
+    h1{font-size:26px;}
+    .meta{grid-template-columns:1fr;}
+    .meta div:nth-child(even){text-align:left;}
+  }
+</style>
+</head>
+<body class="paper-grid">
+
+  <header>
+    <div class="bar site-header-bar">
+      <a href="{{ url_for('undex') }}" class="brand">tcpcat<span class="dot">.</span><span class="tag" data-i18n="brand-tag">Internals</span></a>
+      <nav class="site-nav" aria-label="Site pages">
+        <a href="{{ url_for('undex') }}" class="site-nav-link {{ 'is-active' if active=='home' else '' }}" data-i18n="nav-home">Home</a>
+        <a href="{{ url_for('internals.internals') }}" class="site-nav-link {{ 'is-active' if active=='internals' else '' }}" data-i18n="nav-internals">Internals</a>
+        <a href="{{ url_for('release.release') }}" class="site-nav-link {{ 'is-active' if active=='release' else '' }}" data-i18n="nav-releases">Releases</a>
+        <a href="{{ url_for('notice.notice') }}" class="site-nav-link {{ 'is-active' if active=='notice' else '' }}" data-i18n="nav-notice">Notice</a>
+        <span class="site-nav-divider"></span>
+        <a href="https://github.com/NycolazSec/tcpcat" target="_blank" rel="noreferrer" class="site-nav-link site-nav-external">GitHub ↗</a>
+      </nav>
+      <div class="lang-switch" role="group" aria-label="Language / Langue">
+        <button type="button" id="btn-en" aria-pressed="true">EN</button>
+        <button type="button" id="btn-fr" aria-pressed="false">FR</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <div class="meta">
+      <div data-i18n="meta-doctype">Document type: Systems note</div>
+      <div>N. — NycolazSec</div>
+      <div data-i18n="meta-project">Project: tcpcat</div>
+      <div>github.com/NycolazSec/tcpcat</div>
+    </div>
+
+    <h1 data-i18n="title">Internals</h1>
+    <p class="subtitle" data-i18n="subtitle">Packet path — kernel bypass, hand-assembled</p>
+    <p class="dek" data-i18n="dek">
+      How a scan gets from a Go struct to a live packet on the wire and back — bytecode assembled
+      by hand, loaded straight into the kernel, and read through a shared memory ring instead of
+      a socket.
+    </p>
+
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--wire)"></span><span data-i18n="legend-userspace">userspace Go (tcpcat)</span></span>
+      <span><span class="swatch" style="background:var(--kernel-ink)"></span><span data-i18n="legend-kernel">Linux kernel</span></span>
+      <span><span class="swatch" style="background:var(--stamp)"></span><span data-i18n="legend-pipeline">scan pipeline</span></span>
+    </div>
+
+    <div class="diagram-scroll">
+      <div class="diagram">
+
+        <div class="tracks">
+
+          <div class="track">
+            <p class="track-label"><span class="dot2" style="background:var(--wire)"></span><span data-i18n="track-load">Load path — once, at startup</span></p>
+            <div class="box load">
+              <h3 data-i18n="box-bytecode-h">Bytecode, hand-assembled</h3>
+              <p data-i18n="box-bytecode-p"><code>internal/scan/xdp_asm.go</code> builds eBPF instructions directly with
+                <code>cilium/ebpf/asm</code> — no C source, no <code>clang -target bpf</code> step.</p>
+            </div>
+            <div class="arrow-v"><div class="stem"></div><div class="head"></div></div>
+            <div class="box load">
+              <h3>ebpf.CollectionSpec</h3>
+              <p data-i18n="box-spec-p">The assembled instructions plus a map layout, still just Go values in memory.</p>
+              <div class="chips">
+                <div class="chip"><b data-i18n="chip-program-b">Program</b><span data-i18n="chip-program-d">XDP redirect hook</span></div>
+                <div class="chip"><b data-i18n="chip-maps-b">Maps</b><span>xsks_map</span></div>
+              </div>
+            </div>
+            <div class="arrow-v"><div class="stem"></div><div class="head"></div></div>
+            <div class="box load">
+              <h3>cilium/ebpf (Go library)</h3>
+              <p data-i18n="box-lib-p">Loads the program and creates the maps in one <code>bpf()</code> syscall — the only
+                part of this path clang would normally have done for you.</p>
+            </div>
+            <div class="arrow-v" style="margin-top:16px;">
+              <div class="cap">bpf(BPF_PROG_LOAD)</div>
+              <div class="stem"></div><div class="head"></div>
+            </div>
+          </div>
+
+          <div class="track">
+            <p class="track-label"><span class="dot2" style="background:var(--wire)"></span><span data-i18n="track-data">Data path — per scan</span></p>
+            <div class="box proc" style="min-height:126px; display:flex; flex-direction:column; justify-content:center;">
+              <h3 data-i18n="box-process-h">tcpcat process</h3>
+              <p data-i18n="box-process-p">Crafts SYN / RST / ACK / ICMP frames by hand, parses replies, scores OS fingerprints,
+                paces itself with an RTT/AIMD rate controller — all plain userspace Go.</p>
+              <span class="tag">cmd/tcpcat · internal/scan · internal/osdetect</span>
+            </div>
+            <div class="arrow-v" style="margin-top:16px;">
+              <div class="cap">socket(AF_XDP) · bind() · poll()</div>
+              <div class="stem"></div><div class="head"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="kernel">
+          <span class="kernel-label" data-i18n="kernel-band-label">LINUX KERNEL</span>
+
+          <div class="kgrid kernel-row">
+            <div class="box">
+              <h3 data-i18n="box-verifier-h">Verifier</h3>
+              <p data-i18n="box-verifier-p">Statically proves the program can't crash the kernel or loop forever.</p>
+            </div>
+            <div class="arrow-h"><div class="stem"></div><div class="head"></div><div class="cap" data-i18n="cap-passes">passes</div></div>
+            <div class="box">
+              <h3 data-i18n="box-jit-h">JIT compiler</h3>
+              <p data-i18n="box-jit-p">Turns the verified bytecode into native machine code for the NIC's core.</p>
+            </div>
+            <div class="arrow-h"><div class="stem"></div><div class="head"></div><div class="cap" data-i18n="cap-attaches">attaches</div></div>
+            <div class="box">
+              <h3 data-i18n="box-xdp-h">XDP hook</h3>
+              <p data-i18n="box-xdp-p">Runs on every inbound frame, at the driver — before the kernel's own TCP/IP stack
+                ever sees it.</p>
+            </div>
+          </div>
+
+          <div class="updown">
+            <div class="cap" data-i18n="cap-mapio">reads / writes queue → socket FD mapping</div>
+            <div class="head-up"></div><div class="stem"></div>
+          </div>
+
+          <div class="kgrid kernel-row">
+            <div class="box">
+              <h3 data-i18n="box-maps-h">eBPF maps</h3>
+              <p data-i18n="box-maps-p"><code>xsks_map</code> — a tiny lookup the hook uses to decide which socket owns a
+                given RX queue.</p>
+            </div>
+            <div class="arrow-h"><div class="stem"></div><div class="head"></div><div class="cap" data-i18n="cap-redirect">redirect</div></div>
+            <div class="box">
+              <h3 data-i18n="box-socket-h">AF_XDP socket</h3>
+              <p data-i18n="box-socket-p">A UMEM region shared with the process: fill, RX, TX and completion
+                rings, mapped once and never copied per packet.</p>
+            </div>
+          </div>
+
+          <div class="zerocopy">
+            <div class="head-up"></div><div class="stem"></div>
+            <div class="cap" data-i18n="cap-zerocopy">frames move through shared UMEM rings — zero copy, no per-packet syscall</div>
+            <div class="stem"></div><div class="head-down"></div>
+          </div>
+
+          <div class="passthrough">
+            <div class="stem-h"></div>
+            <div class="box">
+              <p data-i18n="passthrough-p"><b style="color:var(--ink);">Anything the hook doesn't claim</b> — every other
+                process's traffic — falls through to the normal socket / TCP-IP stack, untouched.</p>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="pipeline-intro">
+          <div class="stem"></div>
+          <div>
+            <h2 data-i18n="pipeline-h">What tcpcat does with those frames</h2>
+            <p data-i18n="pipeline-p">Everything below runs in the userspace process, on results the kernel path above hands it.</p>
+          </div>
+        </div>
+
+        <div class="pipeline">
+          <div class="pstep">
+            <span class="n">01</span>
+            <h4 data-i18n="p1-h">Host discovery</h4>
+            <p data-i18n="p1-p">ICMP echo + SYN/443 + ACK/80 fired together over the same ring.</p>
+          </div>
+          <div class="pconnect"><div class="head"></div></div>
+          <div class="pstep">
+            <span class="n">02</span>
+            <h4 data-i18n="p2-h">Half-open SYN scan</h4>
+            <p data-i18n="p2-p">Reads the SYN/ACK, then sends its own crafted RST — never a full connection.</p>
+          </div>
+          <div class="pconnect"><div class="head"></div></div>
+          <div class="pstep">
+            <span class="n">03</span>
+            <h4 data-i18n="p3-h">OS fingerprint</h4>
+            <p data-i18n="p3-p">TTL, window, MSS and option order scored against a small signature table.</p>
+          </div>
+          <div class="pconnect"><div class="head"></div></div>
+          <div class="pstep">
+            <span class="n">04</span>
+            <h4 data-i18n="p4-h">Adaptive rate</h4>
+            <p data-i18n="p4-p">RFC 6298 RTT estimate feeds an AIMD limiter that paces the next batch.</p>
+          </div>
+          <div class="pconnect"><div class="head"></div></div>
+          <div class="pstep">
+            <span class="n">05</span>
+            <h4 data-i18n="p5-h">Service detect</h4>
+            <p data-i18n="p5-p">Open ports get a real TCP connection for a banner — back on ordinary sockets.</p>
+          </div>
+          <div class="pconnect"><div class="head"></div></div>
+          <div class="pstep">
+            <span class="n">06</span>
+            <h4 data-i18n="p6-h">Vuln correlate</h4>
+            <p data-i18n="p6-p">Banner versions checked against OSV, Vulners, and an offline CVE database.</p>
+          </div>
+          <div class="pconnect"><div class="head"></div></div>
+          <div class="pstep">
+            <span class="n">07</span>
+            <h4 data-i18n="p7-h">Report</h4>
+            <p data-i18n="p7-p">JSON, SARIF, XML or console — one result set, several writers.</p>
+          </div>
+        </div>
+
+        <div class="fallback-note">
+          <div class="mark">!</div>
+          <p data-i18n="fallback-p">
+            <b style="color:var(--ink);">No Linux, no root, or no compatible NIC driver?</b>
+            tcpcat drops the whole kernel-bypass path above and runs the same pipeline over
+            <code>SOCK_RAW</code> or a plain TCP connect scan instead — slower, but no eBPF required.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span data-i18n="footer-license">tcpcat — Apache-2.0 license</span>
+      <span>AF_XDP · cilium/ebpf · Go</span>
+    </div>
+  </footer>
+
+  <script src="{{ url_for('static', filename='lang-toggle.js') }}"></script>
+  <script>
+    TcpcatI18n.init({
+      "brand-tag": "Structure interne",
+      "nav-home": "Accueil",
+      "nav-internals": "Internals",
+      "nav-releases": "Releases",
+      "nav-notice": "Mentions",
+      "meta-doctype": "Type de document : note technique",
+      "meta-project": "Projet : tcpcat",
+      "title": "Structure interne",
+      "subtitle": "Chemin d'un paquet — contournement noyau, assemblé à la main",
+      "dek": "Comment un scan passe d'une struct Go à un vrai paquet sur le fil, et retour — bytecode assemblé à la main, chargé directement dans le noyau, lu via un anneau de mémoire partagée plutôt qu'une socket.",
+      "legend-userspace": "espace utilisateur, Go (tcpcat)",
+      "legend-kernel": "noyau Linux",
+      "legend-pipeline": "pipeline de scan",
+      "track-load": "Chargement — une fois, au démarrage",
+      "track-data": "Chemin des données — à chaque scan",
+      "box-bytecode-h": "Bytecode assemblé à la main",
+      "box-bytecode-p": "<code>internal/scan/xdp_asm.go</code> construit les instructions eBPF directement avec <code>cilium/ebpf/asm</code> — pas de source C, pas d'étape <code>clang -target bpf</code>.",
+      "box-spec-p": "Les instructions assemblées plus la disposition des maps, encore de simples valeurs Go en mémoire.",
+      "chip-program-b": "Programme",
+      "chip-program-d": "Hook de redirection XDP",
+      "chip-maps-b": "Maps",
+      "box-lib-p": "Charge le programme et crée les maps en un seul appel système <code>bpf()</code> — la seule partie de ce chemin que clang aurait normalement faite pour vous.",
+      "box-process-h": "Processus tcpcat",
+      "box-process-p": "Fabrique à la main les trames SYN / RST / ACK / ICMP, analyse les réponses, note les empreintes d'OS, s'autorégule avec un contrôleur de débit RTT/AIMD — tout en Go, en espace utilisateur.",
+      "kernel-band-label": "NOYAU LINUX",
+      "box-verifier-h": "Vérificateur",
+      "box-verifier-p": "Prouve statiquement que le programme ne peut ni planter le noyau, ni boucler indéfiniment.",
+      "cap-passes": "validé",
+      "box-jit-h": "Compilateur JIT",
+      "box-jit-p": "Transforme le bytecode vérifié en code machine natif pour le cœur de la carte réseau.",
+      "cap-attaches": "s'attache",
+      "box-xdp-h": "Hook XDP",
+      "box-xdp-p": "S'exécute sur chaque trame entrante, au niveau du pilote — avant même que la pile TCP/IP du noyau ne la voie.",
+      "cap-mapio": "lit / écrit la correspondance file → socket",
+      "box-maps-h": "Maps eBPF",
+      "box-maps-p": "<code>xsks_map</code> — une petite table que le hook consulte pour savoir quelle socket possède une file de réception donnée.",
+      "cap-redirect": "redirige",
+      "box-socket-h": "Socket AF_XDP",
+      "box-socket-p": "Une région UMEM partagée avec le processus : anneaux fill, RX, TX et completion, mappés une seule fois et jamais copiés paquet par paquet.",
+      "cap-zerocopy": "les trames circulent via les anneaux UMEM partagés — zéro copie, aucun appel système par paquet",
+      "passthrough-p": "<b style=\"color:var(--ink);\">Tout ce que le hook ne réclame pas</b> — le trafic de tous les autres processus — retombe, intact, sur la pile socket / TCP-IP classique.",
+      "pipeline-h": "Ce que tcpcat fait de ces trames",
+      "pipeline-p": "Tout ce qui suit tourne dans le processus en espace utilisateur, sur les résultats que le chemin noyau ci-dessus lui transmet.",
+      "p1-h": "Découverte d'hôtes",
+      "p1-p": "ICMP echo + SYN/443 + ACK/80 envoyés ensemble sur le même anneau.",
+      "p2-h": "Scan SYN semi-ouvert",
+      "p2-p": "Lit le SYN/ACK, puis envoie son propre RST fabriqué — jamais de connexion complète.",
+      "p3-h": "Empreinte OS",
+      "p3-p": "TTL, fenêtre, MSS et ordre des options notés selon une petite table de signatures.",
+      "p4-h": "Débit adaptatif",
+      "p4-p": "Une estimation RTT façon RFC 6298 alimente un limiteur AIMD qui ajuste le prochain lot.",
+      "p5-h": "Détection de service",
+      "p5-p": "Les ports ouverts reçoivent une vraie connexion TCP pour la bannière — retour aux sockets classiques.",
+      "p6-h": "Corrélation de vulnérabilités",
+      "p6-p": "Les versions de bannière sont vérifiées contre OSV, Vulners et une base CVE hors-ligne.",
+      "p7-h": "Rapport",
+      "p7-p": "JSON, SARIF, XML ou console — un seul jeu de résultats, plusieurs formats.",
+      "fallback-p": "<b style=\"color:var(--ink);\">Pas de Linux, pas de root, ou pilote de carte réseau incompatible ?</b> tcpcat abandonne tout le chemin de contournement noyau ci-dessus et exécute le même pipeline via <code>SOCK_RAW</code> ou un simple scan TCP connect — plus lent, mais sans eBPF requis.",
+      "footer-license": "tcpcat — licence Apache-2.0"
+    }, { defaultLang: 'en', otherLang: 'fr' });
+  </script>
+
+</body>
+</html>

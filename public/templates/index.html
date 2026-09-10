@@ -66,10 +66,24 @@
   code, pre{font-family:'IBM Plex Mono', monospace;}
   .no-scrollbar::-webkit-scrollbar{display:none;}
   .no-scrollbar{-ms-overflow-style:none; scrollbar-width:none;}
-  .lang-switch{border:1px solid var(--rule-strong); font-size:10px; letter-spacing:.05em;}
-  .lang-switch button{padding:3px 8px; font-family:'IBM Plex Mono', monospace; text-transform:uppercase;}
+  .lang-switch{border:1px solid var(--rule-strong); font-size:10px; letter-spacing:.05em; border-radius:5px; overflow:hidden;}
+  .lang-switch button{padding:3px 8px; font-family:'IBM Plex Mono', monospace; text-transform:uppercase; border:none; cursor:pointer; transition:background-color .18s ease, color .18s ease;}
   .lang-switch button[aria-pressed="true"]{background:var(--ink); color:var(--paper);}
   .lang-switch button[aria-pressed="false"]{color:var(--ink-soft); background:transparent;}
+  .lang-switch button[aria-pressed="false"]:hover{background:var(--paper-flat); color:var(--ink);}
+  header nav a{position:relative;}
+  header nav a:not(.nav-external)::after{
+    content:''; position:absolute; left:0; right:0; bottom:-3px; height:1.5px;
+    background:var(--stamp); transform:scaleX(0); transform-origin:left;
+    transition:transform .22s cubic-bezier(.4,0,.2,1);
+  }
+  header nav a:not(.nav-external):hover::after{transform:scaleX(1);}
+  header{animation:tcpcat-header-in .5s cubic-bezier(.2,.7,.2,1) both;}
+  @keyframes tcpcat-header-in{from{opacity:0; transform:translateY(-6px);} to{opacity:1; transform:translateY(0);}}
+  @media (prefers-reduced-motion: reduce){
+    header{animation:none;}
+    header nav a::after{transition:none;}
+  }
   .colophon-box{max-width:100%; min-width:0;}
 </style>
 </head>
@@ -92,13 +106,17 @@
         <span class="hidden sm:inline text-[10px] font-mono font-normal tracking-widest text-[var(--ink-faint)] uppercase">Technical&nbsp;Note&nbsp;1337</span>
       </a>
       <nav class="flex gap-3 text-[11px] uppercase tracking-wide overflow-x-auto no-scrollbar">
-        <a href="#resume" data-i18n="nav-1" class="hover:text-[var(--stamp)] whitespace-nowrap">Résumé</a>
-        <a href="#capacites" data-i18n="nav-2" class="hover:text-[var(--stamp)] whitespace-nowrap">Capacités</a>
-        <a href="#evasion" data-i18n="nav-3" class="hover:text-[var(--stamp)] whitespace-nowrap">Visibilité</a>
-        <a href="#architecture" data-i18n="nav-4" class="hover:text-[var(--stamp)] whitespace-nowrap">Architecture</a>
-        <a href="#audit" data-i18n="nav-audit" class="hover:text-[var(--stamp)] whitespace-nowrap">Audit</a>
-        <a href="#cli" data-i18n="nav-6" class="hover:text-[var(--stamp)] whitespace-nowrap">CLI</a>
-        <a href="https://github.com/NycolazSec/tcpcat" target="_blank" class="hidden sm:inline text-[var(--wire)] whitespace-nowrap">GitHub ↗</a>
+        <a href="#resume" data-i18n="nav-1" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Résumé</a>
+        <a href="#capacites" data-i18n="nav-2" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Capacités</a>
+        <a href="#evasion" data-i18n="nav-3" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Visibilité</a>
+        <a href="#architecture" data-i18n="nav-4" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Architecture</a>
+        <a href="#audit" data-i18n="nav-audit" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Audit</a>
+        <a href="#cli" data-i18n="nav-6" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">CLI</a>
+        <span class="text-[var(--rule-strong)]">|</span>
+        <a href="{{ url_for('internals.internals') }}" data-i18n="nav-internals" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Internals</a>
+        <a href="{{ url_for('release.release') }}" data-i18n="nav-release" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Releases</a>
+        <a href="{{ url_for('notice.notice') }}" data-i18n="nav-notice" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Notice</a>
+        <a href="https://github.com/NycolazSec/tcpcat" target="_blank" class="nav-external hidden sm:inline text-[var(--wire)] transition-colors duration-200 whitespace-nowrap">GitHub ↗</a>
       </nav>
       <div class="lang-switch flex shrink-0" role="group" aria-label="Langue / Language">
         <button type="button" id="btn-fr" aria-pressed="true">FR</button>
@@ -533,6 +551,9 @@ go build ./cmd/tcpcat</pre>
       "nav-4": "Architecture",
       "nav-audit": "Audit",
       "nav-6": "CLI",
+      "nav-internals": "Internals",
+      "nav-release": "Releases",
+      "nav-notice": "Notice",
       "meta-wg": "Open-source community project",
       "meta-rfc": "Technical Note: 1337",
       "meta-obs": "References: Nmap, RFC 793, eBPF/AF_XDP",

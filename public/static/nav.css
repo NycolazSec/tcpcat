@@ -1,0 +1,133 @@
+/* Shared cross-page navigation + language toggle, used on every tcpcat.io
+   page (index, /internals, /release, /notice) so the chrome around the
+   content is identical no matter where you land. */
+
+.site-nav{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  flex-wrap:wrap;
+}
+
+.site-nav-link{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  padding:6px 9px;
+  font-family:'IBM Plex Mono', ui-monospace, monospace;
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  text-decoration:none;
+  color:var(--ink-soft);
+  border-radius:5px;
+  white-space:nowrap;
+  transition:color .18s ease, background-color .18s ease, transform .15s ease;
+}
+
+.site-nav-link::after{
+  content:'';
+  position:absolute;
+  left:9px; right:9px; bottom:2px;
+  height:1.5px;
+  background:var(--stamp);
+  transform:scaleX(0);
+  transform-origin:left;
+  transition:transform .22s cubic-bezier(.4,0,.2,1);
+}
+
+.site-nav-link:hover,
+.site-nav-link:focus-visible{
+  color:var(--ink);
+  background:var(--paper-flat);
+  transform:translateY(-1px);
+}
+.site-nav-link:hover::after,
+.site-nav-link:focus-visible::after{
+  transform:scaleX(1);
+}
+.site-nav-link:active{
+  transform:translateY(0);
+}
+
+.site-nav-link.is-active{
+  color:var(--ink);
+  font-weight:600;
+}
+.site-nav-link.is-active::after{
+  transform:scaleX(1);
+  background:var(--ink);
+}
+
+.site-nav-link.site-nav-external{
+  color:var(--wire);
+}
+.site-nav-link.site-nav-external::after{
+  background:var(--wire);
+}
+.site-nav-link.site-nav-external:hover,
+.site-nav-link.site-nav-external:focus-visible{
+  color:var(--wire);
+}
+
+.site-nav-divider{
+  width:1px;
+  align-self:stretch;
+  margin:0 6px;
+  background:var(--rule);
+  flex:none;
+}
+
+/* language toggle */
+.lang-switch{
+  display:flex;
+  flex:none;
+  border:1px solid var(--rule-strong);
+  border-radius:5px;
+  overflow:hidden;
+  font-size:10px;
+  letter-spacing:.05em;
+}
+.lang-switch button{
+  padding:5px 9px;
+  font-family:'IBM Plex Mono', ui-monospace, monospace;
+  text-transform:uppercase;
+  border:none;
+  cursor:pointer;
+  background:transparent;
+  color:var(--ink-soft);
+  transition:background-color .18s ease, color .18s ease;
+}
+.lang-switch button + button{
+  border-left:1px solid var(--rule-strong);
+}
+.lang-switch button[aria-pressed="true"]{
+  background:var(--ink);
+  color:var(--paper);
+}
+.lang-switch button[aria-pressed="false"]:hover{
+  background:var(--paper-flat);
+  color:var(--ink);
+}
+.lang-switch button:focus-visible{
+  outline:2px solid var(--wire);
+  outline-offset:-2px;
+}
+
+/* gentle entrance for the whole header row, once, on load */
+.site-header-bar > *{
+  animation:tcpcat-nav-in .5s cubic-bezier(.2,.7,.2,1) both;
+}
+.site-header-bar > *:nth-child(2){animation-delay:.04s;}
+.site-header-bar > *:nth-child(3){animation-delay:.08s;}
+
+@keyframes tcpcat-nav-in{
+  from{opacity:0; transform:translateY(-6px);}
+  to{opacity:1; transform:translateY(0);}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .site-nav-link, .lang-switch button{transition:none;}
+  .site-nav-link:hover{transform:none;}
+  .site-header-bar > *{animation:none;}
+}
