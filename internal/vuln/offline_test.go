@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -68,7 +69,10 @@ func TestGetUserOfflineDBPath(t *testing.T) {
 
 func filepathHasPrefix(path, prefix string) bool {
 	rel, err := filepath.Rel(prefix, path)
-	return err == nil && rel != ".." && len(rel) > 0 && rel[0] != '.'
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func TestGetEmbeddedOfflineDB(t *testing.T) {
