@@ -142,14 +142,37 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 			}
 			batch = batch[:0]
 		}
-		for _, ip := range targets {
-			for _, port := range ports {
-				batch = append(batch, ScanJob{IP: ip, Port: port})
+
+		numPorts := uint64(len(ports))
+		total := uint64(len(targets)) * numPorts
+
+		if e.opts.NoRandomize || numPorts == 0 {
+			for _, ip := range targets {
+				for _, port := range ports {
+					batch = append(batch, ScanJob{IP: ip, Port: port})
+					if len(batch) >= batchSize {
+						flush()
+					}
+				}
+			}
+		} else {
+			// Dispatch in a randomized permutation of the flattened
+			// target*port space (see permute.go) instead of strict list
+			// order, so a long scan doesn't spend its first minutes
+			// hammering the first few hosts back to back.
+			perm := newJobPermutation(total)
+			for {
+				idx, ok := perm.next()
+				if !ok {
+					break
+				}
+				batch = append(batch, ScanJob{IP: targets[idx/numPorts], Port: ports[idx%numPorts]})
 				if len(batch) >= batchSize {
 					flush()
 				}
 			}
 		}
+
 		flush()
 		close(jobs)
 	}()

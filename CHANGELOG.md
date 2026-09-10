@@ -18,6 +18,14 @@ Full diffs for every release are available via GitHub's
   sized from the shared RTT estimator's RFC 6298-style RTO once it has
   real samples (`RTTEstimator.RTO`, previously computed but never used),
   falling back to the `-T` timing template's fixed timeout until then.
+- Randomized scan dispatch order (`internal/scan/permute.go`): the
+  target*port job queue is now fed through an O(1)-memory full-period LCG
+  permutation (the same cycle-walking technique `RandomCIDRGenerator`
+  already used for a single CIDR) instead of strict list order, so a scan
+  interrupted partway through has sampled an unbiased slice of the whole
+  target list instead of only the first few hosts. Final results are
+  unaffected (`engine.go` still sorts by IP then port). `--no-randomize`
+  restores the old strict list-order dispatch.
 - AF_XDP-accelerated host discovery (`internal/scan/xdp_discovery.go`):
   `DiscoverHostsXDP` fires ICMP Echo, TCP SYN/443, and TCP ACK/80 probes
   over the existing zero-copy AF_XDP path instead of shelling out to `ping`

@@ -261,6 +261,7 @@ The baseline must be a non-empty JSON report created by tcpcat. A new, empty fil
 --rate <pps>           Maximum probe rate (packets/sec), 0=unlimited
 --adaptive-rate        Adjust send rate from observed RTT/loss (AIMD) instead of a fixed --rate
 --max-retries <n>      Resend a probe up to <n> times before marking it filtered (default 2)
+--no-randomize         Dispatch probes in target/port list order instead of a randomized permutation
 -v                     Verbose output (stack trace on errors)
 ```
 

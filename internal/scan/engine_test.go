@@ -61,6 +61,41 @@ func TestEngineExecutionBasic(t *testing.T) {
 	}
 }
 
+func TestEngineDispatchesEveryTargetPortPairExactlyOnce(t *testing.T) {
+	targets := []string{"127.0.0.1", "127.0.0.2", "127.0.0.3"}
+	ports := []int{9001, 9002, 9003, 9004, 9005}
+
+	for _, randomize := range []bool{false, true} {
+		name := "randomized"
+		if !randomize {
+			name = "in-order"
+		}
+		t.Run(name, func(t *testing.T) {
+			opts := &config.Options{
+				MaxWorkers:  8,
+				RateLimit:   0,
+				Timing:      5,
+				NoRandomize: !randomize,
+			}
+			engine := NewEngine(opts)
+
+			results := engine.Execute(targets, ports)
+
+			seen := make(map[string]bool, len(targets)*len(ports))
+			for _, r := range results {
+				key := r.IP + ":" + fmt.Sprint(r.Port)
+				if seen[key] {
+					t.Errorf("target/port pair %s scanned more than once", key)
+				}
+				seen[key] = true
+			}
+			if len(seen) != len(targets)*len(ports) {
+				t.Errorf("got %d distinct target/port pairs, want %d", len(seen), len(targets)*len(ports))
+			}
+		})
+	}
+}
+
 func TestEngineProgressCallback(t *testing.T) {
 	opts := &config.Options{
 		MaxWorkers: 1,
