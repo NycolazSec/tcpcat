@@ -93,6 +93,7 @@ type Options struct {
 
 	Timing         int
 	RateLimit      int
+	AdaptiveRate   bool
 	MaxWorkers     int
 	BatchSize      int
 	ConnPoolSize   int
@@ -247,6 +248,7 @@ func ParseFlags() (*Options, error) {
 	flag.IntVar(&opts.BatchSize, "batch-size", 1000, "Number of jobs dispatched per batch")
 	flag.IntVar(&opts.ConnPoolSize, "conn-pool", 64, "Max idle TCP connections kept per address (for -sT scans)")
 	flag.IntVar(&opts.RateLimit, "rate", 500, "Max packets per second for discovery and scans")
+	flag.BoolVar(&opts.AdaptiveRate, "adaptive-rate", false, "Adjust send rate automatically from observed RTT/loss (AIMD) instead of a fixed --rate")
 	flag.BoolVar(&opts.UnsafeNoLimits, "unsafe-no-limits", false, "Disable concurrency limits (DANGEROUS: may cause OOM killer)")
 	flag.BoolVar(&opts.Verbose, "v", false, "Enable verbose output")
 	flag.BoolVar(&opts.InsecureTLS, "k", false, "Allow insecure server connections (alias --insecure)")
@@ -346,6 +348,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--update%s        Check the latest GitHub release and update this binary\n", Yellow, Reset)
 		fmt.Printf("  %s-k, --insecure%s  Allow insecure SSL/TLS connections\n", Yellow, Reset)
 		fmt.Printf("  %s--unsafe-no-limits%s Disable all concurrency limits (DANGEROUS)\n", Yellow, Reset)
+		fmt.Printf("  %s--adaptive-rate%s Adjust send rate from observed RTT/loss instead of a fixed --rate\n", Yellow, Reset)
 	}
 
 	flag.Parse()

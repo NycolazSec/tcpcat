@@ -164,6 +164,16 @@ func main() {
 	if opts.SkipDiscovery {
 		activeTargets = targetIPs
 		fmt.Printf("%s[*] Host discovery skipped (-Pn). All %d target(s) will be scanned.%s\n", config.Yellow, len(targetIPs), config.Reset)
+	} else if scan.GlobalXsk != nil {
+		fmt.Printf("%s[*] Running Host Discovery (AF_XDP: ICMP + SYN/443 + ACK/80)...%s\n", config.White, config.Reset)
+		activeTargets = scan.DiscoverHostsXDP(targetIPs, 2*time.Second)
+		for _, ip := range activeTargets {
+			fmt.Printf("    ├─ %s[UP]%s %s\n", config.Green, config.Reset, ip)
+		}
+		if len(activeTargets) == 0 {
+			fmt.Printf("%s[!] No active hosts found. Use -Pn to skip host discovery.%s\n", config.Yellow, config.Reset)
+			os.Exit(0)
+		}
 	} else {
 		fmt.Printf("%s[*] Running Host Discovery...%s\n", config.White, config.Reset)
 

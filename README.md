@@ -265,6 +265,7 @@ The baseline must be a non-empty JSON report created by tcpcat. A new, empty fil
 -T <0-5>               Timing template (0=paranoid, 5=insane)
 -w <count>             Concurrent worker threads (default: 32)
 --rate <pps>           Maximum probe rate (packets/sec), 0=unlimited
+--adaptive-rate        Adjust send rate from observed RTT/loss (AIMD) instead of a fixed --rate
 -v                     Verbose output (stack trace on errors)
 ```
 

@@ -33,6 +33,7 @@ type Engine struct {
 	timeout      time.Duration
 	scriptEngine *scripting.ScriptingEngine
 	connPool     *connpool.Pool
+	rtt          *RTTEstimator
 }
 
 func NewEngine(opts *config.Options) *Engine {
@@ -63,6 +64,7 @@ func NewEngine(opts *config.Options) *Engine {
 		timeout:      timeout,
 		scriptEngine: se,
 		connPool:     pool,
+		rtt:          NewRTTEstimator(),
 	}
 }
 
@@ -82,13 +84,26 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	started := time.Now()
 
 	var rateTicker *time.Ticker
-	if e.opts.RateLimit > 0 && !e.opts.UnsafeNoLimits {
-		interval := time.Second / time.Duration(e.opts.RateLimit)
-		if interval < time.Nanosecond {
-			interval = time.Nanosecond
+	var adaptiveLimiter *AdaptiveRateLimiter
+	if !e.opts.UnsafeNoLimits {
+		if e.opts.AdaptiveRate {
+			initial := e.opts.RateLimit
+			if initial <= 0 {
+				initial = 500
+			}
+			// Allow the controller to range from a tenth of the requested
+			// rate up to 4x it, so it can both back off under loss and
+			// climb back up once the network recovers.
+			minPPS := initial / 10
+			adaptiveLimiter = NewAdaptiveRateLimiter(initial, minPPS, initial*4)
+		} else if e.opts.RateLimit > 0 {
+			interval := time.Second / time.Duration(e.opts.RateLimit)
+			if interval < time.Nanosecond {
+				interval = time.Nanosecond
+			}
+			rateTicker = time.NewTicker(interval)
+			defer rateTicker.Stop()
 		}
-		rateTicker = time.NewTicker(interval)
-		defer rateTicker.Stop()
 	}
 
 	var wg sync.WaitGroup
@@ -99,8 +114,17 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 			for job := range jobs {
 				if rateTicker != nil {
 					<-rateTicker.C
+				} else if adaptiveLimiter != nil {
+					adaptiveLimiter.Wait()
 				}
 				res := e.dispatchScan(job.IP, job.Port, e.opts)
+				lost := res.State == StateFiltered || res.State == StateOpenFiltered
+				if !lost && res.Latency > 0 {
+					e.rtt.Sample(res.Latency)
+				}
+				if adaptiveLimiter != nil {
+					adaptiveLimiter.Report(lost)
+				}
 				resultsChan <- res
 			}
 		}()
@@ -154,6 +178,11 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 			}
 			onProgress(progress)
 		}
+	}
+
+	if adaptiveLimiter != nil {
+		fmt.Printf("%s[*] Adaptive timing: final rate %d pps, SRTT %v%s\n",
+			config.White, adaptiveLimiter.CurrentRate(), e.rtt.SRTT(), config.Reset)
 	}
 
 	sort.Slice(allResults, func(i, j int) bool {

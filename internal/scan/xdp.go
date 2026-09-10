@@ -29,6 +29,7 @@ var localIP net.IP
 
 var xdpTxLock sync.Mutex
 var xdpResults sync.Map
+var xdpDiscovery sync.Map // IP string -> true, populated by xdpRxLoop for host discovery
 var xdpRunning bool
 
 func getDefaultNetworkInfo() (string, net.IP, error) {
@@ -219,9 +220,22 @@ func xdpRxLoop() {
 				tcpFlags := frame[tcpStart+13]
 				key := fmt.Sprintf("%s:%d", srcIP.String(), pktSrcPort)
 
+				xdpDiscovery.Store(srcIP.String(), true) // any TCP reply proves the host is alive
+
 				if (tcpFlags & 0x12) == 0x12 {
 					osSig := osdetect.GenerateSignature(frame, ipStart, tcpStart)
-					xdpResults.Store(key, xdpResponse{state: StateOpen, osSig: osSig})
+					osName, osConfidence := osdetect.ClassifyOS(frame, ipStart, tcpStart)
+					xdpResults.Store(key, xdpResponse{
+						state:        StateOpen,
+						osSig:        osSig,
+						osName:       osName,
+						osConfidence: osConfidence,
+					})
+
+					ourIP := net.IP(frame[ipStart+16 : ipStart+20])
+					ourPort := binary.BigEndian.Uint16(frame[tcpStart+2 : tcpStart+4])
+					ackSeq := binary.BigEndian.Uint32(frame[tcpStart+8 : tcpStart+12])
+					sendRST(xsk, ourIP, srcIP, ourPort, pktSrcPort, ackSeq)
 				} else if (tcpFlags & 0x04) != 0 {
 					xdpResults.Store(key, xdpResponse{state: StateClosed})
 				}
@@ -243,7 +257,9 @@ func xdpRxLoop() {
 				icmpType := frame[icmpStart]
 				icmpCode := frame[icmpStart+1]
 
-				if icmpType == 3 && icmpCode == 3 {
+				if icmpType == 0 { // Echo Reply: host is alive
+					xdpDiscovery.Store(srcIP.String(), true)
+				} else if icmpType == 3 && icmpCode == 3 {
 					originalIPStart := icmpStart + 8
 					if len(frame) < originalIPStart+20+8 {
 						continue
@@ -263,8 +279,33 @@ func xdpRxLoop() {
 }
 
 type xdpResponse struct {
-	state string
-	osSig string
+	state        string
+	osSig        string
+	osName       string
+	osConfidence float64
+}
+
+// sendRST closes out the half-open connection a SYN scan leaves behind
+// after a SYN/ACK, instead of letting it linger in the target's backlog
+// until its own retransmit timer expires. srcIP/srcPort/dstIP/dstPort are
+// named from the RST's own point of view (srcIP is ours, dstIP is the
+// target that just replied).
+func sendRST(xsk *xdp.Socket, srcIP, dstIP net.IP, srcPort, dstPort uint16, seq uint32) {
+	if xsk == nil {
+		return
+	}
+	frame := constructRSTFrame(localMAC, gatewayMAC, srcIP, dstIP, srcPort, dstPort, seq)
+
+	xdpTxLock.Lock()
+	defer xdpTxLock.Unlock()
+
+	descs := xsk.GetDescs(1)
+	if len(descs) == 0 {
+		return // TX ring is momentarily full; the target's own SYN/ACK retransmit will get a fresh chance
+	}
+	copy(xsk.GetFrame(descs[0]), frame)
+	descs[0].Len = uint32(len(frame))
+	xsk.Transmit(descs)
 }
 
 func getSrcPort(opts *config.Options) uint16 {
@@ -332,6 +373,7 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 		framesToSend = [][]byte{rawFrame}
 	}
 
+	t0 := time.Now()
 	xdpTxLock.Lock()
 
 	for _, frameBytes := range framesToSend {
@@ -371,22 +413,32 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 			resp := val.(xdpResponse)
 			state := resp.state
 			reason := "SYN-ACK Received (AF_XDP)"
+			latency := time.Since(t0)
 
+			osName := resp.osName
 			if state == StateOpen && resp.osSig != "" {
 				reason = fmt.Sprintf("SYN-ACK [%s]", resp.osSig)
+				if osName != "" {
+					reason = fmt.Sprintf("%s, guessed OS: %s (%.0f%% confidence)", reason, osName, resp.osConfidence*100)
+				}
 			} else if state == StateClosed {
 				reason = "RST Received (AF_XDP)"
 			}
-			return TargetResult{IP: ip, Port: port, State: state, Reason: reason}
+			return TargetResult{
+				IP: ip, Port: port, State: state, Reason: reason,
+				OS: osName, Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
+			}
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 
 	return TargetResult{
-		IP:     ip,
-		Port:   port,
-		State:  StateFiltered,
-		Reason: "No Response (Timeout)",
+		IP:        ip,
+		Port:      port,
+		State:     StateFiltered,
+		Reason:    "No Response (Timeout)",
+		Latency:   time.Since(t0),
+		LatencyMs: float64(time.Since(t0).Microseconds()) / 1000.0,
 	}
 
 }

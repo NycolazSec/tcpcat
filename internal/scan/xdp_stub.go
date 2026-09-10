@@ -27,3 +27,7 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP) TargetResult {
 	return TargetResult{IP: ip, Port: port, State: StateFiltered, Reason: "XDP non supporté"}
 }
+
+func DiscoverHostsXDP(ips []string, timeout time.Duration) []string {
+	return nil
+}
