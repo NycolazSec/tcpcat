@@ -104,3 +104,53 @@ func TestAdaptiveRateLimiterWaitPaces(t *testing.T) {
 		t.Fatalf("Wait did not pace calls, elapsed=%v for 5 slots at 1000pps", elapsed)
 	}
 }
+
+func TestAdaptiveRateLimiterWaitNChargesEveryPacket(t *testing.T) {
+	// The whole point of WaitN: a job emitting n packets is charged for n
+	// pacing slots, not one. WaitN returns once the caller's first slot is
+	// due and pushes the *next* caller back by n*interval, so K calls take
+	// ~(K-1)*n*interval. At 1000pps (~1ms/slot), 6 calls of WaitN(10) must
+	// therefore take meaningfully longer than 6 calls of WaitN(1) -- if it
+	// only ever charged one slot (the bug this fixes), the two would match.
+	measure := func(n int) time.Duration {
+		rl := NewAdaptiveRateLimiter(1000, 1000, 1000)
+		start := time.Now()
+		for i := 0; i < 6; i++ {
+			rl.WaitN(n)
+		}
+		return time.Since(start)
+	}
+
+	single := measure(1)   // ~5ms  (5 * 1 slot)
+	tenfold := measure(10) // ~50ms (5 * 10 slots)
+
+	if tenfold < single*5 {
+		t.Fatalf("WaitN(10) (%v) should be far slower than WaitN(1) (%v); "+
+			"per-packet slots are not being charged", tenfold, single)
+	}
+}
+
+func TestAdaptiveRateLimiterWaitNZeroIsNoop(t *testing.T) {
+	rl := NewAdaptiveRateLimiter(10, 10, 10) // slow: 100ms/slot
+	start := time.Now()
+	rl.WaitN(0)
+	rl.WaitN(-3)
+	if elapsed := time.Since(start); elapsed > 20*time.Millisecond {
+		t.Fatalf("WaitN(<=0) blocked for %v, want immediate return", elapsed)
+	}
+}
+
+func TestAdaptiveRateLimiterWaitNConcurrentIsRaceFree(t *testing.T) {
+	rl := NewAdaptiveRateLimiter(100000, 100000, 100000)
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				rl.WaitN(3)
+			}
+		}()
+	}
+	wg.Wait()
+}

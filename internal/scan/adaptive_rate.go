@@ -109,25 +109,49 @@ func NewAdaptiveRateLimiter(initialPPS, minPPS, maxPPS int) *AdaptiveRateLimiter
 }
 
 // Wait blocks until the next send slot is due, spacing calls evenly at the
-// current rate. Safe to call from any number of goroutines concurrently.
-func (rl *AdaptiveRateLimiter) Wait() {
+// current rate. Equivalent to WaitN(1).
+func (rl *AdaptiveRateLimiter) Wait() { rl.WaitN(1) }
+
+// WaitN reserves n evenly-spaced send slots at the current rate and blocks
+// until the first is due. It is the multi-packet form of Wait, and the
+// whole point of it: a single scan job emits more than one packet on the
+// raw/AF_XDP paths (probeAttempts retransmits, plus decoys), so charging
+// one slot per job let the real TX rate run at a multiple of the requested
+// pps -- which is what turns a fast scan into an RX-side packet storm.
+//
+// Strict even spacing is deliberate, and is why this is a pacer rather than
+// a classic token bucket: the goal is to *smooth* the returning flood, and
+// a token bucket's burst-up-to-capacity allowance would just recreate that
+// flood in chunks. Idle time is never banked (a long-quiet limiter can't
+// release a catch-up burst): the reserved window always starts no earlier
+// than now. Lock-free; safe from many goroutines at once.
+func (rl *AdaptiveRateLimiter) WaitN(n int) {
+	if n <= 0 {
+		return
+	}
 	for {
 		interval := time.Second.Nanoseconds() / rl.ratePPS.Load()
 		if interval < 1 {
 			interval = 1
 		}
+		span := interval * int64(n)
 
 		last := rl.lastTick.Load()
 		now := time.Now().UnixNano()
-		next := last + interval
-		if now < next {
-			time.Sleep(time.Duration(next - now))
-			continue
+
+		// lastTick is the next free instant; start there, or at now if the
+		// limiter has been idle, so idle time isn't banked into a burst.
+		start := last
+		if now > start {
+			start = now
 		}
-		if rl.lastTick.CompareAndSwap(last, now) {
+		if rl.lastTick.CompareAndSwap(last, start+span) {
+			if wait := start - now; wait > 0 {
+				time.Sleep(time.Duration(wait))
+			}
 			return
 		}
-		// Lost the race with another goroutine claiming this slot; retry.
+		// Lost the race for this window with another goroutine; retry.
 	}
 }
 

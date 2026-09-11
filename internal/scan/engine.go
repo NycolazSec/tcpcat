@@ -9,8 +9,36 @@ import (
 
 	"tcpcat/config"
 	"tcpcat/internal/connpool"
+	"tcpcat/internal/evasion"
 	"tcpcat/internal/scripting"
 )
+
+// usesRawTxPath reports whether this scan emits its probes as raw frames
+// (raw socket or AF_XDP) rather than through the kernel's TCP stack. Only
+// those paths retransmit and fan out decoys, so only they emit more than
+// one packet per job -- a connect (-sT) or plain UDP-via-kernel job is one
+// packet's worth of send from the pacer's point of view.
+func usesRawTxPath(opts *config.Options) bool {
+	if GlobalXsk != nil {
+		return true
+	}
+	return opts.SynScan || opts.AckScan || opts.WindowScan ||
+		opts.NullScan || opts.FinScan || opts.XmasScan || opts.UdpScan
+}
+
+// decoyCount is how many extra frames each job fans out for decoy cover,
+// so the pacer can reserve their slots too instead of letting them escape
+// the rate limit entirely (which the old per-job ticker did).
+func decoyCount(opts *config.Options) int {
+	if opts.DecoyIPs == "" {
+		return 0
+	}
+	decoys, err := evasion.ParseDecoys(opts.DecoyIPs)
+	if err != nil {
+		return 0
+	}
+	return len(decoys)
+}
 
 type ScanJob struct {
 	IP   string
@@ -83,27 +111,33 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	var allResults []TargetResult
 	started := time.Now()
 
-	var rateTicker *time.Ticker
-	var adaptiveLimiter *AdaptiveRateLimiter
-	if !e.opts.UnsafeNoLimits {
-		if e.opts.AdaptiveRate {
-			initial := e.opts.RateLimit
-			if initial <= 0 {
-				initial = 500
-			}
-			// Allow the controller to range from a tenth of the requested
-			// rate up to 4x it, so it can both back off under loss and
-			// climb back up once the network recovers.
-			minPPS := initial / 10
-			adaptiveLimiter = NewAdaptiveRateLimiter(initial, minPPS, initial*4)
-		} else if e.opts.RateLimit > 0 {
-			interval := time.Second / time.Duration(e.opts.RateLimit)
-			if interval < time.Nanosecond {
-				interval = time.Nanosecond
-			}
-			rateTicker = time.NewTicker(interval)
-			defer rateTicker.Stop()
+	// One shared pacer for both the fixed and the adaptive case. A fixed
+	// rate is just an AIMD limiter pinned with min==max==rate so it never
+	// moves; the adaptive case lets it range from a tenth of the requested
+	// rate up to 4x. Using the same evenly-spaced pacer for both means the
+	// per-packet accounting below applies uniformly.
+	var limiter *AdaptiveRateLimiter
+	adaptive := e.opts.AdaptiveRate
+	if !e.opts.UnsafeNoLimits && e.opts.RateLimit > 0 {
+		initial := e.opts.RateLimit
+		if adaptive {
+			limiter = NewAdaptiveRateLimiter(initial, initial/10, initial*4)
+		} else {
+			limiter = NewAdaptiveRateLimiter(initial, initial, initial)
 		}
+	}
+
+	// Packets emitted per job. On the raw-socket / AF_XDP paths a single
+	// job is not a single packet: probeAttempts() retransmits, plus one
+	// frame per decoy. Reserving that many pacer slots per job is what
+	// keeps the real TX rate at the requested pps instead of a multiple of
+	// it -- the gap that let a stress test flood the NIC's RX side. The
+	// count is conservative (a port that replies on the first try still
+	// reserves every retry's slot), which errs toward under-sending, the
+	// safe direction when the goal is not to overwhelm the path.
+	perJobPackets := 1
+	if usesRawTxPath(e.opts) {
+		perJobPackets = probeAttempts(e.opts) + decoyCount(e.opts)
 	}
 
 	var wg sync.WaitGroup
@@ -112,18 +146,16 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				if rateTicker != nil {
-					<-rateTicker.C
-				} else if adaptiveLimiter != nil {
-					adaptiveLimiter.Wait()
+				if limiter != nil {
+					limiter.WaitN(perJobPackets)
 				}
 				res := e.dispatchScan(job.IP, job.Port, e.opts)
 				lost := res.State == StateFiltered || res.State == StateOpenFiltered
 				if !lost && res.Latency > 0 {
 					e.rtt.Sample(res.Latency)
 				}
-				if adaptiveLimiter != nil {
-					adaptiveLimiter.Report(lost)
+				if adaptive && limiter != nil {
+					limiter.Report(lost)
 				}
 				resultsChan <- res
 			}
@@ -203,9 +235,9 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 		}
 	}
 
-	if adaptiveLimiter != nil {
+	if adaptive && limiter != nil {
 		fmt.Printf("%s[*] Adaptive timing: final rate %d pps, SRTT %v%s\n",
-			config.White, adaptiveLimiter.CurrentRate(), e.rtt.SRTT(), config.Reset)
+			config.White, limiter.CurrentRate(), e.rtt.SRTT(), config.Reset)
 	}
 
 	sort.Slice(allResults, func(i, j int) bool {
