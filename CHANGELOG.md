@@ -125,6 +125,21 @@ Full diffs for every release are available via GitHub's
   build-and-test job.
 
 ### Fixed
+- `internal/scan/engine.go`, `adaptive_rate.go`: **the rate limiter paced
+  jobs, not packets**, so the real TX rate ran at a multiple of `--rate`.
+  A single job on the raw-socket / AF_XDP path emits `probeAttempts()`
+  retransmits (3 by default) plus one frame per `--decoy`, and the old
+  per-job `time.Ticker` charged exactly one slot for all of them -- a
+  "1000 pps" scan actually put ~3000+ SYN/s on the wire, and the decoy
+  frames escaped the limit entirely. On a fast NIC this turns a large scan
+  into an RX-side packet storm (every SYN draws a SYN-ACK/RST back). The
+  fixed and adaptive paths are now one lock-free evenly-spaced pacer
+  (`AdaptiveRateLimiter.WaitN`; a fixed rate is the AIMD controller pinned
+  with `min==max`), and each job reserves its true packet count
+  (`attempts + decoys`) up front. An evenly-spaced pacer is used rather
+  than a token bucket on purpose: the goal is to *smooth* the returning
+  flood, and a token bucket's burst-up-to-capacity allowance would just
+  recreate it in chunks.
 - `internal/scan/raw_tcp.go`: **on Linux, the raw-socket SYN/ACK/Window/
   NULL/FIN/Xmas scan path (`-sS/-sA/-sW/-sN/-sF/-sX`) could never actually
   see a reply.** Every probe's socket was opened with `IPPROTO_RAW`, which
