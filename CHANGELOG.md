@@ -125,6 +125,22 @@ Full diffs for every release are available via GitHub's
   build-and-test job.
 
 ### Fixed
+- `internal/scan/engine.go`: **`-sT --ebpf` was silently promoted to a raw
+  XDP SYN scan.** The AF_XDP gate excluded the *other* raw scan types
+  (`-sA/-sW/-sN/-sF/-sX`) but never checked for an explicit `-sT`
+  (`ConnectScan`), so `!isOtherRawScan` was true and the connect scan a
+  user asked for got redirected into raw SYN crafting instead of a real
+  three-way handshake through the kernel. Against a loopback target this
+  is actively harmful: AF_XDP frames are always addressed to the
+  gateway's MAC on the physical interface, so `-sT --ebpf 127.0.0.1`
+  pushed a martian packet (`dst=127.0.0.1`) out onto the wire instead of
+  routing it locally. New `xdpEligible(ip, opts)` gate: an explicit
+  `-sT`, or any loopback target (`127.0.0.0/8`, `::1`), now always falls
+  through to the kernel stack even with `--ebpf` active. `cmd/tcpcat`
+  also now warns when `--ebpf` is used on Linux at all, since generic/SKB
+  mode (no zero-copy on most virtualized NICs) hooks *all* RX traffic on
+  the auto-detected interface -- typically the same one the operator's
+  own SSH session uses, and a fast scan can starve it.
 - `internal/scan/engine.go`, `adaptive_rate.go`: **the rate limiter paced
   jobs, not packets**, so the real TX rate ran at a multiple of `--rate`.
   A single job on the raw-socket / AF_XDP path emits `probeAttempts()`

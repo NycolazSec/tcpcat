@@ -338,3 +338,41 @@ func TestScanJobChannel(t *testing.T) {
 		t.Errorf("Expected %d results, got %d", expectedJobs, len(results))
 	}
 }
+
+func TestXDPEligibleRejectsExplicitConnectScan(t *testing.T) {
+	// -sT --ebpf used to silently fall through to a raw XDP SYN scan
+	// (the "other raw scan" exclusion list didn't cover ConnectScan), the
+	// opposite of what an explicit -sT asks for -- and dangerous against a
+	// loopback target, since XDP frames always go out the physical NIC.
+	opts := &config.Options{ConnectScan: true}
+	if xdpEligible("93.184.216.34", opts) {
+		t.Error("xdpEligible() = true for an explicit -sT, want false")
+	}
+}
+
+func TestXDPEligibleRejectsLoopbackTargets(t *testing.T) {
+	opts := &config.Options{SynScan: true}
+	for _, ip := range []string{"127.0.0.1", "127.0.0.53", "::1"} {
+		if xdpEligible(ip, opts) {
+			t.Errorf("xdpEligible(%q) = true, want false (loopback)", ip)
+		}
+	}
+}
+
+func TestXDPEligibleAllowsNormalTargets(t *testing.T) {
+	tests := []struct {
+		name string
+		opts *config.Options
+	}{
+		{"explicit -sS", &config.Options{SynScan: true}},
+		{"no explicit scan type (default)", &config.Options{}},
+		{"-sU", &config.Options{UdpScan: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !xdpEligible("93.184.216.34", tt.opts) {
+				t.Error("xdpEligible() = false for a routable target, want true")
+			}
+		})
+	}
+}

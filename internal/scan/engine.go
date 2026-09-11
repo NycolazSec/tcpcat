@@ -336,8 +336,34 @@ func (e *Engine) runPrimaryScan(ip string, port int, opts *config.Options) Targe
 	return e.runScanWithOptions(ip, port, opts)
 }
 
+// xdpEligible reports whether a target/port should go through the AF_XDP
+// fast path, or fall through to the kernel's normal TCP/IP stack even with
+// --ebpf active. Two cases must not take the XDP path:
+//
+//   - An explicit -sT (ConnectScan): the raw-scan gate below only excluded
+//     the *other* raw scan types (ACK/Window/NULL/FIN/Xmas), so a plain
+//     "-sT --ebpf" fell through its `!isOtherRawScan` check and got
+//     silently promoted to a raw XDP SYN scan -- the opposite of what -sT
+//     asks for (a real three-way handshake through the kernel), and
+//     surprising for anyone who explicitly chose -sT expecting kernel
+//     semantics.
+//   - A loopback target (127.0.0.0/8, ::1): AF_XDP frames are always
+//     addressed to the gateway's MAC on the physical interface
+//     (localMAC/gatewayMAC in xdp.go), so a loopback destination becomes a
+//     martian packet pushed out onto the wire instead of handled locally
+//     by the kernel -- wasted at best.
+func xdpEligible(ip string, opts *config.Options) bool {
+	if opts.ConnectScan {
+		return false
+	}
+	if parsed := net.ParseIP(ip); parsed != nil && parsed.IsLoopback() {
+		return false
+	}
+	return true
+}
+
 func (e *Engine) runScanWithOptions(ip string, port int, opts *config.Options) TargetResult {
-	if GlobalXsk != nil {
+	if GlobalXsk != nil && xdpEligible(ip, opts) {
 		if opts.UdpScan {
 			return ScanXDPUDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, e.rtt)
 		}

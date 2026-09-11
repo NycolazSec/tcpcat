@@ -61,6 +61,11 @@ func main() {
 		fmt.Printf("%s[*] Tip: For best results, add --ebpf to use the high-performance XDP engine.%s\n", config.Cyan, config.Reset)
 	}
 
+	if opts.UseXDP && runtime.GOOS == "linux" {
+		fmt.Printf("%s[!] Warning: --ebpf attaches an XDP hook (generic/SKB mode -- no zero-copy on most virtualized NICs) to the auto-detected network interface. That is very likely the SAME interface carrying your own SSH/management connection.%s\n", config.Yellow, config.Reset)
+		fmt.Printf("%s[*] Tip: a large or fast scan can saturate that interface's own RX path -- including the session you're connected through. Test from console/out-of-band access first, or start with a conservative --rate, before scanning at scale from a remote box you administer over the same link.%s\n", config.Cyan, config.Reset)
+	}
+
 	if opts.VulnersAPIKey != "" && !opts.ServiceDetect {
 		fmt.Printf("%s[!] Warning: --vulners-apikey was provided without -sV. CVE lookup requires service detection.%s\n", config.Yellow, config.Reset)
 		fmt.Printf("%s[*] Tip: Add -sV to your command to enable service detection and CVE lookup.%s\n", config.Cyan, config.Reset)
