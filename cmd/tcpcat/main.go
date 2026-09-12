@@ -330,6 +330,7 @@ func main() {
 				}
 				results[i].OS = svc.OS
 				results[i].TLS = svc.TLS
+				results[i].HTTPPosture = svc.HTTPPosture
 				fmt.Printf("%s[v] %s:%-5d ─ SERVICE: %s%s %s%s%s%s\n",
 					config.Bold, results[i].IP, results[i].Port, config.Bold, svc.Name, svc.Version, osDisp, config.Reset, bannerDisp)
 
@@ -341,6 +342,12 @@ func main() {
 					}
 					for _, warning := range svc.TLS.Warnings {
 						fmt.Printf("    %s[!] tls: %s%s\n", config.Yellow, warning, config.Reset)
+					}
+				}
+
+				if svc.HTTPPosture != nil {
+					for _, warning := range svc.HTTPPosture.Warnings {
+						fmt.Printf("    %s[!] http: %s%s\n", config.Yellow, warning, config.Reset)
 					}
 				}
 			}

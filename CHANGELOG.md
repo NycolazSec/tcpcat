@@ -28,6 +28,24 @@ Full diffs for every release are available via GitHub's
   overlapping with it -- against a server that only services one
   connection at a time, two simultaneous connections to the same probe
   left the second stuck in the accept queue until the first timed out.
+- HTTP security posture inspection (`internal/service/http_posture.go`),
+  surfaced as a new `HTTPPosture` on every `-sV` result for a web port
+  (`80`/`443`/`8080`/`8443`/`8000`/`8888`): flags missing security response
+  headers (`Content-Security-Policy`, `X-Frame-Options`,
+  `X-Content-Type-Options`, `Referrer-Policy`, and `Strict-Transport-Security`
+  when the connection is actually TLS -- it's meaningless over plain HTTP,
+  so it's only checked there) and whether a small set of well-known
+  sensitive paths (`.git/HEAD`, `.git/config`, `.env`) are genuinely
+  exposed. Each sensitive-path check requires a body-content signature
+  match on top of a `200` status (e.g. `.git/HEAD`'s body must actually
+  contain `ref:`), not a bare status-code check -- a lot of real sites (SPA
+  routers, custom error/fallback pages) return `200` for literally any
+  path, which would otherwise flag every single one of them. Uses its own
+  `net/http` client (correct header/redirect/chunked-encoding handling,
+  redirects disabled since the check is about *this* host's own response)
+  rather than hand-parsing the existing raw-socket banner grab, and -- same
+  reasoning and same fix as the TLS probe above -- runs to full completion
+  before `DetectService`'s main connection opens, never overlapping it.
 - `--max-retries <n>` (default 2): a stateless probe (SYN/ACK/Window/FIN/
   NULL/Xmas/UDP, over both the raw-socket and AF_XDP paths) is resent up to
   `n` times before the target is reported filtered, instead of a single

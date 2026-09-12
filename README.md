@@ -233,6 +233,16 @@ protocol version (< TLS 1.2), or a known-insecure cipher suite. It always
 inspects the certificate presented, valid or not -- an invalid cert is
 the finding, not a reason to skip the probe.
 
+On a web port (`80`/`443`/`8080`/`8443`/`8000`/`8888`), `-sV` also runs an
+independent HTTP security posture probe and attaches the result as
+`http_posture` in JSON output: which common security response headers
+(`Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`,
+`Referrer-Policy`, and `Strict-Transport-Security` over TLS) are missing,
+and whether `.git/HEAD`, `.git/config`, or `.env` are actually exposed --
+each checked against the response body's own content, not just its status
+code, so a site whose router returns `200` for any path doesn't get
+flagged for files that don't really exist.
+
 ### IDS/IPS Visibility Controls (Phase 4)
 ```
 --evasion <mode>          Coordinated packet-variation level for authorized testing:

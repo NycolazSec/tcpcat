@@ -317,15 +317,22 @@ func TestDetectServiceHTTPServerHeader(t *testing.T) {
 	}
 	defer func() { _ = ln.Close() }()
 
+	// DetectService opens multiple connections against a web port (HTTP
+	// posture probe, then the banner-grab), so this fixture must serve in a
+	// loop like a real server rather than handling exactly one connection.
 	go func() {
-		conn, err := ln.Accept()
-		if err != nil {
-			return
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer func() { _ = conn.Close() }()
+				buf := make([]byte, 1024)
+				_, _ = conn.Read(buf) // drain the GET request
+				_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\nServer: nginx/1.24.0 (Ubuntu)\r\nContent-Length: 0\r\n\r\n"))
+			}()
 		}
-		defer func() { _ = conn.Close() }()
-		buf := make([]byte, 1024)
-		_, _ = conn.Read(buf) // drain the GET request
-		_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\nServer: nginx/1.24.0 (Ubuntu)\r\nContent-Length: 0\r\n\r\n"))
 	}()
 
 	result := DetectService("127.0.0.1", 8080, 2*time.Second, false)
@@ -350,14 +357,21 @@ func TestDetectServiceTLSHandshakeFailureFallsBack(t *testing.T) {
 	}
 	defer func() { _ = ln.Close() }()
 
+	// Same reasoning as TestDetectServiceHTTPServerHeader: 8443 is both a TLS
+	// port and a web port, so DetectService opens more than one connection
+	// here (TLS probe, HTTP posture probe, then the plaintext fallback).
 	go func() {
-		conn, err := ln.Accept()
-		if err != nil {
-			return
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer func() { _ = conn.Close() }()
+				buf := make([]byte, 1024)
+				_, _ = conn.Read(buf)
+			}()
 		}
-		defer func() { _ = conn.Close() }()
-		buf := make([]byte, 1024)
-		_, _ = conn.Read(buf)
 	}()
 
 	result := DetectService("127.0.0.1", 8443, 2*time.Second, true)

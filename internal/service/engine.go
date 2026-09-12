@@ -12,11 +12,12 @@ import (
 )
 
 type ServiceInfo struct {
-	Name    string   `json:"name"`
-	Version string   `json:"version,omitempty"`
-	Banner  string   `json:"banner,omitempty"`
-	OS      string   `json:"os,omitempty"`
-	TLS     *TLSInfo `json:"tls,omitempty"`
+	Name        string           `json:"name"`
+	Version     string           `json:"version,omitempty"`
+	Banner      string           `json:"banner,omitempty"`
+	OS          string           `json:"os,omitempty"`
+	TLS         *TLSInfo         `json:"tls,omitempty"`
+	HTTPPosture *HTTPPostureInfo `json:"http_posture,omitempty"`
 }
 
 var osRegexps = map[string]*regexp.Regexp{
@@ -48,6 +49,16 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 	var tlsInfo *TLSInfo
 	if isTLSPort {
 		tlsInfo = probeTLS(ip, port, timeout)
+	}
+
+	// Same reasoning, same discipline: probeHTTPPosture runs its own
+	// independent http.Client session (its own dial(s), reused via
+	// keep-alive across the header + path checks, then fully closed) to
+	// completion before the main `conn` below ever opens.
+	isWebPortEarly := port == 80 || port == 443 || port == 8080 || port == 8443 || port == 8000 || port == 8888
+	var httpPostureInfo *HTTPPostureInfo
+	if isWebPortEarly {
+		httpPostureInfo = probeHTTPPosture(ip, port, timeout, isTLSPort, insecureSkipVerify)
 	}
 
 	target := net.JoinHostPort(ip, strconv.Itoa(port))
@@ -105,6 +116,8 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 
 	isWebPort := port == 80 || port == 443 || port == 8080 || port == 8443 || port == 8000 || port == 8888
 	if isWebPort {
+		info.HTTPPosture = httpPostureInfo
+
 		isTLS := port == 443 || port == 8443
 		var probeConn = conn
 
