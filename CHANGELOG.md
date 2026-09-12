@@ -11,6 +11,23 @@ Full diffs for every release are available via GitHub's
 ## [Unreleased]
 
 ### Added
+- TLS/certificate inspection (`internal/service/tls.go`), surfaced as a
+  new `TLSInfo` on every `-sV` result for a `443`/`8443` port: negotiated
+  TLS version and cipher suite, the presented certificate's subject,
+  issuer, and expiry, and a set of human-readable warnings -- self-signed
+  certificate, hostname/IP mismatch, expired or expiring within 14 days,
+  deprecated protocol version (< TLS 1.2), or a cipher suite from
+  `crypto/tls`'s own insecure list. The probe deliberately always dials
+  with `InsecureSkipVerify` (a self-signed or expired certificate is
+  exactly the finding this exists to surface, not something that should
+  make the handshake fail silently) and with `MinVersion: TLS 1.0` (Go's
+  client otherwise refuses to even negotiate down far enough to detect a
+  server that only offers TLS 1.0/1.1, which is precisely the server this
+  is meant to flag). It runs as its own independent, fully-closed
+  connection *before* `DetectService`'s main connection opens, rather than
+  overlapping with it -- against a server that only services one
+  connection at a time, two simultaneous connections to the same probe
+  left the second stuck in the accept queue until the first timed out.
 - `--max-retries <n>` (default 2): a stateless probe (SYN/ACK/Window/FIN/
   NULL/Xmas/UDP, over both the raw-socket and AF_XDP paths) is resent up to
   `n` times before the target is reported filtered, instead of a single

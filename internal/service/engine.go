@@ -12,10 +12,11 @@ import (
 )
 
 type ServiceInfo struct {
-	Name    string `json:"name"`
-	Version string `json:"version,omitempty"`
-	Banner  string `json:"banner,omitempty"`
-	OS      string `json:"os,omitempty"`
+	Name    string   `json:"name"`
+	Version string   `json:"version,omitempty"`
+	Banner  string   `json:"banner,omitempty"`
+	OS      string   `json:"os,omitempty"`
+	TLS     *TLSInfo `json:"tls,omitempty"`
 }
 
 var osRegexps = map[string]*regexp.Regexp{
@@ -31,6 +32,22 @@ var osRegexps = map[string]*regexp.Regexp{
 func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerify bool) ServiceInfo {
 	info := ServiceInfo{
 		Name: "unknown",
+	}
+
+	// Run the dedicated TLS probe -- its own independent dial, handshake,
+	// and close -- fully to completion before opening the connection the
+	// rest of this function reuses below. Doing it any later (e.g. inline
+	// inside the isTLS branch further down, while the main `conn` is still
+	// open) means two simultaneous connections to the same port: harmless
+	// against most servers, but against a target that only services one
+	// connection at a time, the main `conn` sits accepted-but-idle
+	// (waiting on a ClientHello the passive banner read never sends)
+	// and starves probeTLS's own connection out of the accept queue until
+	// it times out.
+	isTLSPort := port == 443 || port == 8443
+	var tlsInfo *TLSInfo
+	if isTLSPort {
+		tlsInfo = probeTLS(ip, port, timeout)
 	}
 
 	target := net.JoinHostPort(ip, strconv.Itoa(port))
@@ -92,6 +109,8 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 		var probeConn = conn
 
 		if isTLS {
+			info.TLS = tlsInfo
+
 			tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify} // #nosec G402 -- opt-in via caller flag; banner grabbing must complete the handshake against untrusted/self-signed target certs
 			tlsClient := tls.Client(conn, tlsConfig)
 

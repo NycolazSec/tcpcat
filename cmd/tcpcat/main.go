@@ -329,8 +329,20 @@ func main() {
 					osDisp = fmt.Sprintf(" (OS: %s)", svc.OS)
 				}
 				results[i].OS = svc.OS
+				results[i].TLS = svc.TLS
 				fmt.Printf("%s[v] %s:%-5d ─ SERVICE: %s%s %s%s%s%s\n",
 					config.Bold, results[i].IP, results[i].Port, config.Bold, svc.Name, svc.Version, osDisp, config.Reset, bannerDisp)
+
+				if svc.TLS != nil {
+					fmt.Printf("    %s[tls] %s | %s%s\n", config.Cyan, svc.TLS.Version, svc.TLS.CipherSuite, config.Reset)
+					if svc.TLS.CertSubject != "" {
+						fmt.Printf("    %s[tls] cert: %s (issuer: %s, expires %s)%s\n",
+							config.Cyan, svc.TLS.CertSubject, svc.TLS.CertIssuer, svc.TLS.CertExpiresAt, config.Reset)
+					}
+					for _, warning := range svc.TLS.Warnings {
+						fmt.Printf("    %s[!] tls: %s%s\n", config.Yellow, warning, config.Reset)
+					}
+				}
 			}
 		}
 

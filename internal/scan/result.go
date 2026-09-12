@@ -3,6 +3,7 @@ package scan
 import (
 	"time"
 
+	"tcpcat/internal/service"
 	"tcpcat/internal/vuln"
 )
 
@@ -22,6 +23,7 @@ type TargetResult struct {
 	Version         string                  `json:"version,omitempty"`
 	Banner          string                  `json:"banner,omitempty"`
 	OS              string                  `json:"os,omitempty"`
+	TLS             *service.TLSInfo        `json:"tls,omitempty"`
 	Latency         time.Duration           `json:"latency_ns"`
 	LatencyMs       float64                 `json:"latency_ms"`
 	Reason          string                  `json:"reason"`

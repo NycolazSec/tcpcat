@@ -225,6 +225,13 @@ pointed at an IPv6 target instead of silently misbehaving.
 -O                    Remote OS detection via TTL/MSS/window analysis
 --scripts <dir>       Load WASM detection modules
 ```
+On a `443`/`8443` port, `-sV` also runs an independent TLS/certificate
+probe and attaches the result as `tls` in JSON output: negotiated
+version/cipher, certificate subject/issuer/expiry, and warnings for a
+self-signed or expired certificate, a hostname mismatch, a deprecated
+protocol version (< TLS 1.2), or a known-insecure cipher suite. It always
+inspects the certificate presented, valid or not -- an invalid cert is
+the finding, not a reason to skip the probe.
 
 ### IDS/IPS Visibility Controls (Phase 4)
 ```
