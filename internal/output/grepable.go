@@ -20,20 +20,29 @@ func ExportGrepable(filePath string, target string, results []scan.TargetResult,
 		return fmt.Errorf("write grepable report: %w", err)
 	}
 
-	var portEntries []string
-	for _, r := range results {
-		svc := r.Service
-		if svc == "" {
-			svc = "unknown"
+	hosts := groupByIP(target, results)
+	for _, host := range hosts {
+		var portEntries []string
+		for _, r := range host.Results {
+			svc := r.Service
+			if svc == "" {
+				svc = "unknown"
+			}
+			portEntries = append(portEntries, fmt.Sprintf("%d/%s/%s//%s///", r.Port, strings.ToLower(r.State), "tcp", svc))
 		}
-		portEntries = append(portEntries, fmt.Sprintf("%d/%s/%s//%s///", r.Port, strings.ToLower(r.State), "tcp", svc))
+
+		portsStr := strings.Join(portEntries, ", ")
+		if _, err := fmt.Fprintf(file, "Host: %s ()\tPorts: %s\tStatus: Up\n", host.IP, portsStr); err != nil {
+			return fmt.Errorf("write grepable report: %w", err)
+		}
 	}
 
-	portsStr := strings.Join(portEntries, ", ")
-	if _, err := fmt.Fprintf(file, "Host: %s ()\tPorts: %s\tStatus: Up\n", target, portsStr); err != nil {
-		return fmt.Errorf("write grepable report: %w", err)
+	plural := "addresses"
+	if len(hosts) == 1 {
+		plural = "address"
 	}
-	if _, err := fmt.Fprintf(file, "# tcpcat done -- 1 IP address scanned in %v\n", duration.Round(time.Millisecond)); err != nil {
+	if _, err := fmt.Fprintf(file, "# tcpcat done -- %d IP %s scanned in %v\n",
+		len(hosts), plural, duration.Round(time.Millisecond)); err != nil {
 		return fmt.Errorf("write grepable report: %w", err)
 	}
 

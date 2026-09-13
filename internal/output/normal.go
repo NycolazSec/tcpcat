@@ -18,24 +18,30 @@ func ExportNormal(filePath string, target string, results []scan.TargetResult, d
 	if _, err := fmt.Fprintf(file, "# tcpcat 5.0 scan report for %s\n", target); err != nil {
 		return fmt.Errorf("write report: %w", err)
 	}
-	if _, err := fmt.Fprintf(file, "# Scan completed in %v\n\n", duration.Round(time.Millisecond)); err != nil {
-		return fmt.Errorf("write report: %w", err)
-	}
-	if _, err := fmt.Fprintf(file, "%-10s %-10s %-15s %s\n", "PORT", "STATE", "SERVICE", "BANNER"); err != nil {
-		return fmt.Errorf("write report: %w", err)
-	}
-	if _, err := fmt.Fprintf(file, "---------------------------------------------------\n"); err != nil {
+	if _, err := fmt.Fprintf(file, "# Scan completed in %v\n", duration.Round(time.Millisecond)); err != nil {
 		return fmt.Errorf("write report: %w", err)
 	}
 
-	for _, r := range results {
-		portStr := fmt.Sprintf("%d/tcp", r.Port)
-		svc := r.Service
-		if svc == "" {
-			svc = "unknown"
-		}
-		if _, err := fmt.Fprintf(file, "%-10s %-10s %-15s %s\n", portStr, r.State, svc, r.Banner); err != nil {
+	for _, host := range groupByIP(target, results) {
+		if _, err := fmt.Fprintf(file, "\nHost: %s\n", host.IP); err != nil {
 			return fmt.Errorf("write report: %w", err)
+		}
+		if _, err := fmt.Fprintf(file, "%-10s %-10s %-15s %s\n", "PORT", "STATE", "SERVICE", "BANNER"); err != nil {
+			return fmt.Errorf("write report: %w", err)
+		}
+		if _, err := fmt.Fprintf(file, "---------------------------------------------------\n"); err != nil {
+			return fmt.Errorf("write report: %w", err)
+		}
+
+		for _, r := range host.Results {
+			portStr := fmt.Sprintf("%d/tcp", r.Port)
+			svc := r.Service
+			if svc == "" {
+				svc = "unknown"
+			}
+			if _, err := fmt.Fprintf(file, "%-10s %-10s %-15s %s\n", portStr, r.State, svc, r.Banner); err != nil {
+				return fmt.Errorf("write report: %w", err)
+			}
 		}
 	}
 

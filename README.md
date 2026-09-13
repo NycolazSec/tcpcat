@@ -291,12 +291,24 @@ flagged for files that don't really exist.
 ### Output & Reporting
 ```
 -j <file>              Export a detailed JSON report
+-oX <file>              Export XML
+-oG <file>              Export grepable output (one line per host)
+-oN <file>              Export a plain-text report
+-oS <file>              Export leetspeak
 --sarif <file>          Export open-port and CVE findings as SARIF 2.1.0
 --audit-log <file>      Append one scan audit record per line (JSONL)
 --baseline <file>       Load a previous tcpcat JSON report for comparison
 --changes <file>        Write comparison results; requires --baseline
 --update                Check the latest GitHub release and update this binary
 ```
+
+Every format may be requested in the same run; each writes its own file.
+All of them group results per scanned host, so a CIDR or `-iL` scan
+reports each address separately. The XML export carries the full `-sV`
+picture — service name/version/OS, the TLS block (negotiated version,
+cipher, certificate details, warnings), HTTP posture findings (missing
+security headers, exposed paths), and correlated CVEs — rather than just
+the port state.
 
 `--update` downloads the release archive matching the current OS and CPU architecture, verifies it against the release `checksums.txt`, and replaces the current executable atomically. It requires a published GitHub release with matching assets and may require elevated permissions when the binary is installed in a system directory. The option does not update source checkouts or package-manager installations.
 

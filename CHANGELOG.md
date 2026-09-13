@@ -11,6 +11,27 @@ Full diffs for every release are available via GitHub's
 ## [Unreleased]
 
 ### Added
+- `-oX`, `-oG`, `-oN`, `-oS`: the XML, grepable, plain-text, and leetspeak
+  exports in `internal/output/` were fully implemented and unit-tested but
+  had no CLI flag reaching them -- only JSON, SARIF, and the JSONL audit
+  log were ever wired up, so four working formats sat unreachable. Each
+  may be combined with any other in a single run.
+
+### Fixed
+- Every file export now groups results per scanned host
+  (`internal/output/hosts.go`). The XML, grepable, plain-text, and
+  leetspeak formats each took a single `target` string and ignored
+  `TargetResult.IP` entirely, so a CIDR or `-iL` scan attributed every
+  host's ports to one address -- the grepable footer even reported
+  `1 IP address scanned` regardless of how many were. Wiring the flags up
+  without this would have shipped that bug rather than merely hiding it.
+- The XML export carried only a port's state, service name, and banner,
+  dropping everything else `-sV` collects: version, OS, the TLS block, the
+  HTTP posture findings, and correlated CVEs. JSON got all of it for free
+  through nested structs; XML hand-maps its own types and was never
+  updated as those features landed. `<service>` and `<vulnerabilities>`
+  are now pointers so `encoding/xml` omits them entirely instead of
+  emitting an empty pair of tags on every closed port.
 - TLS/certificate inspection (`internal/service/tls.go`), surfaced as a
   new `TLSInfo` on every `-sV` result for a `443`/`8443` port: negotiated
   TLS version and cipher suite, the presented certificate's subject,

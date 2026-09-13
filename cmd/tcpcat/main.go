@@ -489,6 +489,25 @@ func main() {
 			fmt.Printf("%s[!] Failed to export SARIF: %v%s\n", config.Red, err, config.Reset)
 		}
 	}
+	for _, export := range []struct {
+		format string
+		path   string
+		write  func(string, string, []scan.TargetResult, time.Duration) error
+	}{
+		{"XML", opts.XMLOutput, output.ExportXML},
+		{"grepable", opts.GrepableOutput, output.ExportGrepable},
+		{"normal", opts.NormalOutput, output.ExportNormal},
+		{"leetspeak", opts.KiddieOutput, output.ExportScriptKiddie},
+	} {
+		if export.path == "" {
+			continue
+		}
+		if err := export.write(export.path, displayTarget, results, duration); err != nil {
+			fmt.Printf("%s[!] Failed to export %s: %v%s\n", config.Red, export.format, err, config.Reset)
+		} else {
+			fmt.Printf("%s[✓] Results exported to %s file: %s%s\n", config.Green, export.format, export.path, config.Reset)
+		}
+	}
 	if opts.BaselineFile != "" {
 		baseline, err := compare.LoadBaseline(opts.BaselineFile)
 		if err != nil {

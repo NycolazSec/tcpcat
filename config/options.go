@@ -109,6 +109,10 @@ type Options struct {
 	BaselineFile   string
 	ChangesOutput  string
 	SARIFOutput    string
+	XMLOutput      string
+	GrepableOutput string
+	NormalOutput   string
+	KiddieOutput   string
 	ScriptPath     string
 	VulnersAPIKey  string
 	SmartBypass    bool
@@ -159,6 +163,10 @@ func ParseFlags() (*Options, error) {
 		"--baseline":       true,
 		"--changes":        true,
 		"--sarif":          true,
+		"-oX":              true,
+		"-oG":              true,
+		"-oN":              true,
+		"-oS":              true,
 
 		"--jitter":           true,
 		"--evasion":          true,
@@ -264,6 +272,10 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.BaselineFile, "baseline", "", "Prior JSON report used as a comparison baseline")
 	flag.StringVar(&opts.ChangesOutput, "changes", "", "Write scan changes to a JSON file (requires --baseline)")
 	flag.StringVar(&opts.SARIFOutput, "sarif", "", "Export security findings as SARIF 2.1.0")
+	flag.StringVar(&opts.XMLOutput, "oX", "", "Export results as XML")
+	flag.StringVar(&opts.GrepableOutput, "oG", "", "Export results in grepable format")
+	flag.StringVar(&opts.NormalOutput, "oN", "", "Export results as a plain-text report")
+	flag.StringVar(&opts.KiddieOutput, "oS", "", "Export results in leetspeak (script kiddie format)")
 	flag.StringVar(&opts.ScriptPath, "scripts", "", "Path to directory containing Go scripts")
 	flag.StringVar(&opts.VulnersAPIKey, "vulners-apikey", "", "Vulners.com API key for CVE lookup")
 	flag.BoolVar(&opts.SmartBypass, "smart-bypass", false, "Enable advanced monitoring validation on filtered ports")
@@ -346,6 +358,10 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s-v%s              Enable verbose output\n", Yellow, Reset)
 		fmt.Printf("  %s-j <file>%s       Export results to JSON file\n", Yellow, Reset)
 		fmt.Printf("  %s--sarif <file>%s  Export findings as SARIF 2.1.0\n", Yellow, Reset)
+		fmt.Printf("  %s-oX <file>%s      Export results as XML\n", Yellow, Reset)
+		fmt.Printf("  %s-oG <file>%s      Export results in grepable format\n", Yellow, Reset)
+		fmt.Printf("  %s-oN <file>%s      Export results as a plain-text report\n", Yellow, Reset)
+		fmt.Printf("  %s-oS <file>%s      Export results in leetspeak\n", Yellow, Reset)
 		fmt.Printf("  %s--audit-log <file>%s Append an audit record in JSONL\n", Yellow, Reset)
 		fmt.Printf("  %s--baseline <file>%s Compare with a prior JSON report\n", Yellow, Reset)
 		fmt.Printf("  %s--changes <file>%s Write comparison results (requires --baseline)\n", Yellow, Reset)

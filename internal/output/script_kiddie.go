@@ -16,9 +16,12 @@ func ExportScriptKiddie(filePath string, target string, results []scan.TargetRes
 	}
 	defer func() { _ = file.Close() }()
 
-	rawText := fmt.Sprintf("tcpcat scan report for %s\nCompleted in %v\n\n", target, duration.Round(time.Millisecond))
-	for _, r := range results {
-		rawText += fmt.Sprintf("Port %d/tcp is %s (%s)\n", r.Port, r.State, r.Service)
+	rawText := fmt.Sprintf("tcpcat scan report for %s\nCompleted in %v\n", target, duration.Round(time.Millisecond))
+	for _, host := range groupByIP(target, results) {
+		rawText += fmt.Sprintf("\nHost %s\n", host.IP)
+		for _, r := range host.Results {
+			rawText += fmt.Sprintf("Port %d/tcp is %s (%s)\n", r.Port, r.State, r.Service)
+		}
 	}
 
 	leetText := toLeet(rawText)
