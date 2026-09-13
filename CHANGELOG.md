@@ -26,6 +26,31 @@ Full diffs for every release are available via GitHub's
   may be combined with any other in a single run.
 
 ### Fixed
+- OS fingerprinting matched healthy Linux hosts against the Cisco IOS
+  signature. The AF_XDP SYN probe was built with no TCP options at all
+  (`constructSYNFrame`, data offset 5), and SACK, timestamps and window
+  scaling are *negotiated*: a server may only use them in its SYN/ACK if
+  the client offered them first. Every target therefore replied with an
+  option-less SYN/ACK -- which is exactly the signature of a minimal
+  network-gear stack, so `scanme.nmap.org` came back as "Cisco IOS/IOS-XE
+  (73% confidence)". The probe now advertises MSS, SACK-permitted,
+  Timestamps, NOP and Window scale in the order a modern Linux client
+  sends them, so the reply reflects the target's own stack. The TCP
+  checksum and IP total length cover the larger header, verified by a test
+  that folds the recomputed checksum back to zero.
+- `-O` silently did nothing outside the AF_XDP path: `opts.OsDetect` was
+  registered, documented, and read by no code at all. OS classification
+  only ever ran from `xdpRxLoop`, which is the one place a raw SYN/ACK is
+  visible. It now warns when the flag cannot do anything on the selected
+  scan type instead of reporting no OS and letting it look like the target
+  could not be identified.
+- AF_XDP host discovery ignored `--rate` entirely. `DiscoverHostsXDP`
+  fired its 3-4 probes per host in a tight loop, bounded only by how fast
+  the TX ring drained, so a `/16` sweep put a few hundred thousand frames
+  on the wire before the paced scan proper had even started. It now takes
+  the same pacer the scan engine uses (`NewLimiterFromOptions`, shared by
+  both so `--rate` means one thing) and reserves one slot per frame it is
+  about to send.
 - TLS and HTTP probes now send the name the target was asked for -- as SNI,
   and as the HTTP `Host` header -- instead of only ever addressing the
   resolved IP. Every host behind name-based virtual hosting served its

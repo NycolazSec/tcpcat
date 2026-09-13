@@ -67,6 +67,16 @@ func main() {
 		fmt.Printf("%s[*] Tip: a large or fast scan can saturate that interface's own RX path -- including the session you're connected through. Test from console/out-of-band access first, or start with a conservative --rate, before scanning at scale from a remote box you administer over the same link.%s\n", config.Cyan, config.Reset)
 	}
 
+	// OS fingerprinting reads the TCP options off a SYN/ACK, which only the
+	// AF_XDP receive path captures -- every other scan type goes through the
+	// kernel socket API and never sees the raw reply. -O outside that path
+	// has nothing to read, so say so rather than reporting no OS at all and
+	// letting it look like the target simply couldn't be identified.
+	if opts.OsDetect && (!opts.UseXDP || runtime.GOOS != "linux") {
+		fmt.Printf("%s[!] Warning: -O needs the AF_XDP engine to read a raw SYN/ACK; on this scan it will not report an OS.%s\n", config.Yellow, config.Reset)
+		fmt.Printf("%s[*] Tip: run with --ebpf on Linux (as root) for OS fingerprinting.%s\n", config.Cyan, config.Reset)
+	}
+
 	if opts.VulnersAPIKey != "" && !opts.ServiceDetect {
 		fmt.Printf("%s[!] Warning: --vulners-apikey was provided without -sV. CVE lookup requires service detection.%s\n", config.Yellow, config.Reset)
 		fmt.Printf("%s[*] Tip: Add -sV to your command to enable service detection and CVE lookup.%s\n", config.Cyan, config.Reset)
@@ -192,7 +202,7 @@ func main() {
 		fmt.Printf("%s[*] Host discovery skipped (-Pn). All %d target(s) will be scanned.%s\n", config.Yellow, len(targetIPs), config.Reset)
 	} else if scan.GlobalXsk != nil {
 		fmt.Printf("%s[*] Running Host Discovery (AF_XDP: ICMP + SYN/443 + ACK/80)...%s\n", config.White, config.Reset)
-		activeTargets = scan.DiscoverHostsXDP(targetIPs, 2*time.Second)
+		activeTargets = scan.DiscoverHostsXDP(targetIPs, 2*time.Second, scan.NewLimiterFromOptions(opts))
 		for _, ip := range activeTargets {
 			fmt.Printf("    ├─ %s[UP]%s %s\n", config.Green, config.Reset, ip)
 		}

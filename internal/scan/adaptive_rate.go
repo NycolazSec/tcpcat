@@ -3,6 +3,8 @@ package scan
 import (
 	"sync/atomic"
 	"time"
+
+	"tcpcat/config"
 )
 
 // RTTEstimator maintains a smoothed round-trip time and its variance using
@@ -203,3 +205,21 @@ func (rl *AdaptiveRateLimiter) Report(lost bool) {
 
 // CurrentRate returns the controller's current target rate in packets/sec.
 func (rl *AdaptiveRateLimiter) CurrentRate() int64 { return rl.ratePPS.Load() }
+
+// NewLimiterFromOptions builds the pacer a scan phase should send through,
+// or nil when the user has disabled pacing. Both the port-scan engine and
+// AF_XDP host discovery go through this, so --rate means the same thing in
+// each: discovery used to bypass pacing entirely and fire every probe as
+// fast as the TX ring accepted it, which on a large range put far more
+// packets on the wire than the requested rate before the scan proper had
+// even started.
+func NewLimiterFromOptions(opts *config.Options) *AdaptiveRateLimiter {
+	if opts == nil || opts.UnsafeNoLimits || opts.RateLimit <= 0 {
+		return nil
+	}
+	initial := opts.RateLimit
+	if opts.AdaptiveRate {
+		return NewAdaptiveRateLimiter(initial, initial/10, initial*4)
+	}
+	return NewAdaptiveRateLimiter(initial, initial, initial)
+}

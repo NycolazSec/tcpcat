@@ -5,6 +5,7 @@ package scan
 import (
 	"encoding/binary"
 	"net"
+	"time"
 )
 
 // constructARPRequestFrame builds an Ethernet+ARP "who has dstIP" request,
@@ -35,8 +36,36 @@ func constructARPRequestFrame(srcMAC net.HardwareAddr, srcIP, dstIP net.IP) []by
 	return frame
 }
 
+// synOptions is the TCP option block advertised on every SYN probe: MSS,
+// SACK-permitted, Timestamps, NOP, Window scale -- the same set and order a
+// modern Linux client sends.
+//
+// This is not cosmetic. SACK, timestamps and window scaling are *negotiated*:
+// a server may only use them in its SYN/ACK if the client offered them first.
+// A SYN carrying no options at all therefore guarantees an option-less
+// SYN/ACK from every target, whatever it runs -- which is precisely the
+// signature of a minimal network-gear stack, so OS fingerprinting matched
+// healthy Linux hosts (scanme.nmap.org among them) against the Cisco IOS
+// entry. Advertising a realistic set lets the reply actually reflect the
+// target's own stack, which is what osdetect scores.
+var synOptions = []byte{
+	2, 4, 0x05, 0xB4, // MSS = 1460
+	4, 2, // SACK permitted
+	8, 10, 0, 0, 0, 0, 0, 0, 0, 0, // Timestamps (TSval/TSecr filled below)
+	1,       // NOP, aligning the next option to a word boundary
+	3, 3, 7, // Window scale, shift 7
+}
+
+const (
+	synOptionsLen   = 20                   // len(synOptions), as a constant
+	synTCPHeaderLen = 20 + synOptionsLen   // 40 bytes: 10 32-bit words
+	synIPTotalLen   = 20 + synTCPHeaderLen // IP header + TCP header
+	synFrameLen     = 14 + synIPTotalLen   // + Ethernet header
+	synDataOffset   = (synTCPHeaderLen / 4) << 4
+)
+
 func constructSYNFrame(srcMAC, dstMAC net.HardwareAddr, srcIP, dstIP net.IP, srcPort, dstPort uint16) []byte {
-	frame := make([]byte, 54)
+	frame := make([]byte, synFrameLen)
 
 	copy(frame[0:6], dstMAC)
 	copy(frame[6:12], srcMAC)
@@ -45,7 +74,7 @@ func constructSYNFrame(srcMAC, dstMAC net.HardwareAddr, srcIP, dstIP net.IP, src
 	ipStart := 14
 	frame[ipStart] = 0x45
 	frame[ipStart+1] = 0x00
-	binary.BigEndian.PutUint16(frame[ipStart+2:ipStart+4], 40)
+	binary.BigEndian.PutUint16(frame[ipStart+2:ipStart+4], synIPTotalLen)
 	binary.BigEndian.PutUint16(frame[ipStart+4:ipStart+6], 0x1234)
 	binary.BigEndian.PutUint16(frame[ipStart+6:ipStart+8], 0x4000)
 	frame[ipStart+8] = 64
@@ -62,20 +91,26 @@ func constructSYNFrame(srcMAC, dstMAC net.HardwareAddr, srcIP, dstIP net.IP, src
 	binary.BigEndian.PutUint16(frame[tcpStart+2:tcpStart+4], dstPort)
 	binary.BigEndian.PutUint32(frame[tcpStart+4:tcpStart+8], 0x11223344)
 	binary.BigEndian.PutUint32(frame[tcpStart+8:tcpStart+12], 0)
-	frame[tcpStart+12] = 0x50
+	frame[tcpStart+12] = synDataOffset
 	frame[tcpStart+13] = 0x02
 	binary.BigEndian.PutUint16(frame[tcpStart+14:tcpStart+16], 64240)
 	binary.BigEndian.PutUint16(frame[tcpStart+16:tcpStart+18], 0)
 	binary.BigEndian.PutUint16(frame[tcpStart+18:tcpStart+20], 0)
+
+	optStart := tcpStart + 20
+	copy(frame[optStart:optStart+synOptionsLen], synOptions)
+	// A timestamp option echoing a constant TSval looks synthetic and can be
+	// dropped by middleboxes; a monotonic-ish value keeps the probe ordinary.
+	binary.BigEndian.PutUint32(frame[optStart+8:optStart+12], uint32(time.Now().UnixMilli()))
 
 	pseudoHeader := make([]byte, 12)
 	copy(pseudoHeader[0:4], srcIP.To4())
 	copy(pseudoHeader[4:8], dstIP.To4())
 	pseudoHeader[8] = 0
 	pseudoHeader[9] = 6
-	binary.BigEndian.PutUint16(pseudoHeader[10:12], 20)
+	binary.BigEndian.PutUint16(pseudoHeader[10:12], synTCPHeaderLen)
 
-	tcpChecksum := tcpChecksumCalc(pseudoHeader, frame[tcpStart:tcpStart+20])
+	tcpChecksum := tcpChecksumCalc(pseudoHeader, frame[tcpStart:tcpStart+synTCPHeaderLen])
 	binary.BigEndian.PutUint16(frame[tcpStart+16:tcpStart+18], tcpChecksum)
 
 	return frame

@@ -111,21 +111,15 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	var allResults []TargetResult
 	started := time.Now()
 
-	// One shared pacer for both the fixed and the adaptive case. A fixed
-	// rate is just an AIMD limiter pinned with min==max==rate so it never
-	// moves; the adaptive case lets it range from a tenth of the requested
-	// rate up to 4x. Using the same evenly-spaced pacer for both means the
-	// per-packet accounting below applies uniformly.
-	var limiter *AdaptiveRateLimiter
+	// One shared pacer for both the fixed and the adaptive case, built the
+	// same way host discovery builds its own so --rate means one thing
+	// across both phases. A fixed rate is just an AIMD limiter pinned with
+	// min==max==rate so it never moves; the adaptive case lets it range
+	// from a tenth of the requested rate up to 4x. Using the same
+	// evenly-spaced pacer for both means the per-packet accounting below
+	// applies uniformly.
 	adaptive := e.opts.AdaptiveRate
-	if !e.opts.UnsafeNoLimits && e.opts.RateLimit > 0 {
-		initial := e.opts.RateLimit
-		if adaptive {
-			limiter = NewAdaptiveRateLimiter(initial, initial/10, initial*4)
-		} else {
-			limiter = NewAdaptiveRateLimiter(initial, initial, initial)
-		}
-	}
+	limiter := NewLimiterFromOptions(e.opts)
 
 	// Packets emitted per job. On the raw-socket / AF_XDP paths a single
 	// job is not a single packet: probeAttempts() retransmits, plus one

@@ -19,7 +19,10 @@ import (
 // xdpRxLoop records the replies into xdpDiscovery as they arrive, so this
 // function only has to fire the probes and wait: no per-host blocking dial,
 // no shelling out to ping/arping, and no state beyond that one shared map.
-func DiscoverHostsXDP(ips []string, timeout time.Duration) []string {
+//
+// limiter paces emission (nil disables pacing) so a sweep over a large
+// range honours --rate rather than sending as fast as the TX ring drains.
+func DiscoverHostsXDP(ips []string, timeout time.Duration, limiter *AdaptiveRateLimiter) []string {
 	xsk, ok := GlobalXsk.(*xdp.Socket)
 	if !ok || xsk == nil {
 		return nil
@@ -49,6 +52,14 @@ func DiscoverHostsXDP(ips []string, timeout time.Duration) []string {
 		}
 		if localSubnet != nil && localSubnet.Contains(targetIP) {
 			frames = append(frames, constructARPRequestFrame(localMAC, localIP.To4(), targetIP))
+		}
+
+		// Reserve one pacer slot per frame actually about to go out, the
+		// same accounting the scan engine uses, so a /16 discovery sweep
+		// respects --rate instead of emitting 3-4 frames per host as fast
+		// as the ring drains.
+		if limiter != nil {
+			limiter.WaitN(len(frames))
 		}
 
 		xdpTxLock.Lock()
