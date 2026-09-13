@@ -7,6 +7,7 @@ import (
 
 	"tcpcat/config"
 	"tcpcat/internal/evasion"
+	"tcpcat/internal/osdetect"
 )
 
 func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator) TargetResult {
@@ -65,6 +66,16 @@ func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.D
 		if resp.Flags&0x12 == 0x12 {
 			res.State = StateOpen
 			res.Reason = "SYN-ACK Received"
+			// The SYN/ACK is the only packet carrying the target's own stack
+			// characteristics (initial TTL, window, negotiated options), and
+			// this is the one place outside AF_XDP that sees it raw. Done
+			// only under -O since it costs a parse per open port.
+			if opts.OsDetect && resp.Frame != nil {
+				if osName, confidence := osdetect.ClassifyOS(resp.Frame, resp.IPStart, resp.TCPStart); osName != "" {
+					res.OS = osName
+					res.Reason = fmt.Sprintf("%s, guessed OS: %s (%.0f%% confidence)", res.Reason, osName, confidence*100)
+				}
+			}
 		} else if resp.Flags&0x04 != 0 {
 			res.State = StateClosed
 			res.Reason = "RST Received"

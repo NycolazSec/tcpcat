@@ -46,6 +46,7 @@ type Options struct {
 	SkipDiscovery bool
 	UdpPing       int
 	Traceroute    bool
+	MaxHops       int
 
 	SynScan     bool
 	ConnectScan bool
@@ -119,9 +120,10 @@ type Options struct {
 	AWSRegion string
 	AWSTags   string
 
-	Web     bool
-	WebAddr string
-	Update  bool
+	Web         bool
+	WebAddr     string
+	Update      bool
+	ShowVersion bool
 }
 
 func ParseFlags() (*Options, error) {
@@ -156,6 +158,7 @@ func ParseFlags() (*Options, error) {
 		"--conn-pool":      true,
 		"--relay-server":   true,
 		"-PU":              true,
+		"--max-hops":       true,
 		"--scope-file":     true,
 		"--profile":        true,
 		"--audit-log":      true,
@@ -211,6 +214,7 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.SkipDiscovery, "Pn", false, "Treat all hosts as online")
 	flag.IntVar(&opts.UdpPing, "PU", 0, "UDP Ping discovery port")
 	flag.BoolVar(&opts.Traceroute, "traceroute", false, "Trace hop path to target")
+	flag.IntVar(&opts.MaxHops, "max-hops", 30, "Maximum hops for --traceroute")
 
 	flag.BoolVar(&opts.AckScan, "sA", false, "ACK Scan (Firewall mapping)")
 	flag.BoolVar(&opts.WindowScan, "sW", false, "TCP Window Scan")
@@ -287,6 +291,7 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.Web, "web", false, "Start the local web interface")
 	flag.StringVar(&opts.WebAddr, "web-addr", "127.0.0.1:8080", "Web interface listen address")
 	flag.BoolVar(&opts.Update, "update", false, "Check GitHub and update the tcpcat binary")
+	flag.BoolVar(&opts.ShowVersion, "version", false, "Print version information and exit")
 
 	flag.BoolVar(&opts.InsecureTLS, "insecure", false, "Allow insecure server connections")
 
@@ -328,7 +333,8 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--ttl <val>%s     Set custom IP Time-To-Live\n", Yellow, Reset)
 		fmt.Printf("  %s--data-string%s   Append custom ASCII payload\n", Yellow, Reset)
 		fmt.Printf("  %s--data%s          Append custom HEX payload\n", Yellow, Reset)
-		fmt.Printf("  %s--traceroute%s    Trace hop path to target\n", Yellow, Reset)
+		fmt.Printf("  %s--traceroute%s    Trace hop path to target (uses the first -p port, default 80)\n", Yellow, Reset)
+		fmt.Printf("  %s--max-hops <n>%s   Maximum hops for --traceroute (default 30)\n", Yellow, Reset)
 		fmt.Printf("  %s--relay-server <ip>%s Use a relay server for IP-in-IP encapsulation\n", Yellow, Reset)
 		fmt.Printf("  %s--decoy <ips>%s   Comma-separated list of decoy IPs\n", Yellow, Reset)
 		fmt.Printf("  %s--frag%s              Fragment packets for authorized monitoring validation\n", Yellow, Reset)
@@ -490,7 +496,7 @@ func ParseFlags() (*Options, error) {
 		opts.Target = flag.Arg(0)
 	}
 
-	if !opts.Update && !opts.Web && opts.Target == "" && opts.InputFile == "" && opts.AWSTags == "" {
+	if !opts.Update && !opts.Web && !opts.ShowVersion && opts.Target == "" && opts.InputFile == "" && opts.AWSTags == "" {
 		flag.Usage()
 		os.Exit(1)
 	}

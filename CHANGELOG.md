@@ -8,9 +8,14 @@ Full diffs for every release are available via GitHub's
 [compare view](https://github.com/NycolazSec/tcpcat/compare) and
 [Releases page](https://github.com/NycolazSec/tcpcat/releases).
 
-## [Unreleased]
+## [1.1.0-beta.1] - 2026-09-13
 
 ### Added
+- `--version`: prints the build version, commit, and date, then exits. The
+  GoReleaser ldflags already injected `main.version`/`commit`/`date`, but
+  no variables existed to receive them, so the information was silently
+  discarded on every release build.
+- `--max-hops <n>`: maximum hops for `--traceroute` (default 30).
 - `--exclude <list>`: comma-separated hosts, CIDRs, or names left out of a
   scan. `FilterExcluded` was already implemented and unit-tested in
   `internal/target/generator.go` but nothing ever called it and no flag fed
@@ -26,6 +31,19 @@ Full diffs for every release are available via GitHub's
   may be combined with any other in a single run.
 
 ### Fixed
+- OS fingerprinting now works on a raw-socket SYN scan (`-sS -O`), not just
+  `--ebpf`. The raw send path had the same option-less SYN bug just fixed
+  for AF_XDP (`raw_tcp.go`, data offset `0x50`), and the shared receive
+  loop parsed only flags and window out of each reply and threw the frame
+  away. The SYN now carries the standard option set, the reply frame is
+  kept with its header offsets, and `ScanSYNPort` classifies it under `-O`.
+  The two send paths share one option block (`tcp_options.go`) so they
+  cannot drift apart. `-O` now warns only when the chosen scan type genuinely
+  cannot see a SYN/ACK (`-sT`/`-sU` and the like), no longer for `-sS`.
+- `--max-hops` and the traceroute port were documented but ignored:
+  `--traceroute -p 443 --max-hops 15` traced port 80 with 30 hops
+  regardless. `--max-hops` is now a real flag, and the traceroute uses the
+  first `-p` port (falling back to 80).
 - OS fingerprinting matched healthy Linux hosts against the Cisco IOS
   signature. The AF_XDP SYN probe was built with no TCP options at all
   (`constructSYNFrame`, data offset 5), and SACK, timestamps and window

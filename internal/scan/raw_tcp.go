@@ -19,6 +19,15 @@ type rawTCPPacket struct {
 	Flags      byte
 	WindowSize uint16
 	IPID       uint16
+
+	// Frame is a copy of the reply as received, with the offsets at which
+	// its IP and TCP headers start. OS fingerprinting needs the whole
+	// thing -- initial TTL, window, and the negotiated TCP options -- not
+	// just the few fields parsed out above, and the shared receive buffer
+	// is overwritten by the next packet, so this has to be a copy.
+	Frame    []byte
+	IPStart  int
+	TCPStart int
 }
 
 type rawTCPScanner struct {
@@ -132,6 +141,9 @@ func rawRxLoop(fd int) {
 			Flags:      buf[tcpOffset+13],
 			WindowSize: binary.BigEndian.Uint16(buf[tcpOffset+14 : tcpOffset+16]),
 			IPID:       ipID,
+			Frame:      append([]byte(nil), buf[:n]...),
+			IPStart:    ipOffset,
+			TCPStart:   tcpOffset,
 		}
 		select {
 		case ch <- pkt:
@@ -203,12 +215,26 @@ func (s *rawTCPScanner) Send(flags byte) error {
 	default:
 	}
 
-	tcpHeader := make([]byte, 20)
+	// A SYN advertises the standard option set so the SYN/ACK coming back
+	// reflects the target's stack rather than this probe's own minimalism
+	// (see tcp_options.go). Every other probe type stays a bare 20-byte
+	// header: nothing is being negotiated there.
+	isSYN := flags == 0x02
+	headerLen := 20
+	if isSYN {
+		headerLen = synTCPHeaderLen
+	}
+
+	tcpHeader := make([]byte, headerLen)
 	binary.BigEndian.PutUint16(tcpHeader[0:2], uint16(s.srcPort))
 	binary.BigEndian.PutUint16(tcpHeader[2:4], uint16(s.dstPort))
 	binary.BigEndian.PutUint32(tcpHeader[4:8], 1)
 	binary.BigEndian.PutUint32(tcpHeader[8:12], 1)
 	tcpHeader[12] = 0x50
+	if isSYN {
+		tcpHeader[12] = synDataOffset
+		writeSYNOptions(tcpHeader[20:])
+	}
 	tcpHeader[13] = flags
 	binary.BigEndian.PutUint16(tcpHeader[14:16], 65535)
 

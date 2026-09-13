@@ -25,6 +25,14 @@ import (
 	"tcpcat/internal/web"
 )
 
+// Injected at build time by GoReleaser's ldflags (-X main.version=...).
+// The defaults are what a plain `go build` or `go install` produces.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	opts, err := config.ParseFlags()
 	if err != nil {
@@ -32,6 +40,11 @@ func main() {
 		os.Exit(1)
 	}
 	config.ApplyProfile(opts)
+
+	if opts.ShowVersion {
+		fmt.Printf("tcpcat %s (commit %s, built %s)\n", version, commit, date)
+		return
+	}
 
 	fmt.Println(config.Banner)
 	if opts.Update {
@@ -67,14 +80,15 @@ func main() {
 		fmt.Printf("%s[*] Tip: a large or fast scan can saturate that interface's own RX path -- including the session you're connected through. Test from console/out-of-band access first, or start with a conservative --rate, before scanning at scale from a remote box you administer over the same link.%s\n", config.Cyan, config.Reset)
 	}
 
-	// OS fingerprinting reads the TCP options off a SYN/ACK, which only the
-	// AF_XDP receive path captures -- every other scan type goes through the
-	// kernel socket API and never sees the raw reply. -O outside that path
-	// has nothing to read, so say so rather than reporting no OS at all and
-	// letting it look like the target simply couldn't be identified.
-	if opts.OsDetect && (!opts.UseXDP || runtime.GOOS != "linux") {
-		fmt.Printf("%s[!] Warning: -O needs the AF_XDP engine to read a raw SYN/ACK; on this scan it will not report an OS.%s\n", config.Yellow, config.Reset)
-		fmt.Printf("%s[*] Tip: run with --ebpf on Linux (as root) for OS fingerprinting.%s\n", config.Cyan, config.Reset)
+	// OS fingerprinting reads the target's stack characteristics off a raw
+	// SYN/ACK, so it needs a scan type that actually sees one: the AF_XDP
+	// engine, or a raw-socket SYN scan. -sT/-sU and friends go through the
+	// kernel socket API and never see the reply, so -O there has nothing to
+	// read -- say so rather than reporting no OS and letting it look like
+	// the target simply couldn't be identified.
+	if opts.OsDetect && !opts.SynScan && (!opts.UseXDP || runtime.GOOS != "linux") {
+		fmt.Printf("%s[!] Warning: -O needs a raw SYN/ACK to read; this scan type never sees one, so no OS will be reported.%s\n", config.Yellow, config.Reset)
+		fmt.Printf("%s[*] Tip: use -sS (or --ebpf on Linux), as root, for OS fingerprinting.%s\n", config.Cyan, config.Reset)
 	}
 
 	if opts.VulnersAPIKey != "" && !opts.ServiceDetect {
@@ -179,11 +193,23 @@ func main() {
 		config.Bold, config.Red, displayTarget, len(targetIPs), config.Reset)
 
 	if opts.Traceroute {
-		fmt.Printf("%s[*] Executing TCP Traceroute to %s...%s\n", config.Yellow, targetIPs[0], config.Reset)
+		// Probe the first port the user actually asked for, falling back to
+		// 80 -- the old call hard-coded 80 and ignored -p entirely, so
+		// `--traceroute -p 443` traced port 80 while claiming otherwise.
+		traceroutePort := 80
+		if tports, err := ports.ParsePorts(opts.Ports, opts.TopPorts); err == nil && len(tports) > 0 {
+			traceroutePort = tports[0]
+		}
+		maxHops := opts.MaxHops
+		if maxHops <= 0 {
+			maxHops = 30
+		}
+
+		fmt.Printf("%s[*] Executing TCP Traceroute to %s:%d (max %d hops)...%s\n", config.Yellow, targetIPs[0], traceroutePort, maxHops, config.Reset)
 		fmt.Printf("%s%-4s %-25s %-30s %-10s%s\n", config.Bold, "Hop", "IP Address", "Hostname", "Latency", config.Reset)
 		fmt.Println(config.Bold + "───────────────────────────────────────────────────────────────────────────" + config.Reset)
 
-		hops := discovery.RunTraceroute(targetIPs[0], 80, 30, 2*time.Second)
+		hops := discovery.RunTraceroute(targetIPs[0], traceroutePort, maxHops, 2*time.Second)
 		for _, h := range hops {
 			ipDisp := h.IP
 			if ipDisp == "*" {

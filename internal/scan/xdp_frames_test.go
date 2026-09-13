@@ -67,18 +67,6 @@ func TestConstructARPRequestFrame(t *testing.T) {
 	}
 }
 
-func TestSYNOptionsLenMatchesConstant(t *testing.T) {
-	// synOptionsLen has to be a constant (it sizes the frame at compile
-	// time) but synOptions is a slice, so nothing but this check keeps the
-	// two from drifting apart if an option is ever added or removed.
-	if len(synOptions) != synOptionsLen {
-		t.Fatalf("len(synOptions) = %d, synOptionsLen = %d -- they must agree", len(synOptions), synOptionsLen)
-	}
-	if synOptionsLen%4 != 0 {
-		t.Errorf("synOptionsLen = %d, want a multiple of 4 (TCP header is measured in 32-bit words)", synOptionsLen)
-	}
-}
-
 func TestConstructSYNFrameAdvertisesTCPOptions(t *testing.T) {
 	srcMAC, err := net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	if err != nil {

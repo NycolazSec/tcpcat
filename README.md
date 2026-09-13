@@ -223,6 +223,7 @@ pointed at an IPv6 target instead of silently misbehaving.
 ```
 -sV                   Probe response fingerprinting + version correlation
 -O                    Remote OS detection via TTL/MSS/window analysis
+                      (needs -sS or --ebpf on Linux, as root, to read a raw SYN/ACK)
 --scripts <dir>       Load WASM detection modules
 ```
 On a `443`/`8443` port, `-sV` also runs an independent TLS/certificate

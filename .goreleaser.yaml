@@ -44,6 +44,13 @@ nfpms:
       - rpm
     bindir: /usr/bin
 
+release:
+  # "auto" marks the GitHub release as a pre-release whenever the tag has a
+  # semver pre-release suffix (e.g. v1.1.0-beta.1), and as a full release
+  # otherwise -- so a beta tag ships as a pre-release without any further
+  # config, and a later stable tag needs no change here.
+  prerelease: auto
+
 checksum:
   name_template: "checksums.txt"
 
