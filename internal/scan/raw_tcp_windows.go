@@ -15,6 +15,13 @@ type rawTCPPacket struct {
 	Flags      byte
 	WindowSize uint16
 	IPID       uint16
+
+	// Kept in sync with the non-Windows definition so shared code (syn.go's
+	// OS-fingerprint path) compiles on Windows. Raw-socket scanning isn't
+	// supported here, so these are never populated.
+	Frame    []byte
+	IPStart  int
+	TCPStart int
 }
 
 type rawTCPScanner struct{}
