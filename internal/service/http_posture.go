@@ -70,16 +70,24 @@ const sensitivePathBodyLimit = 4096
 // chunked responses correctly, which hand-parsing a raw response does not.
 // Redirects are not followed -- a check is about *this* host's own
 // response, not wherever it happens to redirect to.
-func probeHTTPPosture(ip string, port int, timeout time.Duration, useTLS bool, insecureSkipVerify bool) *HTTPPostureInfo {
+//
+// hostname, when the target was asked for by name, is sent as the Host
+// header and as TLS SNI while still connecting to the scanned address:
+// one address can serve any number of virtual hosts, and asking it by IP
+// gets whichever one it falls back to -- so the headers and paths
+// reported would belong to a different site than the one scanned.
+func probeHTTPPosture(ip string, port int, timeout time.Duration, useTLS bool, insecureSkipVerify bool, hostname string) *HTTPPostureInfo {
 	scheme := "http"
 	if useTLS {
 		scheme = "https"
 	}
 	base := fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(ip, strconv.Itoa(port)))
 
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecureSkipVerify}, // #nosec G402 -- opt-in via caller flag, same semantics as the existing banner-grab path
+	tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify} // #nosec G402 -- opt-in via caller flag, same semantics as the existing banner-grab path
+	if hostname != "" {
+		tlsConfig.ServerName = hostname
 	}
+	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	client := &http.Client{
 		Timeout:   timeout,
 		Transport: transport,
@@ -89,7 +97,18 @@ func probeHTTPPosture(ip string, port int, timeout time.Duration, useTLS bool, i
 	}
 	defer transport.CloseIdleConnections()
 
-	resp, err := client.Get(base + "/")
+	get := func(path string) (*http.Response, error) {
+		req, err := http.NewRequest(http.MethodGet, base+path, nil)
+		if err != nil {
+			return nil, err
+		}
+		if hostname != "" {
+			req.Host = hostname
+		}
+		return client.Do(req)
+	}
+
+	resp, err := get("/")
 	if err != nil {
 		return nil
 	}
@@ -110,7 +129,7 @@ func probeHTTPPosture(ip string, port int, timeout time.Duration, useTLS bool, i
 	}
 
 	for _, sp := range sensitivePaths {
-		pResp, pErr := client.Get(base + sp.path)
+		pResp, pErr := get(sp.path)
 		if pErr != nil {
 			continue
 		}

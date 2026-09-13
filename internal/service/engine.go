@@ -30,7 +30,12 @@ var osRegexps = map[string]*regexp.Regexp{
 	"freebsd": regexp.MustCompile(`(?i)freebsd`),
 }
 
-func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerify bool) ServiceInfo {
+// DetectService probes one open port. hostname is the name the target was
+// originally asked for, or empty when it was given as a bare address; it
+// is only used to address name-based virtual hosts correctly (TLS SNI and
+// the HTTP Host header), never to choose what to connect to -- every
+// probe below dials ip itself.
+func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerify bool, hostname string) ServiceInfo {
 	info := ServiceInfo{
 		Name: "unknown",
 	}
@@ -48,7 +53,7 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 	isTLSPort := port == 443 || port == 8443
 	var tlsInfo *TLSInfo
 	if isTLSPort {
-		tlsInfo = probeTLS(ip, port, timeout)
+		tlsInfo = probeTLS(ip, port, timeout, hostname)
 	}
 
 	// Same reasoning, same discipline: probeHTTPPosture runs its own
@@ -58,7 +63,7 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 	isWebPortEarly := port == 80 || port == 443 || port == 8080 || port == 8443 || port == 8000 || port == 8888
 	var httpPostureInfo *HTTPPostureInfo
 	if isWebPortEarly {
-		httpPostureInfo = probeHTTPPosture(ip, port, timeout, isTLSPort, insecureSkipVerify)
+		httpPostureInfo = probeHTTPPosture(ip, port, timeout, isTLSPort, insecureSkipVerify, hostname)
 	}
 
 	target := net.JoinHostPort(ip, strconv.Itoa(port))
@@ -125,6 +130,9 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 			info.TLS = tlsInfo
 
 			tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify} // #nosec G402 -- opt-in via caller flag; banner grabbing must complete the handshake against untrusted/self-signed target certs
+			if hostname != "" {
+				tlsConfig.ServerName = hostname
+			}
 			tlsClient := tls.Client(conn, tlsConfig)
 
 			if err := tlsClient.SetDeadline(time.Now().Add(timeout)); err != nil {
@@ -139,7 +147,14 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 
 		if (isTLS && probeConn != conn) || !isTLS {
 			_ = probeConn.SetDeadline(time.Now().Add(timeout))
-			probe := fmt.Sprintf("GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\nAccept: */*\r\nConnection: close\r\n\r\n", ip)
+			// Host carries the name when there is one: a name-based virtual
+			// host asked for by IP answers with its fallback site, so the
+			// Server header read back would describe the wrong one.
+			hostHeader := hostname
+			if hostHeader == "" {
+				hostHeader = ip
+			}
+			probe := fmt.Sprintf("GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\nAccept: */*\r\nConnection: close\r\n\r\n", hostHeader)
 			_, errWrite := probeConn.Write([]byte(probe))
 			if errWrite == nil {
 				n, errRead := probeConn.Read(buf)

@@ -53,15 +53,53 @@ func ParseTarget(target string) ([]string, error) {
 }
 
 func ParseTargets(targets []string) ([]string, error) {
+	ips, _, err := ParseTargetsWithNames(targets)
+	return ips, err
+}
+
+// ParseTargetsWithNames is ParseTargets plus the hostname each address was
+// resolved from, for the addresses that came from a name at all (an IP
+// literal, a range, or a CIDR contributes nothing).
+//
+// Resolution is otherwise a one-way trip -- everything downstream sees
+// only addresses -- but a TLS probe needs the name back: dialing an IP
+// with no SNI makes any host behind name-based virtual hosting serve its
+// default certificate, which then looks self-signed and mismatched no
+// matter how healthy the real one is.
+//
+// A name is recorded only if that address has none yet, so when several
+// names resolve to one address (shared hosting, a CDN edge) the first one
+// asked for wins instead of whichever happened to be parsed last.
+func ParseTargetsWithNames(targets []string) ([]string, map[string]string, error) {
 	var allIPs []string
+	names := make(map[string]string)
+
 	for _, t := range targets {
 		ips, err := ParseTarget(t)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		if isHostname(t) {
+			for _, ip := range ips {
+				if _, seen := names[ip]; !seen {
+					names[ip] = t
+				}
+			}
 		}
 		allIPs = append(allIPs, ips...)
 	}
-	return allIPs, nil
+
+	return allIPs, names, nil
+}
+
+// isHostname reports whether a raw target was a name rather than an
+// address literal, a range, or a CIDR -- mirroring ParseTarget's own
+// dispatch, which only reaches a DNS lookup for this last case.
+func isHostname(target string) bool {
+	if strings.Contains(target, "/") || strings.Contains(target, "-") {
+		return false
+	}
+	return net.ParseIP(target) == nil
 }
 
 // maxIPv6CIDRHostBits caps how many host bits (and so how many addresses)

@@ -84,7 +84,6 @@ type Options struct {
 	ProbeTTL       int
 
 	DeepInspect     bool
-	PacketCapture   bool
 	OSIVerbosity    int
 	HexDump         bool
 	TimingAnalysis  bool
@@ -163,6 +162,7 @@ func ParseFlags() (*Options, error) {
 		"--baseline":       true,
 		"--changes":        true,
 		"--sarif":          true,
+		"--exclude":        true,
 		"-oX":              true,
 		"-oG":              true,
 		"-oN":              true,
@@ -246,7 +246,6 @@ func ParseFlags() (*Options, error) {
 	flag.IntVar(&opts.ProbeTTL, "probe-ttl", 64, "TTL value for probe packets")
 
 	flag.BoolVar(&opts.DeepInspect, "deep-inspect", false, "ADVANCED: Surgical packet-level analysis (slower, detailed)")
-	flag.BoolVar(&opts.PacketCapture, "capture", false, "Enable raw packet capture and storage")
 	flag.IntVar(&opts.OSIVerbosity, "osi-verbosity", 4, "OSI layer detail level (1=L3 only, 7=full stack analysis)")
 	flag.BoolVar(&opts.HexDump, "hex-dump", false, "Display packet hex dump + ASCII representation")
 	flag.BoolVar(&opts.TimingAnalysis, "timing-analysis", false, "Show inter-packet timing and latency metrics")
@@ -267,6 +266,7 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.InsecureTLS, "k", false, "Allow insecure server connections (alias --insecure)")
 	flag.StringVar(&opts.JsonOutput, "j", "", "Export results to JSON file")
 	flag.StringVar(&opts.ScopeFile, "scope-file", "", "Authorized scope file (CIDRs, IPs, or domains)")
+	flag.StringVar(&opts.ExcludeHost, "exclude", "", "Comma-separated hosts, CIDRs, or names to exclude from the scan")
 	flag.StringVar(&opts.Profile, "profile", "", "Scan profile: safe-production")
 	flag.StringVar(&opts.AuditLog, "audit-log", "", "Append one audit record per scan to a JSONL file")
 	flag.StringVar(&opts.BaselineFile, "baseline", "", "Prior JSON report used as a comparison baseline")
@@ -296,6 +296,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Println(Cyan + "TARGET & DISCOVERY SPECIFICATION:" + Reset)
 		fmt.Printf("  %s<target>%s         Hostnames, IP addresses, CIDRs\n", Yellow, Reset)
 		fmt.Printf("  %s-iL <file>%s       Input target list from file\n", Yellow, Reset)
+		fmt.Printf("  %s--exclude <list>%s Comma-separated hosts/CIDRs/names to skip\n", Yellow, Reset)
 		fmt.Printf("  %s--scope-file <file>%s Restrict scans to authorized CIDRs, IPs, or domains\n", Yellow, Reset)
 		fmt.Printf("  %s-sn%s             Ping Scan - disable port scan\n", Yellow, Reset)
 		fmt.Println(Cyan + "\nCLOUD-AWARE TARGETING:" + Reset)
@@ -345,7 +346,6 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("                             %sWARNING: Significantly slower, for network professionals only%s\n", Yellow, Reset)
 		fmt.Printf("  %s--osi-verbosity <1-7>%s OSI detail level (1=L3, 4=default, 7=full protocol dissection)\n", Yellow, Reset)
 		fmt.Printf("  %s--hex-dump%s             Display raw packet hex dump + ASCII representation\n", Yellow, Reset)
-		fmt.Printf("  %s--capture%s              Enable raw packet capture and storage for offline analysis\n", Yellow, Reset)
 		fmt.Printf("  %s--timing-analysis%s     Show inter-packet timing and latency metrics\n", Yellow, Reset)
 		fmt.Printf("  %s--payload-analysis%s    Dissect L7 application layer data and protocols\n", Yellow, Reset)
 		fmt.Printf("  %s--protocol-trace%s      Trace full protocol negotiation (3-way handshake, etc)\n", Yellow, Reset)

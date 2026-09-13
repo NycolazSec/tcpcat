@@ -18,26 +18,7 @@ const (
 	colorBold   = "\033[1m"
 )
 
-type PacketAnalysis struct {
-	Timestamp   time.Time
-	SourceIP    net.IP
-	DestIP      net.IP
-	SourcePort  int
-	DestPort    int
-	Protocol    string
-	Flags       []string
-	TTL         int
-	WindowSize  int
-	SequenceNum uint32
-	AckNum      uint32
-	Length      int
-	HexData     []byte
-	Latency     time.Duration
-	OSILayers   map[int]string
-	Banner      string
-}
-
-func RunDeepInspect(ip string, port int, osiVerbosity int, hexDump bool, protocolTrace bool, timingAnalysis bool) {
+func RunDeepInspect(ip string, port int, osiVerbosity int, hexDump bool, protocolTrace bool, timingAnalysis bool, payloadAnalysis bool) {
 	target := net.JoinHostPort(ip, fmt.Sprintf("%d", port))
 	fmt.Printf("\n%s%s[DEEP INSPECT] %s:%d%s\n", colorBold, colorCyan, ip, port, colorReset)
 	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", colorCyan, colorReset)
@@ -133,7 +114,9 @@ func RunDeepInspect(ip string, port int, osiVerbosity int, hexDump bool, protoco
 		}
 	}
 
-	if osiVerbosity >= 6 || banner != "" {
+	// --payload-analysis is exactly this section: forcing it on shows the
+	// L7 dissection even for a service that sends no banner of its own.
+	if osiVerbosity >= 6 || banner != "" || payloadAnalysis {
 		fmt.Printf("%s\n[L7 - Application Layer]%s\n", colorGreen+colorBold, colorReset)
 		if banner != "" {
 			fmt.Printf("  Banner:         %s%s%s\n", colorWhite, banner, colorReset)
@@ -359,12 +342,6 @@ func minRTT(rtts []time.Duration) time.Duration {
 	return m
 }
 
-func DeepInspectPacket(analysis *PacketAnalysis, osiVerbosity int, hexDump bool, verbose bool) {
-	if verbose {
-		RunDeepInspect(analysis.DestIP.String(), analysis.DestPort, osiVerbosity, hexDump, false, false)
-	}
-}
-
 func printHexDump(data []byte) {
 	fmt.Printf("  %s--- HEX DUMP (16 bytes/line) ---%s\n", colorCyan, colorReset)
 	for i := 0; i < len(data); i += 16 {
@@ -397,48 +374,4 @@ func printHexDump(data []byte) {
 		fmt.Printf("\n")
 	}
 	fmt.Printf("%s\n", colorReset)
-}
-
-func AnalyzeProtocolSequence(phases []string, verbose bool) {
-	if !verbose {
-		return
-	}
-	fmt.Printf("%s[PROTOCOL NEGOTIATION SEQUENCE]%s\n", colorBold+colorCyan, colorReset)
-	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n", colorCyan, colorReset)
-	defaultPhases := []string{
-		"1. [SYN]     Client → Server",
-		"2. [SYN-ACK] Server → Client",
-		"3. [ACK]     Client → Server",
-		"4. [DATA]    Bidirectional",
-		"5. [FIN]     Client → Server",
-		"6. [FIN-ACK] Server → Client",
-		"7. [ACK]     Client → Server",
-	}
-	if len(phases) > 0 {
-		defaultPhases = phases
-	}
-	for i, phase := range defaultPhases {
-		if i%2 == 0 {
-			fmt.Printf("%s  →  %s%s\n", colorGreen, phase, colorReset)
-		} else {
-			fmt.Printf("%s  ←  %s%s\n", colorYellow, phase, colorReset)
-		}
-	}
-	fmt.Printf("%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n", colorCyan, colorReset)
-}
-
-func PrintTimelineAnalysis(packets []PacketAnalysis, verbose bool) {
-	if !verbose || len(packets) == 0 {
-		return
-	}
-	fmt.Printf("%s[INTER-PACKET TIMING ANALYSIS]%s\n", colorBold+colorCyan, colorReset)
-	for i, pkt := range packets {
-		if i > 0 {
-			delta := pkt.Timestamp.Sub(packets[i-1].Timestamp).Milliseconds()
-			fmt.Printf("  %s → %s  %s%d ms%s\n",
-				packets[i-1].Timestamp.Format("15:04:05.000"),
-				pkt.Timestamp.Format("15:04:05.000"),
-				colorYellow, delta, colorReset)
-		}
-	}
 }

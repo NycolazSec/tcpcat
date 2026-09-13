@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -88,6 +89,43 @@ func GenerateRandomIPs(count int) []string {
 	}
 
 	return ips
+}
+
+// ExpandExclusions normalizes raw --exclude entries into the form
+// FilterExcluded understands. Addresses and CIDRs pass through untouched
+// (a CIDR is matched by containment, so even a very large prefix never
+// needs enumerating), while a hostname is resolved to the addresses it
+// currently points at.
+//
+// Entries that resolve to nothing come back in `failed` rather than being
+// dropped quietly: an exclusion is a statement about what must not be
+// scanned, so one that silently does nothing is worse than none at all --
+// the caller is expected to surface it.
+func ExpandExclusions(entries []string) (resolved []string, failed []string) {
+	for _, raw := range entries {
+		entry := strings.TrimSpace(raw)
+		if entry == "" {
+			continue
+		}
+
+		if _, _, err := net.ParseCIDR(entry); err == nil {
+			resolved = append(resolved, entry)
+			continue
+		}
+		if ip := net.ParseIP(entry); ip != nil {
+			resolved = append(resolved, entry)
+			continue
+		}
+
+		ips, err := ParseTarget(entry)
+		if err != nil || len(ips) == 0 {
+			failed = append(failed, entry)
+			continue
+		}
+		resolved = append(resolved, ips...)
+	}
+
+	return resolved, failed
 }
 
 func FilterExcluded(targets []string, excludeList []string) []string {

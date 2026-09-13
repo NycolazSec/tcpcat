@@ -128,3 +128,45 @@ func TestFilterExcludedIgnoresUnparsableTargets(t *testing.T) {
 		t.Errorf("got %v, want nil (unparsable entries are dropped)", got)
 	}
 }
+
+func TestExpandExclusionsPassesThroughLiterals(t *testing.T) {
+	// A CIDR must stay a CIDR: FilterExcluded matches it by containment, so
+	// expanding it would pointlessly enumerate the whole prefix.
+	resolved, failed := ExpandExclusions([]string{"10.0.0.1", "192.168.0.0/16", " 172.16.0.1 "})
+	if len(failed) != 0 {
+		t.Errorf("failed = %v, want none for literal entries", failed)
+	}
+	want := []string{"10.0.0.1", "192.168.0.0/16", "172.16.0.1"}
+	if len(resolved) != len(want) {
+		t.Fatalf("resolved = %v, want %v", resolved, want)
+	}
+	for i, w := range want {
+		if resolved[i] != w {
+			t.Errorf("resolved[%d] = %q, want %q", i, resolved[i], w)
+		}
+	}
+}
+
+func TestExpandExclusionsReportsUnresolvableEntries(t *testing.T) {
+	// An exclusion that resolves to nothing protects nothing; it has to be
+	// reported rather than silently dropped.
+	resolved, failed := ExpandExclusions([]string{"definitely-not-a-real-host.invalid"})
+	if len(resolved) != 0 {
+		t.Errorf("resolved = %v, want none", resolved)
+	}
+	if len(failed) != 1 || failed[0] != "definitely-not-a-real-host.invalid" {
+		t.Errorf("failed = %v, want the unresolvable entry reported", failed)
+	}
+}
+
+func TestExpandExclusionsSkipsEmptyEntries(t *testing.T) {
+	// "10.0.0.1,,10.0.0.2" splits to an empty middle entry; it is not a
+	// failure, just nothing.
+	resolved, failed := ExpandExclusions([]string{"10.0.0.1", "", "  "})
+	if len(failed) != 0 {
+		t.Errorf("failed = %v, want none", failed)
+	}
+	if len(resolved) != 1 || resolved[0] != "10.0.0.1" {
+		t.Errorf("resolved = %v, want just the one real entry", resolved)
+	}
+}

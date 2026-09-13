@@ -197,3 +197,48 @@ func TestExpandCIDRNoDuplicates(t *testing.T) {
 		t.Errorf("expected the range to run 10.0.0.0..10.0.0.15 in order, got first=%s last=%s", got[0], got[len(got)-1])
 	}
 }
+
+func TestParseTargetsWithNamesRecordsOnlyResolvedNames(t *testing.T) {
+	// An address literal, a range, and a CIDR were never resolved from a
+	// name, so none of them should claim one -- only a real lookup does.
+	_, names, err := ParseTargetsWithNames([]string{"192.168.1.1", "192.168.1.0/30", "10.0.0.1-3"})
+	if err != nil {
+		t.Fatalf("ParseTargetsWithNames() error = %v", err)
+	}
+	if len(names) != 0 {
+		t.Errorf("names = %v, want empty for literal targets", names)
+	}
+}
+
+func TestParseTargetsWithNamesMapsHostnameToItsAddresses(t *testing.T) {
+	ips, names, err := ParseTargetsWithNames([]string{"localhost"})
+	if err != nil {
+		t.Skipf("localhost did not resolve on this machine: %v", err)
+	}
+	if len(ips) == 0 {
+		t.Fatal("localhost resolved to no addresses")
+	}
+	for _, ip := range ips {
+		if names[ip] != "localhost" {
+			t.Errorf("names[%q] = %q, want localhost", ip, names[ip])
+		}
+	}
+}
+
+func TestIsHostname(t *testing.T) {
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"example.com", true},
+		{"192.168.1.1", false},
+		{"192.168.1.0/24", false},
+		{"10.0.0.1-5", false},
+		{"::1", false},
+	}
+	for _, tt := range tests {
+		if got := isHostname(tt.in); got != tt.want {
+			t.Errorf("isHostname(%q) = %v, want %v", tt.in, got, tt.want)
+		}
+	}
+}

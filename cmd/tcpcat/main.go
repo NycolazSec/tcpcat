@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -119,7 +120,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	targetIPs, err := target.ParseTargets(rawTargets)
+	targetIPs, targetNames, err := target.ParseTargetsWithNames(rawTargets)
 	if err != nil {
 		fmt.Printf("%s[!] Target Error: %v%s\n", config.Red, err, config.Reset)
 		os.Exit(1)
@@ -132,6 +133,26 @@ func main() {
 		}
 		if len(targetIPs) == 0 {
 			fmt.Printf("%s[!] Scope Error: no resolved targets are authorized by %s.%s\n", config.Red, opts.ScopeFile, config.Reset)
+			os.Exit(1)
+		}
+	}
+
+	if opts.ExcludeHost != "" {
+		excluded, failed := target.ExpandExclusions(strings.Split(opts.ExcludeHost, ","))
+		// An entry that resolves to nothing excludes nothing, and staying
+		// quiet about it would leave the operator believing a host is off
+		// limits while it gets scanned anyway.
+		for _, entry := range failed {
+			fmt.Printf("%s[!] Exclusion Warning: could not resolve %q -- it excludes nothing.%s\n", config.Yellow, entry, config.Reset)
+		}
+
+		before := len(targetIPs)
+		targetIPs = target.FilterExcluded(targetIPs, excluded)
+		if removed := before - len(targetIPs); removed > 0 {
+			fmt.Printf("%s[*] Excluded %d target(s) via --exclude.%s\n", config.White, removed, config.Reset)
+		}
+		if len(targetIPs) == 0 {
+			fmt.Printf("%s[!] Exclusion Error: every resolved target was excluded.%s\n", config.Red, config.Reset)
 			os.Exit(1)
 		}
 	}
@@ -296,7 +317,7 @@ func main() {
 
 	results := engine.Execute(activeTargets, targetedPorts)
 
-	if opts.DeepInspect || opts.ProtocolTracing || opts.TimingAnalysis {
+	if opts.DeepInspect || opts.ProtocolTracing || opts.TimingAnalysis || opts.PayloadAnalysis {
 		fmt.Println(config.Bold + "───────────────────────────────────────────────────────────────────────────" + config.Reset)
 		fmt.Printf("%s[*] Running Deep Packet Inspection...%s\n", config.Yellow, config.Reset)
 		osiV := opts.OSIVerbosity
@@ -305,7 +326,7 @@ func main() {
 		}
 		for _, r := range results {
 			if r.State == scan.StateOpen {
-				scan.RunDeepInspect(r.IP, r.Port, osiV, opts.HexDump, opts.ProtocolTracing, opts.TimingAnalysis)
+				scan.RunDeepInspect(r.IP, r.Port, osiV, opts.HexDump, opts.ProtocolTracing, opts.TimingAnalysis, opts.PayloadAnalysis)
 			}
 		}
 	}
@@ -315,7 +336,7 @@ func main() {
 		fmt.Printf("%s[*] Running Service & Version Detection...%s\n", config.Red, config.Reset)
 		for i := range results {
 			if results[i].State == scan.StateOpen {
-				svc := service.DetectService(results[i].IP, results[i].Port, 2*time.Second, opts.InsecureTLS)
+				svc := service.DetectService(results[i].IP, results[i].Port, 2*time.Second, opts.InsecureTLS, targetNames[results[i].IP])
 				results[i].Service = svc.Name
 				results[i].Banner = svc.Banner
 				results[i].Version = svc.Version

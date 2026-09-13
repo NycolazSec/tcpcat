@@ -25,7 +25,7 @@ func TestProbeHTTPPostureFlagsMissingHeadersAndExposedFiles(t *testing.T) {
 
 	ip, port := startHTTPTestServer(t, mux)
 
-	info := probeHTTPPosture(ip, port, 2*time.Second, false, false)
+	info := probeHTTPPosture(ip, port, 2*time.Second, false, false, "")
 	if info == nil {
 		t.Fatal("probeHTTPPosture() = nil, want a result")
 	}
@@ -77,7 +77,7 @@ func TestProbeHTTPPostureNoFalsePositivesOnSPAFallback(t *testing.T) {
 
 	ip, port := startHTTPTestServer(t, mux)
 
-	info := probeHTTPPosture(ip, port, 2*time.Second, false, false)
+	info := probeHTTPPosture(ip, port, 2*time.Second, false, false, "")
 	if info == nil {
 		t.Fatal("probeHTTPPosture() = nil, want a result")
 	}
@@ -100,7 +100,7 @@ func TestProbeHTTPPostureChecksHSTSOnlyOverTLS(t *testing.T) {
 
 	ip, port := startHTTPTestServer(t, mux)
 
-	info := probeHTTPPosture(ip, port, 2*time.Second, false, false)
+	info := probeHTTPPosture(ip, port, 2*time.Second, false, false, "")
 	if info == nil {
 		t.Fatal("probeHTTPPosture() = nil, want a result")
 	}
@@ -112,7 +112,7 @@ func TestProbeHTTPPostureChecksHSTSOnlyOverTLS(t *testing.T) {
 }
 
 func TestProbeHTTPPostureUnreachableReturnsNil(t *testing.T) {
-	if info := probeHTTPPosture("127.0.0.1", 1, 200*time.Millisecond, false, false); info != nil {
+	if info := probeHTTPPosture("127.0.0.1", 1, 200*time.Millisecond, false, false, ""); info != nil {
 		t.Errorf("probeHTTPPosture() = %+v for an unreachable port, want nil", info)
 	}
 }

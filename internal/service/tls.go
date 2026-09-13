@@ -38,7 +38,14 @@ const certExpiryWarnDays = 14
 // self-signed, expired, or hostname-mismatched ones, which is exactly the
 // class of finding a security audit wants surfaced rather than swallowed by
 // a failed handshake. #nosec G402 -- deliberate, see above.
-func probeTLS(ip string, port int, timeout time.Duration) *TLSInfo {
+//
+// hostname is the name the target was originally asked for, empty when it
+// was given as a bare address. It matters twice: as the SNI sent in the
+// ClientHello, without which a name-based virtual host serves its default
+// certificate rather than the one actually in use; and as what the
+// presented certificate is then checked against, since an IP only matches
+// a certificate carrying that IP in a SAN.
+func probeTLS(ip string, port int, timeout time.Duration, hostname string) *TLSInfo {
 	target := net.JoinHostPort(ip, strconv.Itoa(port))
 	dialer := &net.Dialer{Timeout: timeout}
 
@@ -49,9 +56,14 @@ func probeTLS(ip string, port int, timeout time.Duration) *TLSInfo {
 	// server that only offers TLS 1.0/1.1 -- exactly the servers this
 	// probe most needs to reach, since failing to connect would silently
 	// hide the finding instead of reporting it as weak.
+	//
+	// ServerName is only carried in the ClientHello here; it never gates
+	// the handshake, since InsecureSkipVerify leaves verification to the
+	// explicit checks below.
 	conn, err := tls.DialWithDialer(dialer, "tcp", target, &tls.Config{
 		InsecureSkipVerify: true, // #nosec G402 -- deliberate: this probe reports on whatever certificate is presented, valid or not
 		MinVersion:         tls.VersionTLS10,
+		ServerName:         hostname,
 	})
 	if err != nil {
 		return nil
@@ -93,8 +105,13 @@ func probeTLS(ip string, port int, timeout time.Duration) *TLSInfo {
 			info.Warnings = append(info.Warnings, "self-signed certificate")
 		}
 
-		if err := cert.VerifyHostname(ip); err != nil {
-			info.Warnings = append(info.Warnings, "certificate does not match target hostname/IP")
+		verifyAgainst := hostname
+		if verifyAgainst == "" {
+			verifyAgainst = ip
+		}
+		if err := cert.VerifyHostname(verifyAgainst); err != nil {
+			info.Warnings = append(info.Warnings,
+				fmt.Sprintf("certificate does not match %s", verifyAgainst))
 		}
 	}
 

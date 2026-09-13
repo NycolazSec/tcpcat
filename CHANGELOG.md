@@ -11,6 +11,14 @@ Full diffs for every release are available via GitHub's
 ## [Unreleased]
 
 ### Added
+- `--exclude <list>`: comma-separated hosts, CIDRs, or names left out of a
+  scan. `FilterExcluded` was already implemented and unit-tested in
+  `internal/target/generator.go` but nothing ever called it and no flag fed
+  `opts.ExcludeHost`, so exclusion simply did not exist. Names are resolved
+  (`ExpandExclusions`) rather than ignored, while CIDRs stay CIDRs and are
+  matched by containment; an entry that resolves to nothing is reported
+  instead of dropped quietly, since an exclusion that silently does nothing
+  is worse than none at all.
 - `-oX`, `-oG`, `-oN`, `-oS`: the XML, grepable, plain-text, and leetspeak
   exports in `internal/output/` were fully implemented and unit-tested but
   had no CLI flag reaching them -- only JSON, SARIF, and the JSONL audit
@@ -18,6 +26,22 @@ Full diffs for every release are available via GitHub's
   may be combined with any other in a single run.
 
 ### Fixed
+- TLS and HTTP probes now send the name the target was asked for -- as SNI,
+  and as the HTTP `Host` header -- instead of only ever addressing the
+  resolved IP. Every host behind name-based virtual hosting served its
+  fallback certificate to the old probe, which then reported "self-signed
+  certificate" and "certificate does not match" for a perfectly healthy
+  server: scanning `google.com` produced two false findings about an
+  `invalid2.invalid` certificate Google never serves to a real client. The
+  same blind spot applied to the banner grab and the posture checks, which
+  were describing whichever site the address falls back to rather than the
+  one asked for. `ParseTargetsWithNames` keeps the name alongside each
+  resolved address so `DetectService` can use it; a target given as a bare
+  address behaves exactly as before, and a genuine mismatch is still
+  reported (now naming what it failed to match).
+- `--payload-analysis` did nothing: the flag parsed into `opts.PayloadAnalysis`
+  and no code ever read it. It now forces the L7 dissection section of deep
+  inspection, which is what it always advertised.
 - Every file export now groups results per scanned host
   (`internal/output/hosts.go`). The XML, grepable, plain-text, and
   leetspeak formats each took a single `target` string and ignored
@@ -179,6 +203,17 @@ Full diffs for every release are available via GitHub's
 - Static analysis (`go vet`, `golangci-lint`), a `gosec` security scan, and
   `govulncheck` dependency scanning in CI, in addition to the existing
   build-and-test job.
+
+### Removed
+- `--capture` is gone. It was registered and documented as "enable raw packet
+  capture and storage for offline analysis" while `opts.PacketCapture` was
+  read nowhere and no capture machinery exists anywhere in the tree -- a flag
+  that silently does nothing is worse than an absent one. It now errors as
+  unrecognized rather than being accepted and ignored.
+- Dead code in `internal/scan/deep_inspect.go`: `DeepInspectPacket` (a
+  wrapper that only called `RunDeepInspect`), `AnalyzeProtocolSequence` (a
+  duplicate of the live `printProtocolTrace`), `PrintTimelineAnalysis`, and
+  the `PacketAnalysis` type they alone referenced.
 
 ### Fixed
 - `internal/scan/engine.go`: **`-sT --ebpf` was silently promoted to a raw

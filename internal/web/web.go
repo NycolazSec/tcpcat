@@ -150,7 +150,7 @@ func (s *server) handleScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targets, err := target.ParseTargets([]string{request.Target})
+	targets, targetNames, err := target.ParseTargetsWithNames([]string{request.Target})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -193,7 +193,7 @@ func (s *server) handleScan(w http.ResponseWriter, r *http.Request) {
 			s.state.mu.Unlock()
 		})
 		if options.ServiceDetect {
-			enrichResults(results)
+			enrichResults(results, targetNames)
 		}
 		s.state.mu.Lock()
 		s.state.results = results
@@ -205,7 +205,7 @@ func (s *server) handleScan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"status": "started"})
 }
 
-func enrichResults(results []scan.TargetResult) {
+func enrichResults(results []scan.TargetResult, targetNames map[string]string) {
 	offlineScanner, err := vuln.NewOfflineScanner()
 	if err != nil {
 		return
@@ -217,7 +217,7 @@ func enrichResults(results []scan.TargetResult) {
 			continue
 		}
 
-		serviceInfo := service.DetectService(result.IP, result.Port, 2*time.Second, false)
+		serviceInfo := service.DetectService(result.IP, result.Port, 2*time.Second, false, targetNames[result.IP])
 		result.Service = serviceInfo.Name
 		result.Version = serviceInfo.Version
 		result.Banner = serviceInfo.Banner

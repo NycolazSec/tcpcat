@@ -22,7 +22,7 @@ func TestDetectServiceLocalhost(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := DetectService(tt.ip, tt.port, 2*time.Second, false)
+			result := DetectService(tt.ip, tt.port, 2*time.Second, false, "")
 
 			if result.Name == "" {
 				t.Logf("Service detection returned empty name for %s:%d", tt.ip, tt.port)
@@ -33,7 +33,7 @@ func TestDetectServiceLocalhost(t *testing.T) {
 
 func TestDetectServiceTimeout(t *testing.T) {
 
-	result := DetectService("192.0.2.1", 12345, 1*time.Millisecond, false)
+	result := DetectService("192.0.2.1", 12345, 1*time.Millisecond, false, "")
 
 	if result.Name == "" {
 		t.Log("Timeout returned empty service name (expected)")
@@ -41,7 +41,7 @@ func TestDetectServiceTimeout(t *testing.T) {
 }
 
 func TestDetectServiceResponseStructure(t *testing.T) {
-	result := DetectService("127.0.0.1", 22, 2*time.Second, false)
+	result := DetectService("127.0.0.1", 22, 2*time.Second, false, "")
 
 	if result.Name == "" {
 		t.Error("Result has empty Name")
@@ -65,7 +65,7 @@ func TestDetectServiceCommonPorts(t *testing.T) {
 
 	for _, port := range commonPorts {
 		t.Run(string(rune(port)), func(t *testing.T) {
-			result := DetectService("127.0.0.1", port, 2*time.Second, false)
+			result := DetectService("127.0.0.1", port, 2*time.Second, false, "")
 
 			if len(result.Name) > 50 {
 				t.Errorf("Service name unreasonably long: %s", result.Name)
@@ -79,7 +79,7 @@ func TestDetectServiceConcurrency(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		go func(port int) {
-			result := DetectService("127.0.0.1", port, 1*time.Second, false)
+			result := DetectService("127.0.0.1", port, 1*time.Second, false, "")
 			results <- result.Name != ""
 		}(22 + i)
 	}
@@ -101,7 +101,7 @@ func TestDetectServiceInsecureSkipVerify(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := DetectService("127.0.0.1", 443, 1*time.Second, tt.insecure)
+			result := DetectService("127.0.0.1", 443, 1*time.Second, tt.insecure, "")
 			if result.Name == "" {
 				t.Log("Expected behavior with insecure flag")
 			}
@@ -277,7 +277,7 @@ func startBannerServer(t *testing.T, banner string) int {
 func TestDetectServiceSSHBanner(t *testing.T) {
 	port := startBannerServer(t, "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.5\r\n")
 
-	result := DetectService("127.0.0.1", port, 2*time.Second, false)
+	result := DetectService("127.0.0.1", port, 2*time.Second, false, "")
 
 	if result.Name != "openssh" {
 		t.Errorf("Name = %q, want openssh", result.Name)
@@ -293,7 +293,7 @@ func TestDetectServiceSSHBanner(t *testing.T) {
 func TestDetectServiceFTPBanner(t *testing.T) {
 	port := startBannerServer(t, "220 ProFTPD 1.3.5 Server ready.\r\n")
 
-	result := DetectService("127.0.0.1", port, 2*time.Second, false)
+	result := DetectService("127.0.0.1", port, 2*time.Second, false, "")
 
 	if result.Name != "ftp" {
 		t.Errorf("Name = %q, want ftp", result.Name)
@@ -303,7 +303,7 @@ func TestDetectServiceFTPBanner(t *testing.T) {
 func TestDetectServiceSMTPBanner(t *testing.T) {
 	port := startBannerServer(t, "220 mail.example.com ESMTP Postfix\r\n")
 
-	result := DetectService("127.0.0.1", port, 2*time.Second, false)
+	result := DetectService("127.0.0.1", port, 2*time.Second, false, "")
 
 	if result.Name != "smtp" {
 		t.Errorf("Name = %q, want smtp", result.Name)
@@ -335,7 +335,7 @@ func TestDetectServiceHTTPServerHeader(t *testing.T) {
 		}
 	}()
 
-	result := DetectService("127.0.0.1", 8080, 2*time.Second, false)
+	result := DetectService("127.0.0.1", 8080, 2*time.Second, false, "")
 
 	if result.Name != "nginx" {
 		t.Errorf("Name = %q, want nginx", result.Name)
@@ -374,7 +374,7 @@ func TestDetectServiceTLSHandshakeFailureFallsBack(t *testing.T) {
 		}
 	}()
 
-	result := DetectService("127.0.0.1", 8443, 2*time.Second, true)
+	result := DetectService("127.0.0.1", 8443, 2*time.Second, true, "")
 
 	if result.Name != "unknown" {
 		t.Errorf("Name = %q, want unknown (8443 has no resolveDefaultPortName case)", result.Name)
@@ -384,7 +384,7 @@ func TestDetectServiceTLSHandshakeFailureFallsBack(t *testing.T) {
 func TestDetectServiceVNCBanner(t *testing.T) {
 	port := startBannerServer(t, "RFB 003.008\n")
 
-	result := DetectService("127.0.0.1", port, 2*time.Second, false)
+	result := DetectService("127.0.0.1", port, 2*time.Second, false, "")
 
 	if result.Name != "vnc" {
 		t.Errorf("Name = %q, want vnc", result.Name)
@@ -397,7 +397,7 @@ func TestDetectServiceVNCBanner(t *testing.T) {
 func TestDetectServicePOP3Banner(t *testing.T) {
 	port := startBannerServer(t, "+OK POP3 ready\r\n")
 
-	result := DetectService("127.0.0.1", port, 2*time.Second, false)
+	result := DetectService("127.0.0.1", port, 2*time.Second, false, "")
 
 	if result.Name != "pop3" {
 		t.Errorf("Name = %q, want pop3", result.Name)
@@ -407,7 +407,7 @@ func TestDetectServicePOP3Banner(t *testing.T) {
 func TestDetectServiceIMAPBanner(t *testing.T) {
 	port := startBannerServer(t, "* OK IMAP4rev1 Dovecot ready\r\n")
 
-	result := DetectService("127.0.0.1", port, 2*time.Second, false)
+	result := DetectService("127.0.0.1", port, 2*time.Second, false, "")
 
 	if result.Name != "imap" {
 		t.Errorf("Name = %q, want imap", result.Name)
@@ -439,7 +439,7 @@ func TestDetectServiceMySQLHandshake(t *testing.T) {
 
 	port := startBannerServer(t, string(payload))
 
-	result := DetectService("127.0.0.1", port, 2*time.Second, false)
+	result := DetectService("127.0.0.1", port, 2*time.Second, false, "")
 
 	if result.Name != "mysql" {
 		t.Errorf("Name = %q, want mysql", result.Name)
@@ -588,7 +588,7 @@ func TestProbeRDPRejectsNonTPKT(t *testing.T) {
 
 func BenchmarkDetectService(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_ = DetectService("127.0.0.1", 22, 1*time.Second, false)
+		_ = DetectService("127.0.0.1", 22, 1*time.Second, false, "")
 	}
 }
 
@@ -596,7 +596,7 @@ func BenchmarkDetectServiceParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		port := 22
 		for pb.Next() {
-			_ = DetectService("127.0.0.1", port, 1*time.Second, false)
+			_ = DetectService("127.0.0.1", port, 1*time.Second, false, "")
 			port++
 			if port > 443 {
 				port = 22

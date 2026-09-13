@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"math/big"
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -91,13 +92,15 @@ func selfSignedCert(t *testing.T, commonName string, notAfter time.Time) tls.Cer
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
-	// A CommonName alone doesn't satisfy hostname verification for an IP
-	// target under modern Go (CN fallback matching was dropped; an IP SAN
-	// is required) -- add one whenever commonName parses as an IP, so a
-	// cert built for "127.0.0.1" actually validates against 127.0.0.1
-	// instead of always tripping the hostname-mismatch check.
+	// A CommonName alone doesn't satisfy hostname verification under modern
+	// Go: CN fallback matching was dropped, so whatever is being verified
+	// against has to appear in a SAN -- IPAddresses for an address, DNSNames
+	// for a name. Without this a fixture cert fails verification against its
+	// own subject, which is not how any real certificate behaves.
 	if ip := net.ParseIP(commonName); ip != nil {
 		template.IPAddresses = []net.IP{ip}
+	} else {
+		template.DNSNames = []string{commonName}
 	}
 
 	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
@@ -142,7 +145,7 @@ func TestProbeTLSHealthyCertificate(t *testing.T) {
 	cert := selfSignedCert(t, "127.0.0.1", time.Now().AddDate(1, 0, 0))
 	port := startTLSTestServer(t, cert, tls.VersionTLS13)
 
-	info := probeTLS("127.0.0.1", port, 2*time.Second)
+	info := probeTLS("127.0.0.1", port, 2*time.Second, "")
 	if info == nil {
 		t.Fatal("probeTLS() = nil, want a result")
 	}
@@ -166,7 +169,7 @@ func TestProbeTLSExpiredCertificate(t *testing.T) {
 	cert := selfSignedCert(t, "127.0.0.1", time.Now().Add(-24*time.Hour))
 	port := startTLSTestServer(t, cert, tls.VersionTLS12)
 
-	info := probeTLS("127.0.0.1", port, 2*time.Second)
+	info := probeTLS("127.0.0.1", port, 2*time.Second, "")
 	if info == nil {
 		t.Fatal("probeTLS() = nil, want a result")
 	}
@@ -189,7 +192,7 @@ func TestProbeTLSExpiringSoonCertificate(t *testing.T) {
 	cert := selfSignedCert(t, "127.0.0.1", time.Now().Add(5*24*time.Hour))
 	port := startTLSTestServer(t, cert, tls.VersionTLS12)
 
-	info := probeTLS("127.0.0.1", port, 2*time.Second)
+	info := probeTLS("127.0.0.1", port, 2*time.Second, "")
 	if info == nil {
 		t.Fatal("probeTLS() = nil, want a result")
 	}
@@ -212,14 +215,14 @@ func TestProbeTLSHostnameMismatch(t *testing.T) {
 	cert := selfSignedCert(t, "totally-different-name.example", time.Now().AddDate(1, 0, 0))
 	port := startTLSTestServer(t, cert, tls.VersionTLS12)
 
-	info := probeTLS("127.0.0.1", port, 2*time.Second)
+	info := probeTLS("127.0.0.1", port, 2*time.Second, "")
 	if info == nil {
 		t.Fatal("probeTLS() = nil, want a result")
 	}
 
 	found := false
 	for _, w := range info.Warnings {
-		if w == "certificate does not match target hostname/IP" {
+		if w == "certificate does not match 127.0.0.1" {
 			found = true
 		}
 	}
@@ -228,11 +231,79 @@ func TestProbeTLSHostnameMismatch(t *testing.T) {
 	}
 }
 
+func TestProbeTLSVerifiesAgainstHostnameNotIP(t *testing.T) {
+	// The regression this guards: a certificate valid for the name the user
+	// actually asked for, served by a host reached over an IP that is not in
+	// any SAN -- i.e. every name-based virtual host on the internet. Checking
+	// the certificate against the IP flagged all of them as mismatched.
+	cert := selfSignedCert(t, "secure.example", time.Now().AddDate(1, 0, 0))
+	port := startTLSTestServer(t, cert, tls.VersionTLS12)
+
+	info := probeTLS("127.0.0.1", port, 2*time.Second, "secure.example")
+	if info == nil {
+		t.Fatal("probeTLS() = nil, want a result")
+	}
+
+	for _, w := range info.Warnings {
+		if strings.HasPrefix(w, "certificate does not match") {
+			t.Errorf("Warnings = %v, want no hostname mismatch when verifying against the requested name", info.Warnings)
+		}
+	}
+}
+
+func TestProbeTLSSendsSNI(t *testing.T) {
+	// Without SNI a name-based virtual host serves its default certificate,
+	// so the probe would report on a certificate the scanned site doesn't
+	// even use. Capture what the server actually receives in the ClientHello.
+	cert := selfSignedCert(t, "127.0.0.1", time.Now().AddDate(1, 0, 0))
+
+	received := make(chan string, 1)
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			select {
+			case received <- hello.ServerName:
+			default:
+			}
+			return &cert, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("tls.Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		if tlsConn, ok := conn.(*tls.Conn); ok {
+			_ = tlsConn.Handshake()
+		}
+	}()
+
+	port := ln.Addr().(*net.TCPAddr).Port
+	if info := probeTLS("127.0.0.1", port, 2*time.Second, "vhost.example"); info == nil {
+		t.Fatal("probeTLS() = nil, want a result")
+	}
+
+	select {
+	case got := <-received:
+		if got != "vhost.example" {
+			t.Errorf("SNI server name = %q, want vhost.example", got)
+		}
+	case <-time.After(time.Second):
+		t.Error("server never saw a ClientHello")
+	}
+}
+
 func TestProbeTLSWeakVersionIsFlagged(t *testing.T) {
 	cert := selfSignedCert(t, "127.0.0.1", time.Now().AddDate(1, 0, 0))
 	port := startTLSTestServer(t, cert, tls.VersionTLS11)
 
-	info := probeTLS("127.0.0.1", port, 2*time.Second)
+	info := probeTLS("127.0.0.1", port, 2*time.Second, "")
 	if info == nil {
 		t.Fatal("probeTLS() = nil, want a result")
 	}
@@ -254,7 +325,7 @@ func TestProbeTLSWeakVersionIsFlagged(t *testing.T) {
 func TestProbeTLSUnreachableReturnsNil(t *testing.T) {
 	// Nothing listening on this port -- probeTLS must fail closed (nil),
 	// never panic, and never block past the given timeout.
-	if info := probeTLS("127.0.0.1", 1, 200*time.Millisecond); info != nil {
+	if info := probeTLS("127.0.0.1", 1, 200*time.Millisecond, ""); info != nil {
 		t.Errorf("probeTLS() = %+v for an unreachable port, want nil", info)
 	}
 }
