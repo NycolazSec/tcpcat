@@ -82,6 +82,19 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 		rawBanner := strings.TrimSpace(string(buf[:n]))
 		info.Banner = sanitizeBanner(rawBanner)
 
+		// Try the curated signature table first: it names the exact
+		// product (proftpd, postfix, nginx, ...) and pulls a version out of
+		// the banner, which is what CVE correlation keys on -- a bare "ftp"
+		// or "smtp" matches no CVEs. A miss falls through to the generic
+		// prefix cascade below, so an unrecognised banner is no worse off
+		// than before.
+		if name, version, ok := matchBannerSignature(rawBanner); ok {
+			info.Name = name
+			info.Version = version
+			info.OS = extractOSFromBanner(rawBanner)
+			return info
+		}
+
 		if strings.HasPrefix(rawBanner, "SSH-") {
 			info.Name = "ssh"
 			if strings.Contains(rawBanner, "OpenSSH") {

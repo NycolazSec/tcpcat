@@ -29,6 +29,17 @@ Full diffs for every release are available via GitHub's
   back into the output, the way nmap's and masscan's `--resume` work. The
   file doubles as a complete record of the finished portion, and a corrupt
   file is reported rather than silently restarting from zero.
+- Curated banner signature table for service detection
+  (`internal/service/signatures.go`). The passive banner grab used to
+  recognise a few protocols by a bare prefix ("220" -> `smtp`) and rarely
+  captured a version. It now matches the exact product and version --
+  OpenSSH, vsftpd, ProFTPD, Pure-FTPd, Postfix, Exim, Sendmail, Dovecot,
+  nginx, Apache, lighttpd, IIS, Caddy, MongoDB, Elasticsearch, MariaDB,
+  RabbitMQ and more -- reporting e.g. `proftpd 1.3.5` where it used to say
+  a bare `ftp`. This matters beyond cosmetics: CVE correlation keys on the
+  product name and version, and a generic `ftp`/`smtp` with no version
+  matches nothing. An unrecognised banner still falls back to the generic
+  protocol name, so nothing regresses.
 
 ## [1.1.0-beta.1] - 2026-09-13
 

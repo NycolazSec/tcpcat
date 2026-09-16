@@ -291,12 +291,30 @@ func TestDetectServiceSSHBanner(t *testing.T) {
 }
 
 func TestDetectServiceFTPBanner(t *testing.T) {
+	// The banner names the exact daemon and version, so the signature table
+	// should report the product ("proftpd" 1.3.5) that CVE correlation can
+	// key on, not the generic "ftp".
 	port := startBannerServer(t, "220 ProFTPD 1.3.5 Server ready.\r\n")
 
 	result := DetectService("127.0.0.1", port, 2*time.Second, false, "")
 
+	if result.Name != "proftpd" {
+		t.Errorf("Name = %q, want proftpd", result.Name)
+	}
+	if result.Version != "1.3.5" {
+		t.Errorf("Version = %q, want 1.3.5", result.Version)
+	}
+}
+
+func TestDetectServiceFTPBannerGenericFallback(t *testing.T) {
+	// A banner with no recognisable product still falls back to the generic
+	// protocol name rather than "unknown".
+	port := startBannerServer(t, "220 FTP server ready.\r\n")
+
+	result := DetectService("127.0.0.1", port, 2*time.Second, false, "")
+
 	if result.Name != "ftp" {
-		t.Errorf("Name = %q, want ftp", result.Name)
+		t.Errorf("Name = %q, want ftp (generic fallback)", result.Name)
 	}
 }
 
@@ -305,8 +323,8 @@ func TestDetectServiceSMTPBanner(t *testing.T) {
 
 	result := DetectService("127.0.0.1", port, 2*time.Second, false, "")
 
-	if result.Name != "smtp" {
-		t.Errorf("Name = %q, want smtp", result.Name)
+	if result.Name != "postfix" {
+		t.Errorf("Name = %q, want postfix", result.Name)
 	}
 }
 
@@ -405,12 +423,14 @@ func TestDetectServicePOP3Banner(t *testing.T) {
 }
 
 func TestDetectServiceIMAPBanner(t *testing.T) {
+	// "Dovecot" in the banner names the product; the generic "imap" is only
+	// the fallback for an unrecognised IMAP greeting.
 	port := startBannerServer(t, "* OK IMAP4rev1 Dovecot ready\r\n")
 
 	result := DetectService("127.0.0.1", port, 2*time.Second, false, "")
 
-	if result.Name != "imap" {
-		t.Errorf("Name = %q, want imap", result.Name)
+	if result.Name != "dovecot" {
+		t.Errorf("Name = %q, want dovecot", result.Name)
 	}
 }
 
