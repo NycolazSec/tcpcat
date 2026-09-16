@@ -104,6 +104,7 @@ type Options struct {
 	Verbose        bool
 	JsonOutput     string
 	ScopeFile      string
+	Resume         string
 	Profile        string
 	AuditLog       string
 	BaselineFile   string
@@ -160,6 +161,7 @@ func ParseFlags() (*Options, error) {
 		"-PU":              true,
 		"--max-hops":       true,
 		"--scope-file":     true,
+		"--resume":         true,
 		"--profile":        true,
 		"--audit-log":      true,
 		"--baseline":       true,
@@ -270,6 +272,7 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.InsecureTLS, "k", false, "Allow insecure server connections (alias --insecure)")
 	flag.StringVar(&opts.JsonOutput, "j", "", "Export results to JSON file")
 	flag.StringVar(&opts.ScopeFile, "scope-file", "", "Authorized scope file (CIDRs, IPs, or domains)")
+	flag.StringVar(&opts.Resume, "resume", "", "Checkpoint file: skip target/ports already recorded there and append new results (re-run the same command to resume)")
 	flag.StringVar(&opts.ExcludeHost, "exclude", "", "Comma-separated hosts, CIDRs, or names to exclude from the scan")
 	flag.StringVar(&opts.Profile, "profile", "", "Scan profile: safe-production")
 	flag.StringVar(&opts.AuditLog, "audit-log", "", "Append one audit record per scan to a JSONL file")
@@ -303,6 +306,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s-iL <file>%s       Input target list from file\n", Yellow, Reset)
 		fmt.Printf("  %s--exclude <list>%s Comma-separated hosts/CIDRs/names to skip\n", Yellow, Reset)
 		fmt.Printf("  %s--scope-file <file>%s Restrict scans to authorized CIDRs, IPs, or domains\n", Yellow, Reset)
+		fmt.Printf("  %s--resume <file>%s   Skip target/ports already in <file>; append new results (resume an interrupted scan)\n", Yellow, Reset)
 		fmt.Printf("  %s-sn%s             Ping Scan - disable port scan\n", Yellow, Reset)
 		fmt.Println(Cyan + "\nCLOUD-AWARE TARGETING:" + Reset)
 		fmt.Printf("  %s--aws-region <region>%s AWS region for tag-based discovery\n", Yellow, Reset)

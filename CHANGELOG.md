@@ -21,6 +21,14 @@ Full diffs for every release are available via GitHub's
   free service identification (e.g. `open (dns)`). `--data-string` still
   overrides the built-in payload, and a port with no known probe falls back
   to the previous empty-datagram behaviour.
+- `--resume <file>`: an interrupted scan can be finished by re-running the
+  same command with the same `--resume` file (`internal/scan/checkpoint.go`).
+  Each result is appended to the file as JSON Lines as it is produced, so a
+  Ctrl-C, dropped SSH session, or crash loses nothing; on the next run the
+  target/port pairs already recorded are skipped and their results merged
+  back into the output, the way nmap's and masscan's `--resume` work. The
+  file doubles as a complete record of the finished portion, and a corrupt
+  file is reported rather than silently restarting from zero.
 
 ## [1.1.0-beta.1] - 2026-09-13
 

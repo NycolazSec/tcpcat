@@ -316,6 +316,7 @@ the port state.
 ### Enterprise Scan Controls
 ```
 --scope-file <file>         Restrict resolved targets to authorized CIDRs, IPs, or hostnames
+--resume <file>             Resume an interrupted scan: skip target/ports already recorded, append new ones
 --exclude <list>            Comma-separated hosts, CIDRs, or names to leave out of the scan
 --profile safe-production   Apply conservative rate, timing, and non-evasive scan settings
 ```

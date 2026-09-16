@@ -111,6 +111,27 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	var allResults []TargetResult
 	started := time.Now()
 
+	// Resume support: when --resume names a file, results already recorded
+	// there are loaded as output and their target/port pairs are skipped,
+	// while every new result is appended so a later interruption can resume
+	// again. A failure to open it is fatal here -- silently ignoring it
+	// would rescan everything and, worse, not record progress this time
+	// either, defeating the flag the user explicitly asked for.
+	var cp *checkpoint
+	if e.opts.Resume != "" {
+		var err error
+		cp, err = openCheckpoint(e.opts.Resume)
+		if err != nil {
+			fmt.Printf("%s[!] Resume error: %v%s\n", config.Red, err, config.Reset)
+			return nil
+		}
+		allResults = append(allResults, cp.priorResults()...)
+		if len(allResults) > 0 {
+			fmt.Printf("%s[*] Resuming: %d result(s) loaded from %s, skipping those already scanned.%s\n",
+				config.White, len(allResults), e.opts.Resume, config.Reset)
+		}
+	}
+
 	// One shared pacer for both the fixed and the adaptive case, built the
 	// same way host discovery builds its own so --rate means one thing
 	// across both phases. A fixed rate is just an AIMD limiter pinned with
@@ -175,6 +196,9 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 		if e.opts.NoRandomize || numPorts == 0 {
 			for _, ip := range targets {
 				for _, port := range ports {
+					if cp.isDone(ip, port) {
+						continue
+					}
 					batch = append(batch, ScanJob{IP: ip, Port: port})
 					if len(batch) >= batchSize {
 						flush()
@@ -192,7 +216,11 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 				if !ok {
 					break
 				}
-				batch = append(batch, ScanJob{IP: targets[idx/numPorts], Port: ports[idx%numPorts]})
+				ip, port := targets[idx/numPorts], ports[idx%numPorts]
+				if cp.isDone(ip, port) {
+					continue
+				}
+				batch = append(batch, ScanJob{IP: ip, Port: port})
 				if len(batch) >= batchSize {
 					flush()
 				}
@@ -208,9 +236,13 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 		close(resultsChan)
 	}()
 
-	progress := Progress{Total: len(targets) * len(ports)}
+	// Prior results (from a resumed checkpoint) already count as completed
+	// against the full target*port total, so progress reflects the whole
+	// scan rather than restarting at zero.
+	progress := Progress{Total: len(targets) * len(ports), Completed: len(allResults)}
 	for res := range resultsChan {
 		allResults = append(allResults, res)
+		cp.record(res)
 		progress.Completed++
 		switch res.State {
 		case StateOpen:
@@ -227,6 +259,10 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 			}
 			onProgress(progress)
 		}
+	}
+
+	if err := cp.close(); err != nil {
+		fmt.Printf("%s[!] Warning: could not flush resume checkpoint: %v%s\n", config.Yellow, err, config.Reset)
 	}
 
 	if adaptive && limiter != nil {
