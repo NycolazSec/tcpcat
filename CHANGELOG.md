@@ -8,6 +8,20 @@ Full diffs for every release are available via GitHub's
 [compare view](https://github.com/NycolazSec/tcpcat/compare) and
 [Releases page](https://github.com/NycolazSec/tcpcat/releases).
 
+## [Unreleased]
+
+### Added
+- UDP scanning now sends real protocol payloads (`internal/scan/udp_payloads.go`).
+  The scanner used to fire an empty datagram, which almost no UDP service
+  answers, so nearly every port came back `open|filtered` -- a non-answer.
+  It now sends a valid request for the service a port is known to carry
+  (DNS/53, NTP/123, SNMP/161, NetBIOS/137, IKE/500, SSDP/1900, mDNS/5353,
+  SIP/5060, RPC portmapper/111, TFTP/69), turning most of those into a
+  definite `open` and, when the reply matches the protocol's signature, a
+  free service identification (e.g. `open (dns)`). `--data-string` still
+  overrides the built-in payload, and a port with no known probe falls back
+  to the previous empty-datagram behaviour.
+
 ## [1.1.0-beta.1] - 2026-09-13
 
 ### Added
