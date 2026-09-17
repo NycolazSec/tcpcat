@@ -87,7 +87,7 @@ func checkHeartbleed(ip string, port int) (bool, error) {
 	header := make([]byte, 5)
 	n, err := conn.Read(header)
 	if err != nil || n < 5 {
-		return false, fmt.Errorf("n'a pas pu lire l'en-tête de la réponse heartbeat")
+		return false, fmt.Errorf("could not read the heartbeat response header")
 	}
 
 	if header[0] != 0x18 {

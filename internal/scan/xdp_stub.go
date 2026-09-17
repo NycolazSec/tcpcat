@@ -13,7 +13,7 @@ import (
 var GlobalXsk any
 
 func InitXDPEngine() (any, error) {
-	return nil, fmt.Errorf("le moteur AF_XDP/eBPF n'est supporté que sur Linux")
+	return nil, fmt.Errorf("the AF_XDP/eBPF engine is only supported on Linux")
 }
 
 func ShutdownXDPEngine() {

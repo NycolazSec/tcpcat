@@ -61,7 +61,7 @@ func Run(target map[string]interface{}) map[string]string {
 		}
 
 		if strings.Contains(string(body), "VULNERABLE_SHELLSHOCK_TEST") {
-			output["CVE-2014-6271"] = fmt.Sprintf("VULNERABLE - Shellshock détecté sur %s", path)
+			output["CVE-2014-6271"] = fmt.Sprintf("VULNERABLE - Shellshock detected on %s", path)
 			return output
 		}
 	}

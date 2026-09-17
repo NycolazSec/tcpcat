@@ -202,7 +202,7 @@ func ParseFlags() (*Options, error) {
 				i++
 			} else if valueFlags[arg] {
 
-				fmt.Printf("%s[!] Avertissement : Le drapeau %s attend une valeur mais aucune n'a été fournie. Il sera ignoré.%s\n", Yellow, arg, Reset)
+				fmt.Printf("%s[!] Warning: flag %s expects a value but none was provided. It will be ignored.%s\n", Yellow, arg, Reset)
 			}
 		} else {
 			posArgs = append(posArgs, arg)

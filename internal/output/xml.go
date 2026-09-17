@@ -147,7 +147,7 @@ func ExportXML(filePath string, target string, results []scan.TargetResult, dura
 
 	data, err := xml.MarshalIndent(report, "", "  ")
 	if err != nil {
-		return fmt.Errorf("erreur de sérialisation XML: %w", err)
+		return fmt.Errorf("XML serialization error: %w", err)
 	}
 
 	content := append([]byte(xml.Header), data...)

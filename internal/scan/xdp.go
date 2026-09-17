@@ -203,7 +203,7 @@ func InitXDPEngine() (any, error) {
 			if q == 0 {
 				_ = l.Close()
 				coll.Close()
-				return nil, fmt.Errorf("échec du pontage FD dans xsks_map: %v", err)
+				return nil, fmt.Errorf("failed to bridge FD into xsks_map: %v", err)
 			}
 			log.Printf("[!] Could not map AF_XDP socket for queue %d into xsks_map (%v); continuing with %d queue(s)", q, err, len(xdpSockets))
 			break
@@ -212,7 +212,7 @@ func InitXDPEngine() (any, error) {
 		xdpSockets = append(xdpSockets, xsk)
 	}
 
-	log.Printf("[+] Pont Zéro-Copie (Ring Buffer) établi sur %d file(s) RX. Moteur prêt à l'emploi.", len(xdpSockets))
+	log.Printf("[+] Zero-copy bridge (ring buffer) established on %d RX queue(s). Engine ready.", len(xdpSockets))
 	logNAPITuningHint(ifaceName)
 
 	xdpRunning = true
@@ -233,9 +233,9 @@ func ShutdownXDPEngine() {
 	xdpRunning = false
 	if xdpLink != nil {
 		if err := xdpLink.Close(); err != nil {
-			log.Printf("[!] Erreur lors du détachement du hook XDP: %v", err)
+			log.Printf("[!] Error while detaching the XDP hook: %v", err)
 		} else {
-			log.Println("[-] Hook eBPF XDP détaché avec succès.")
+			log.Println("[-] eBPF XDP hook detached successfully.")
 		}
 	}
 	for _, xsk := range xdpSockets {
