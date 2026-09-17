@@ -23,6 +23,19 @@ Full diffs for every release are available via GitHub's
   unpinnable loop still runs. The interface's system-wide NAPI tunables
   (`napi_defer_hard_irqs`, `gro_flush_timeout`) are surfaced as a hint
   rather than silently rewritten, since they are the operator's NIC.
+- AF_XDP scan probes now wake on their reply instead of polling
+  (`internal/scan/xdp_waiters.go`). Each probe published its result into a
+  shared map that the scanning goroutine polled on a 5 ms timer, which
+  floored every probe's latency at ~5 ms even when the reply came back in
+  0.2 ms -- so against same-subnet hosts, throughput was capped near 200
+  probes/sec/goroutine by the poll granularity alone, not the wire. Probes
+  now register a channel keyed by target before transmitting (mirroring the
+  raw-socket path's rxWaiters), and the RX loop delivers the reply straight
+  into it the instant a matching frame arrives; a local reply completes
+  immediately. Registering before the transmit closes the race where a
+  sub-millisecond reply arrives before the waiter exists, and a reply with
+  no waiter is now dropped rather than leaked into the map forever as the
+  old code did on every timed-out probe.
 - UDP scanning now sends real protocol payloads (`internal/scan/udp_payloads.go`).
   The scanner used to fire an empty datagram, which almost no UDP service
   answers, so nearly every port came back `open|filtered` -- a non-answer.

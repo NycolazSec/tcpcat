@@ -30,7 +30,6 @@ var localIP net.IP
 var localSubnet *net.IPNet // the interface's own network, for deciding when ARP (rather than routing through the gateway) can reach a discovery target directly
 
 var xdpTxLock sync.Mutex
-var xdpResults sync.Map
 var xdpDiscovery sync.Map // IP string -> true, populated by xdpRxLoop for host discovery
 var xdpRunning bool
 var xdpSockets []*xdp.Socket // one per bound RX queue; xdpSockets[0] is also GlobalXsk, the sole TX path
@@ -249,7 +248,7 @@ func ShutdownXDPEngine() {
 // InitXDPEngine starts one of these per queue (each bound to its own
 // xsks_map slot) since a NIC's RSS hashing can steer replies to any queue,
 // not just the one the scan's own probes happen to transmit from; all of
-// them feed the same shared xdpResults/xdpDiscovery maps.
+// them deliver into the same shared xdpWaiters channels and xdpDiscovery map.
 func xdpRxLoop(xsk *xdp.Socket, cpu int) {
 	// Pin this loop to a stable core before draining anything (see
 	// pinToCPU). Best-effort: an unpinned loop still works.
@@ -312,7 +311,7 @@ func xdpRxLoop(xsk *xdp.Socket, cpu int) {
 				if (tcpFlags & 0x12) == 0x12 {
 					osSig := osdetect.GenerateSignature(frame, ipStart, tcpStart)
 					osName, osConfidence := osdetect.ClassifyOS(frame, ipStart, tcpStart)
-					xdpResults.Store(key, xdpResponse{
+					deliverXDPResult(key, xdpResponse{
 						state:        StateOpen,
 						osSig:        osSig,
 						osName:       osName,
@@ -324,7 +323,7 @@ func xdpRxLoop(xsk *xdp.Socket, cpu int) {
 					ackSeq := binary.BigEndian.Uint32(frame[tcpStart+8 : tcpStart+12])
 					sendRST(xsk, ourIP, srcIP, ourPort, pktSrcPort, ackSeq)
 				} else if (tcpFlags & 0x04) != 0 {
-					xdpResults.Store(key, xdpResponse{state: StateClosed})
+					deliverXDPResult(key, xdpResponse{state: StateClosed})
 				}
 
 			case 17:
@@ -334,7 +333,7 @@ func xdpRxLoop(xsk *xdp.Socket, cpu int) {
 				}
 				pktSrcPort := binary.BigEndian.Uint16(frame[udpStart : udpStart+2])
 				key := fmt.Sprintf("%s:%d", srcIP.String(), pktSrcPort)
-				xdpResults.Store(key, xdpResponse{state: StateOpen})
+				deliverXDPResult(key, xdpResponse{state: StateOpen})
 
 			case 1:
 				icmpStart := ipStart + ipHeaderLen
@@ -358,7 +357,7 @@ func xdpRxLoop(xsk *xdp.Socket, cpu int) {
 					originalDstPort := binary.BigEndian.Uint16(frame[originalUDPStart+2 : originalUDPStart+4])
 
 					key := fmt.Sprintf("%s:%d", originalDstIP.String(), originalDstPort)
-					xdpResults.Store(key, xdpResponse{state: StateClosed})
+					deliverXDPResult(key, xdpResponse{state: StateClosed})
 				}
 			}
 		}
@@ -494,7 +493,20 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 	attempts := probeAttempts(opts)
 	var lastLatency time.Duration
 
+	// Register the waiter before the first transmit: a same-subnet SYN-ACK
+	// can return in under a millisecond, before this goroutine would reach
+	// a poll, and the RX loop drops any reply with no waiter.
+	ch, release := registerXDPWaiter(key)
+	defer release()
+
 	for attempt := 0; attempt < attempts; attempt++ {
+		// Drop any reply left over from a previous attempt so this attempt's
+		// timeout can't be satisfied by a stale frame.
+		select {
+		case <-ch:
+		default:
+		}
+
 		t0 := time.Now()
 		if !transmitXDPFrames(xsk, framesToSend) {
 			return TargetResult{
@@ -505,34 +517,31 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 			}
 		}
 
-		deadline := time.Now().Add(attemptTimeout)
-		for time.Now().Before(deadline) {
-			if val, ok := xdpResults.LoadAndDelete(key); ok {
-				resp := val.(xdpResponse)
-				state := resp.state
-				reason := "SYN-ACK Received (AF_XDP)"
-				latency := time.Since(t0)
-				if rtt != nil {
-					rtt.Sample(latency)
-				}
-
-				osName := resp.osName
-				if state == StateOpen && resp.osSig != "" {
-					reason = fmt.Sprintf("SYN-ACK [%s]", resp.osSig)
-					if osName != "" {
-						reason = fmt.Sprintf("%s, guessed OS: %s (%.0f%% confidence)", reason, osName, resp.osConfidence*100)
-					}
-				} else if state == StateClosed {
-					reason = "RST Received (AF_XDP)"
-				}
-				return TargetResult{
-					IP: ip, Port: port, State: state, Reason: reason,
-					OS: osName, Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
-				}
+		select {
+		case resp := <-ch:
+			state := resp.state
+			reason := "SYN-ACK Received (AF_XDP)"
+			latency := time.Since(t0)
+			if rtt != nil {
+				rtt.Sample(latency)
 			}
-			time.Sleep(5 * time.Millisecond)
+
+			osName := resp.osName
+			if state == StateOpen && resp.osSig != "" {
+				reason = fmt.Sprintf("SYN-ACK [%s]", resp.osSig)
+				if osName != "" {
+					reason = fmt.Sprintf("%s, guessed OS: %s (%.0f%% confidence)", reason, osName, resp.osConfidence*100)
+				}
+			} else if state == StateClosed {
+				reason = "RST Received (AF_XDP)"
+			}
+			return TargetResult{
+				IP: ip, Port: port, State: state, Reason: reason,
+				OS: osName, Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
+			}
+		case <-time.After(attemptTimeout):
+			lastLatency = time.Since(t0)
 		}
-		lastLatency = time.Since(t0)
 	}
 
 	return TargetResult{
@@ -627,7 +636,17 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 	attempts := probeAttempts(opts)
 	var lastLatency time.Duration
 
+	// Register before transmit (see ScanXDPPort): the RX loop delivers a
+	// reply straight into this channel and drops it if no waiter exists.
+	ch, release := registerXDPWaiter(key)
+	defer release()
+
 	for attempt := 0; attempt < attempts; attempt++ {
+		select {
+		case <-ch:
+		default:
+		}
+
 		t0 := time.Now()
 		if !transmitXDPFrames(xsk, framesToSend) {
 			return TargetResult{
@@ -638,30 +657,27 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 			}
 		}
 
-		deadline := time.Now().Add(attemptTimeout)
-		for time.Now().Before(deadline) {
-			if val, ok := xdpResults.LoadAndDelete(key); ok {
-				resp := val.(xdpResponse)
-				state := resp.state
-				latency := time.Since(t0)
-				if rtt != nil {
-					rtt.Sample(latency)
-				}
-				var reason string
-				switch state {
-				case StateOpen:
-					reason = "UDP Response Received (AF_XDP)"
-				case StateClosed:
-					reason = "ICMP Port Unreachable (AF_XDP)"
-				}
-				return TargetResult{
-					IP: ip, Port: port, State: state, Reason: reason,
-					Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
-				}
+		select {
+		case resp := <-ch:
+			state := resp.state
+			latency := time.Since(t0)
+			if rtt != nil {
+				rtt.Sample(latency)
 			}
-			time.Sleep(5 * time.Millisecond)
+			var reason string
+			switch state {
+			case StateOpen:
+				reason = "UDP Response Received (AF_XDP)"
+			case StateClosed:
+				reason = "ICMP Port Unreachable (AF_XDP)"
+			}
+			return TargetResult{
+				IP: ip, Port: port, State: state, Reason: reason,
+				Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
+			}
+		case <-time.After(attemptTimeout):
+			lastLatency = time.Since(t0)
 		}
-		lastLatency = time.Since(t0)
 	}
 
 	return TargetResult{
