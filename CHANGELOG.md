@@ -10,6 +10,8 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+## [1.1.0-beta.2] - 2026-09-17
+
 ### Added
 - AF_XDP receive path now uses busy-polling and per-queue CPU pinning
   (`internal/scan/xdp_busypoll.go`). Each XSK socket is switched into
@@ -65,6 +67,13 @@ Full diffs for every release are available via GitHub's
   product name and version, and a generic `ftp`/`smtp` with no version
   matches nothing. An unrecognised banner still falls back to the generic
   protocol name, so nothing regresses.
+
+### Changed
+- All console output is now English. A handful of user-facing log and error
+  strings were still French (the XDP engine's zero-copy/hook-detach lines,
+  the flag-value warning, the XML serialization error, the Linux-only AF_XDP
+  error, and two example-script strings), so a scan printed a mix of both
+  languages; they are now consistent.
 
 ## [1.1.0-beta.1] - 2026-09-13
 
