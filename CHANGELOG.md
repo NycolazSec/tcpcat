@@ -11,6 +11,18 @@ Full diffs for every release are available via GitHub's
 ## [Unreleased]
 
 ### Added
+- AF_XDP receive path now uses busy-polling and per-queue CPU pinning
+  (`internal/scan/xdp_busypoll.go`). Each XSK socket is switched into
+  preferred busy-poll mode (`SO_PREFER_BUSY_POLL` + `SO_BUSY_POLL` +
+  `SO_BUSY_POLL_BUDGET`), and each per-queue RX goroutine is locked to a
+  stable core (`runtime.LockOSThread` + `SchedSetaffinity`). At the
+  multi-Mpps rates a SYN sweep produces this keeps the RX ring from
+  overflowing (a dropped reply reads as a filtered port) and keeps CPU off
+  the softirq path. All of it is best-effort: the sockopts touch only
+  tcpcat's own fd and are skipped on kernels older than 5.11, and an
+  unpinnable loop still runs. The interface's system-wide NAPI tunables
+  (`napi_defer_hard_irqs`, `gro_flush_timeout`) are surfaced as a hint
+  rather than silently rewritten, since they are the operator's NIC.
 - UDP scanning now sends real protocol payloads (`internal/scan/udp_payloads.go`).
   The scanner used to fire an empty datagram, which almost no UDP service
   answers, so nearly every port came back `open|filtered` -- a non-answer.

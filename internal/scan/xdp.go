@@ -193,6 +193,10 @@ func InitXDPEngine() (any, error) {
 			break
 		}
 
+		// Switch this queue's socket into busy-poll before it is mapped in
+		// and the RX loop starts draining it.
+		enableBusyPoll(xsk.FD())
+
 		key := uint32(q)
 		val := uint32(xsk.FD())
 		if err := xskMap.Put(&key, &val); err != nil {
@@ -210,10 +214,14 @@ func InitXDPEngine() (any, error) {
 	}
 
 	log.Printf("[+] Pont Zéro-Copie (Ring Buffer) établi sur %d file(s) RX. Moteur prêt à l'emploi.", len(xdpSockets))
+	logNAPITuningHint(ifaceName)
 
 	xdpRunning = true
-	for _, xsk := range xdpSockets {
-		go xdpRxLoop(xsk)
+	for i, xsk := range xdpSockets {
+		// One RX goroutine per queue, each pinned to its own core (queue i
+		// -> CPU i, wrapping if there are more queues than cores) so a
+		// queue's replies drain on a stable core instead of migrating.
+		go xdpRxLoop(xsk, i)
 	}
 
 	return xdpSockets[0], nil
@@ -242,7 +250,11 @@ func ShutdownXDPEngine() {
 // xsks_map slot) since a NIC's RSS hashing can steer replies to any queue,
 // not just the one the scan's own probes happen to transmit from; all of
 // them feed the same shared xdpResults/xdpDiscovery maps.
-func xdpRxLoop(xsk *xdp.Socket) {
+func xdpRxLoop(xsk *xdp.Socket, cpu int) {
+	// Pin this loop to a stable core before draining anything (see
+	// pinToCPU). Best-effort: an unpinned loop still works.
+	pinToCPU(cpu)
+
 	for xdpRunning {
 		freeFill := xsk.NumFreeFillSlots()
 		if freeFill > 0 {
