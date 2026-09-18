@@ -195,6 +195,45 @@ func ParseTCPSignature(frame []byte, ipStart, tcpStart int) (TCPSignature, bool)
 	return sig, true
 }
 
+// HasTCPOptionKind reports whether the TCP header at tcpStart carries a TCP
+// option of the given kind. It walks the option area the same way
+// ParseTCPSignature does -- honoring EOL (0), NOP (1), and the length byte
+// on every other option -- so a malformed or truncated option list can't
+// run it off the end of the frame. Used to spot an MP_CAPABLE (kind 30)
+// echoed in a SYN/ACK, which marks a Multipath-TCP-capable target.
+func HasTCPOptionKind(frame []byte, ipStart, tcpStart int, kind byte) bool {
+	if len(frame) < tcpStart+20 {
+		return false
+	}
+	dataOffset := int(frame[tcpStart+12]>>4) * 4
+	if dataOffset < 20 || len(frame) < tcpStart+dataOffset {
+		return false
+	}
+	opt := frame[tcpStart+20 : tcpStart+dataOffset]
+	for i := 0; i < len(opt); {
+		k := opt[i]
+		if k == kind {
+			return true
+		}
+		if k == 0 { // End of Option List
+			return false
+		}
+		if k == 1 { // NOP
+			i++
+			continue
+		}
+		if i+1 >= len(opt) {
+			return false
+		}
+		length := int(opt[i+1])
+		if length < 2 {
+			return false
+		}
+		i += length
+	}
+	return false
+}
+
 // optOrderSimilarity scores how closely two option orderings match as the
 // fraction of the shorter list that appears, in the same order, as a
 // subsequence of the longer one. 1.0 is an exact match, 0.0 shares nothing.

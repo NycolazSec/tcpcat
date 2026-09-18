@@ -66,3 +66,37 @@ func TestWriteSYNOptionsAdvertisesNegotiatedOptions(t *testing.T) {
 		}
 	}
 }
+
+func TestMPTCPOptionBlock(t *testing.T) {
+	if synMPTCPOptionsLen != synOptionsLen+mpCapableLen {
+		t.Fatalf("synMPTCPOptionsLen = %d, want synOptionsLen+mpCapableLen = %d", synMPTCPOptionsLen, synOptionsLen+mpCapableLen)
+	}
+	if synMPTCPOptionsLen != 32 {
+		t.Fatalf("synMPTCPOptionsLen = %d, want 32 (20 base + 12 MP_CAPABLE)", synMPTCPOptionsLen)
+	}
+	if synMPTCPHeaderLen%4 != 0 {
+		t.Errorf("synMPTCPHeaderLen = %d, want a multiple of 4", synMPTCPHeaderLen)
+	}
+	if got := byte(synMPTCPDataOffset); got>>4 != synMPTCPHeaderLen/4 {
+		t.Errorf("synMPTCPDataOffset high nibble = %d words, want %d", got>>4, synMPTCPHeaderLen/4)
+	}
+
+	buf := make([]byte, synMPTCPOptionsLen)
+	writeSYNOptionsMPTCP(buf)
+
+	// The first 20 bytes are the standard block, TSval stamped.
+	if binary.BigEndian.Uint32(buf[tsvalOffset:tsvalOffset+4]) == 0 {
+		t.Error("TSval = 0, want a per-probe timestamp in the base block")
+	}
+	// The MP_CAPABLE option (kind 30) follows immediately.
+	if buf[synOptionsLen] != mpCapableKind {
+		t.Errorf("byte %d = %d, want MP_CAPABLE kind %d", synOptionsLen, buf[synOptionsLen], mpCapableKind)
+	}
+	if buf[synOptionsLen+1] != mpCapableLen {
+		t.Errorf("MP_CAPABLE length = %d, want %d", buf[synOptionsLen+1], mpCapableLen)
+	}
+	// The 8-byte sender key must be stamped, not left zero.
+	if binary.BigEndian.Uint64(buf[synOptionsLen+4:synMPTCPOptionsLen]) == 0 {
+		t.Error("MP_CAPABLE sender key = 0, want a per-probe value")
+	}
+}

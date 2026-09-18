@@ -47,7 +47,7 @@ func DiscoverHostsXDP(ips []string, timeout time.Duration, limiter *AdaptiveRate
 
 		frames := [][]byte{
 			constructICMPEchoFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, icmpID, uint16(i)),
-			constructSYNFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, discoverySrcPort, 443),
+			constructSYNFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, discoverySrcPort, 443, false),
 			constructACKFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, discoverySrcPort, 80),
 		}
 		if localSubnet != nil && localSubnet.Contains(targetIP) {

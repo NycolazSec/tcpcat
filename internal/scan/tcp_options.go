@@ -45,3 +45,40 @@ func writeSYNOptions(dst []byte) {
 	copy(dst[:synOptionsLen], synOptions)
 	binary.BigEndian.PutUint32(dst[tsvalOffset:tsvalOffset+4], uint32(time.Now().UnixMilli()))
 }
+
+// mpCapableOption is a Multipath TCP MP_CAPABLE option (kind 30, RFC 8684)
+// for a SYN: subtype 0, version 1, carrying an 8-byte sender key. It is
+// appended to the SYN option block only under --mptcp.
+//
+// A target that also speaks MPTCP answers with its own MP_CAPABLE in the
+// SYN/ACK, so the mere presence of option 30 in the reply identifies a
+// multipath-capable stack -- an OS-default on recent Apple/Android devices
+// and on operator and CDN front ends (Cloudflare). It costs no extra
+// bandwidth: the option rides in the SYN the scan already sends, and the
+// handshake is never completed (the key's value is irrelevant, only the
+// option's presence in the reply matters).
+var mpCapableOption = []byte{
+	30,                     // kind: MPTCP
+	12,                     // length
+	0x01,                   // subtype 0 (MP_CAPABLE, high nibble) | version 1 (low nibble)
+	0x01,                   // flags: H = HMAC-SHA256, the RFC 8684 v1 baseline
+	0, 0, 0, 0, 0, 0, 0, 0, // sender key, stamped per probe
+}
+
+const (
+	mpCapableLen       = 12
+	mpCapableKind      = 30
+	synMPTCPOptionsLen = synOptionsLen + mpCapableLen // 32 bytes, 4-byte aligned
+	synMPTCPHeaderLen  = 20 + synMPTCPOptionsLen      // 52 bytes = 13 words
+	synMPTCPDataOffset = (synMPTCPHeaderLen / 4) << 4 // data-offset nibble
+)
+
+// writeSYNOptionsMPTCP writes the standard SYN options followed by an
+// MP_CAPABLE option, stamping the per-probe TSval and a fresh MP_CAPABLE
+// sender key. dst must be at least synMPTCPOptionsLen bytes. Both blocks
+// are 4-byte aligned, so the combined header needs no padding.
+func writeSYNOptionsMPTCP(dst []byte) {
+	writeSYNOptions(dst[:synOptionsLen])
+	copy(dst[synOptionsLen:synMPTCPOptionsLen], mpCapableOption)
+	binary.BigEndian.PutUint64(dst[synOptionsLen+4:synMPTCPOptionsLen], uint64(time.Now().UnixNano()))
+}

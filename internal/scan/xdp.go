@@ -316,6 +316,12 @@ func xdpRxLoop(xsk *xdp.Socket, cpu int) {
 						osSig:        osSig,
 						osName:       osName,
 						osConfidence: osConfidence,
+						// A SYN/ACK echoing MP_CAPABLE (kind 30) marks a
+						// Multipath-TCP-capable target. Only meaningful when
+						// --mptcp put the option in our SYN in the first place,
+						// but reading it is free and never false-positives:
+						// a stack that didn't negotiate MPTCP won't echo it.
+						mptcp: osdetect.HasTCPOptionKind(frame, ipStart, tcpStart, mpCapableKind),
 					})
 
 					ourIP := net.IP(frame[ipStart+16 : ipStart+20])
@@ -369,6 +375,7 @@ type xdpResponse struct {
 	osSig        string
 	osName       string
 	osConfidence float64
+	mptcp        bool
 }
 
 // sendRST closes out the half-open connection a SYN scan leaves behind
@@ -443,7 +450,7 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 			srcPort := getSrcPort(opts)
 			for _, decoyIP := range decoys {
 				go func(decoyIP net.IP) {
-					frame := constructSYNFrame(localMAC, gatewayMAC, decoyIP.To4(), targetIP.To4(), srcPort, uint16(port))
+					frame := constructSYNFrame(localMAC, gatewayMAC, decoyIP.To4(), targetIP.To4(), srcPort, uint16(port), false)
 
 					xdpTxLock.Lock()
 					defer xdpTxLock.Unlock()
@@ -475,7 +482,7 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 	if relayIP != nil {
 		log.Printf("[*] Using relay server %s for IP-in-IP encapsulation.", relayIP.String())
 	}
-	rawFrame := constructSYNFrame(localMAC, gatewayMAC, effectiveSrcIP, targetIP, srcPort, uint16(port))
+	rawFrame := constructSYNFrame(localMAC, gatewayMAC, effectiveSrcIP, targetIP, srcPort, uint16(port), opts != nil && opts.MPTCP)
 
 	var framesToSend [][]byte
 	if opts != nil && opts.Fragment {
@@ -535,8 +542,11 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 			} else if state == StateClosed {
 				reason = "RST Received (AF_XDP)"
 			}
+			if resp.mptcp {
+				reason += " [MPTCP]"
+			}
 			return TargetResult{
-				IP: ip, Port: port, State: state, Reason: reason,
+				IP: ip, Port: port, State: state, Reason: reason, MPTCP: resp.mptcp,
 				OS: osName, Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
 			}
 		case <-time.After(attemptTimeout):

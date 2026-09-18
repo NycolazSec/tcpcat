@@ -38,6 +38,7 @@ type rawTCPScanner struct {
 	dstPort int
 	timeout time.Duration
 	relayIP net.IP
+	mptcp   bool // advertise MP_CAPABLE (kind 30) in the SYN, for MPTCP detection
 	t0      time.Time
 
 	rxKey  string
@@ -201,6 +202,7 @@ func newRawTCPScanner(targetIP string, port int, opts *config.Options, timeout t
 		dstPort: port,
 		timeout: timeout,
 		relayIP: net.ParseIP(opts.RelayServer),
+		mptcp:   opts != nil && opts.MPTCP,
 		rxKey:   key,
 		rxChan:  ch,
 	}, nil
@@ -223,6 +225,9 @@ func (s *rawTCPScanner) Send(flags byte) error {
 	headerLen := 20
 	if isSYN {
 		headerLen = synTCPHeaderLen
+		if s.mptcp {
+			headerLen = synMPTCPHeaderLen
+		}
 	}
 
 	tcpHeader := make([]byte, headerLen)
@@ -232,8 +237,13 @@ func (s *rawTCPScanner) Send(flags byte) error {
 	binary.BigEndian.PutUint32(tcpHeader[8:12], 1)
 	tcpHeader[12] = 0x50
 	if isSYN {
-		tcpHeader[12] = synDataOffset
-		writeSYNOptions(tcpHeader[20:])
+		if s.mptcp {
+			tcpHeader[12] = synMPTCPDataOffset
+			writeSYNOptionsMPTCP(tcpHeader[20:])
+		} else {
+			tcpHeader[12] = synDataOffset
+			writeSYNOptions(tcpHeader[20:])
+		}
 	}
 	tcpHeader[13] = flags
 	binary.BigEndian.PutUint16(tcpHeader[14:16], 65535)

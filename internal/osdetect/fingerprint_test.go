@@ -151,3 +151,29 @@ func TestOptOrderSimilarity(t *testing.T) {
 		}
 	}
 }
+
+func TestHasTCPOptionKind(t *testing.T) {
+	const ipStart, tcpStart = 14, 34
+
+	// A SYN/ACK whose options include MP_CAPABLE (kind 30, len 12).
+	withMP := buildSynAckFrame(64, 65535, []byte{
+		2, 4, 0x05, 0xB4, // MSS
+		30, 12, 0x01, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, // MP_CAPABLE
+	})
+	if !HasTCPOptionKind(withMP, ipStart, tcpStart, 30) {
+		t.Error("MP_CAPABLE present but HasTCPOptionKind returned false")
+	}
+
+	// A normal SYN/ACK without MP_CAPABLE must not false-positive.
+	withoutMP := buildSynAckFrame(64, 65535, []byte{
+		2, 4, 0x05, 0xB4, 4, 2, 1, 3, 3, 7,
+	})
+	if HasTCPOptionKind(withoutMP, ipStart, tcpStart, 30) {
+		t.Error("no MP_CAPABLE present but HasTCPOptionKind returned true")
+	}
+
+	// A truncated/garbage option area must not run off the end or panic.
+	if HasTCPOptionKind(withoutMP, ipStart, tcpStart, 99) {
+		t.Error("kind 99 is absent; want false")
+	}
+}

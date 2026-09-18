@@ -40,8 +40,18 @@ const (
 	synFrameLen   = 14 + synIPTotalLen   // + Ethernet header
 )
 
-func constructSYNFrame(srcMAC, dstMAC net.HardwareAddr, srcIP, dstIP net.IP, srcPort, dstPort uint16) []byte {
-	frame := make([]byte, synFrameLen)
+func constructSYNFrame(srcMAC, dstMAC net.HardwareAddr, srcIP, dstIP net.IP, srcPort, dstPort uint16, mptcp bool) []byte {
+	// Header size varies only with --mptcp; for the default path these are
+	// exactly the fixed constants, so a non-MPTCP frame is byte-identical
+	// to before.
+	tcpHdrLen := synTCPHeaderLen
+	dataOffset := synDataOffset
+	if mptcp {
+		tcpHdrLen = synMPTCPHeaderLen
+		dataOffset = synMPTCPDataOffset
+	}
+	ipTotalLen := 20 + tcpHdrLen
+	frame := make([]byte, 14+ipTotalLen)
 
 	copy(frame[0:6], dstMAC)
 	copy(frame[6:12], srcMAC)
@@ -50,7 +60,7 @@ func constructSYNFrame(srcMAC, dstMAC net.HardwareAddr, srcIP, dstIP net.IP, src
 	ipStart := 14
 	frame[ipStart] = 0x45
 	frame[ipStart+1] = 0x00
-	binary.BigEndian.PutUint16(frame[ipStart+2:ipStart+4], synIPTotalLen)
+	binary.BigEndian.PutUint16(frame[ipStart+2:ipStart+4], uint16(ipTotalLen))
 	binary.BigEndian.PutUint16(frame[ipStart+4:ipStart+6], 0x1234)
 	binary.BigEndian.PutUint16(frame[ipStart+6:ipStart+8], 0x4000)
 	frame[ipStart+8] = 64
@@ -67,22 +77,26 @@ func constructSYNFrame(srcMAC, dstMAC net.HardwareAddr, srcIP, dstIP net.IP, src
 	binary.BigEndian.PutUint16(frame[tcpStart+2:tcpStart+4], dstPort)
 	binary.BigEndian.PutUint32(frame[tcpStart+4:tcpStart+8], 0x11223344)
 	binary.BigEndian.PutUint32(frame[tcpStart+8:tcpStart+12], 0)
-	frame[tcpStart+12] = synDataOffset
+	frame[tcpStart+12] = byte(dataOffset)
 	frame[tcpStart+13] = 0x02
 	binary.BigEndian.PutUint16(frame[tcpStart+14:tcpStart+16], 64240)
 	binary.BigEndian.PutUint16(frame[tcpStart+16:tcpStart+18], 0)
 	binary.BigEndian.PutUint16(frame[tcpStart+18:tcpStart+20], 0)
 
-	writeSYNOptions(frame[tcpStart+20 : tcpStart+synTCPHeaderLen])
+	if mptcp {
+		writeSYNOptionsMPTCP(frame[tcpStart+20 : tcpStart+tcpHdrLen])
+	} else {
+		writeSYNOptions(frame[tcpStart+20 : tcpStart+tcpHdrLen])
+	}
 
 	pseudoHeader := make([]byte, 12)
 	copy(pseudoHeader[0:4], srcIP.To4())
 	copy(pseudoHeader[4:8], dstIP.To4())
 	pseudoHeader[8] = 0
 	pseudoHeader[9] = 6
-	binary.BigEndian.PutUint16(pseudoHeader[10:12], synTCPHeaderLen)
+	binary.BigEndian.PutUint16(pseudoHeader[10:12], uint16(tcpHdrLen))
 
-	tcpChecksum := tcpChecksumCalc(pseudoHeader, frame[tcpStart:tcpStart+synTCPHeaderLen])
+	tcpChecksum := tcpChecksumCalc(pseudoHeader, frame[tcpStart:tcpStart+tcpHdrLen])
 	binary.BigEndian.PutUint16(frame[tcpStart+16:tcpStart+18], tcpChecksum)
 
 	return frame

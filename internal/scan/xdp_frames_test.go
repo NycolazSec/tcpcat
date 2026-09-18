@@ -77,7 +77,7 @@ func TestConstructSYNFrameAdvertisesTCPOptions(t *testing.T) {
 		t.Fatalf("ParseMAC: %v", err)
 	}
 
-	frame := constructSYNFrame(srcMAC, dstMAC, net.IP{10, 0, 0, 1}, net.IP{10, 0, 0, 2}, 40000, 443)
+	frame := constructSYNFrame(srcMAC, dstMAC, net.IP{10, 0, 0, 1}, net.IP{10, 0, 0, 2}, 40000, 443, false)
 
 	if len(frame) != synFrameLen {
 		t.Fatalf("frame length = %d, want %d", len(frame), synFrameLen)
@@ -138,7 +138,7 @@ func TestConstructSYNFrameChecksumCoversOptions(t *testing.T) {
 	dstMAC, _ := net.ParseMAC("11:22:33:44:55:66")
 	srcIP, dstIP := net.IP{10, 0, 0, 1}, net.IP{10, 0, 0, 2}
 
-	frame := constructSYNFrame(srcMAC, dstMAC, srcIP, dstIP, 40000, 443)
+	frame := constructSYNFrame(srcMAC, dstMAC, srcIP, dstIP, 40000, 443, false)
 	tcpStart := 34
 
 	// Recomputing over the full 40-byte header including the stored checksum
@@ -153,4 +153,59 @@ func TestConstructSYNFrameChecksumCoversOptions(t *testing.T) {
 	if got := tcpChecksumCalc(pseudo, frame[tcpStart:tcpStart+synTCPHeaderLen]); got != 0 {
 		t.Errorf("recomputed TCP checksum = %#x, want 0 (checksum must cover the options)", got)
 	}
+}
+
+func TestConstructSYNFrameMPTCP(t *testing.T) {
+	srcMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
+	dstMAC, _ := net.ParseMAC("11:22:33:44:55:66")
+	srcIP, dstIP := net.IP{10, 0, 0, 1}, net.IP{10, 0, 0, 2}
+
+	frame := constructSYNFrame(srcMAC, dstMAC, srcIP, dstIP, 40000, 443, true)
+	tcpStart := 34
+
+	// The MPTCP frame is 12 bytes longer than the default (MP_CAPABLE).
+	wantLen := 14 + 20 + synMPTCPHeaderLen
+	if len(frame) != wantLen {
+		t.Fatalf("frame length = %d, want %d", len(frame), wantLen)
+	}
+	if got := frame[tcpStart+12] >> 4; got != synMPTCPHeaderLen/4 {
+		t.Errorf("data offset = %d words, want %d", got, synMPTCPHeaderLen/4)
+	}
+
+	// MP_CAPABLE (kind 30) must be present in the options.
+	opts := frame[tcpStart+20 : tcpStart+synMPTCPHeaderLen]
+	if !containsOptionKind(opts, 30) {
+		t.Error("MPTCP frame does not carry MP_CAPABLE (kind 30)")
+	}
+
+	// The checksum must cover the full 52-byte header including MP_CAPABLE.
+	pseudo := make([]byte, 12)
+	copy(pseudo[0:4], srcIP.To4())
+	copy(pseudo[4:8], dstIP.To4())
+	pseudo[9] = 6
+	binary.BigEndian.PutUint16(pseudo[10:12], synMPTCPHeaderLen)
+	if got := tcpChecksumCalc(pseudo, frame[tcpStart:tcpStart+synMPTCPHeaderLen]); got != 0 {
+		t.Errorf("recomputed TCP checksum = %#x, want 0", got)
+	}
+}
+
+func containsOptionKind(opts []byte, kind byte) bool {
+	for i := 0; i < len(opts); {
+		k := opts[i]
+		if k == kind {
+			return true
+		}
+		if k == 0 {
+			return false
+		}
+		if k == 1 {
+			i++
+			continue
+		}
+		if i+1 >= len(opts) {
+			return false
+		}
+		i += int(opts[i+1])
+	}
+	return false
 }

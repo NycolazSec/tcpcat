@@ -91,6 +91,15 @@ func main() {
 		fmt.Printf("%s[*] Tip: use -sS (or --ebpf on Linux), as root, for OS fingerprinting.%s\n", config.Cyan, config.Reset)
 	}
 
+	// --mptcp puts MP_CAPABLE in the SYN, so it only does anything on a scan
+	// that actually crafts the SYN: -sS or --ebpf. A connect scan (-sT) goes
+	// through the kernel stack and can neither add the option nor read the
+	// reply's, so warn rather than silently do nothing.
+	if opts.MPTCP && !opts.SynScan && (!opts.UseXDP || runtime.GOOS != "linux") {
+		fmt.Printf("%s[!] Warning: --mptcp needs a raw SYN scan to craft the option; this scan type can't, so no MPTCP will be reported.%s\n", config.Yellow, config.Reset)
+		fmt.Printf("%s[*] Tip: use -sS (or --ebpf on Linux), as root, for MPTCP detection.%s\n", config.Cyan, config.Reset)
+	}
+
 	if opts.VulnersAPIKey != "" && !opts.ServiceDetect {
 		fmt.Printf("%s[!] Warning: --vulners-apikey was provided without -sV. CVE lookup requires service detection.%s\n", config.Yellow, config.Reset)
 		fmt.Printf("%s[*] Tip: Add -sV to your command to enable service detection and CVE lookup.%s\n", config.Cyan, config.Reset)

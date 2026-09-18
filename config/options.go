@@ -65,6 +65,7 @@ type Options struct {
 
 	ServiceDetect bool
 	OsDetect      bool
+	MPTCP         bool
 
 	SourcePort   int
 	TTL          int
@@ -233,6 +234,7 @@ func ParseFlags() (*Options, error) {
 
 	flag.BoolVar(&opts.ServiceDetect, "sV", false, "Probe open ports for service/version info")
 	flag.BoolVar(&opts.OsDetect, "O", false, "Enable OS detection")
+	flag.BoolVar(&opts.MPTCP, "mptcp", false, "Advertise MP_CAPABLE in SYN probes and flag Multipath-TCP-capable hosts (needs -sS or --ebpf)")
 
 	flag.IntVar(&opts.SourcePort, "g", 0, "Use given source port number")
 	flag.IntVar(&opts.TTL, "ttl", 0, "Set IP time-to-live field")
@@ -332,6 +334,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--scripts <dir>%s Run scripts from directory for advanced detection\n", Yellow, Reset)
 		fmt.Printf("  %s--vulners-apikey <key>%s Perform CVE lookup for detected services\n", Yellow, Reset)
 		fmt.Printf("  %s-O%s              Enable OS detection\n", Yellow, Reset)
+		fmt.Printf("  %s--mptcp%s         Detect Multipath-TCP-capable hosts (MP_CAPABLE in SYN; needs -sS or --ebpf)\n", Yellow, Reset)
 		fmt.Println(Cyan + "\nEVASION & OPTIONS:" + Reset)
 		fmt.Printf("  %s-g <port>%s       Use specified source port\n", Yellow, Reset)
 		fmt.Printf("  %s--ttl <val>%s     Set custom IP Time-To-Live\n", Yellow, Reset)

@@ -76,6 +76,14 @@ func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.D
 					res.Reason = fmt.Sprintf("%s, guessed OS: %s (%.0f%% confidence)", res.Reason, osName, confidence*100)
 				}
 			}
+			// A SYN/ACK echoing MP_CAPABLE (kind 30) marks a Multipath-TCP
+			// target. The reply frame is already captured for OS detection,
+			// so reading one more option is nearly free; it only fires when
+			// --mptcp put the option in our SYN, and never false-positives.
+			if opts.MPTCP && resp.Frame != nil && osdetect.HasTCPOptionKind(resp.Frame, resp.IPStart, resp.TCPStart, mpCapableKind) {
+				res.MPTCP = true
+				res.Reason += " [MPTCP]"
+			}
 		} else if resp.Flags&0x04 != 0 {
 			res.State = StateClosed
 			res.Reason = "RST Received"

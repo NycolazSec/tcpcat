@@ -10,6 +10,18 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Added
+- `--mptcp`: opt-in Multipath TCP detection. A SYN scan (`-sS` or `--ebpf`)
+  advertises an MP_CAPABLE option (TCP kind 30, RFC 8684) in its SYN, and a
+  target that also speaks MPTCP echoes MP_CAPABLE in the SYN/ACK -- so its
+  presence in the reply marks a multipath-capable stack (an OS default on
+  recent Apple/Android devices and on operator/CDN front ends like
+  Cloudflare). It rides in the SYN the scan already sends, so it costs no
+  extra packets, and the reply's option is read from the frame already
+  captured for OS detection. It is opt-in because adding the option to
+  every SYN would shift the OS fingerprint; the default probe is unchanged,
+  byte for byte. Reported as `[MPTCP]` in the reason and `mptcp` in JSON.
+
 ## [1.1.0-beta.2] - 2026-09-17
 
 ### Added

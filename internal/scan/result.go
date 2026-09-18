@@ -23,6 +23,7 @@ type TargetResult struct {
 	Version         string                   `json:"version,omitempty"`
 	Banner          string                   `json:"banner,omitempty"`
 	OS              string                   `json:"os,omitempty"`
+	MPTCP           bool                     `json:"mptcp,omitempty"`
 	TLS             *service.TLSInfo         `json:"tls,omitempty"`
 	HTTPPosture     *service.HTTPPostureInfo `json:"http_posture,omitempty"`
 	Latency         time.Duration            `json:"latency_ns"`
