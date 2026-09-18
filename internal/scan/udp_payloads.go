@@ -45,6 +45,8 @@ var udpProbesByPort = map[int][]udpProbe{
 	5060: {sipProbe},
 	111:  {rpcProbe},
 	69:   {tftpProbe},
+	443:  {quicProbe}, // QUIC / HTTP/3
+	8443: {quicProbe},
 }
 
 // probesForPort returns the probes to try against a port, or nil when none

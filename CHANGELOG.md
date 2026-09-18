@@ -21,6 +21,16 @@ Full diffs for every release are available via GitHub's
   captured for OS detection. It is opt-in because adding the option to
   every SYN would shift the OS fingerprint; the default probe is unchanged,
   byte for byte. Reported as `[MPTCP]` in the reason and `mptcp` in JSON.
+- QUIC / HTTP/3 detection on UDP 443 and 8443 (`internal/scan/quic_probe.go`).
+  Rather than forge a full encrypted QUIC Initial (fragile crypto where one
+  wrong byte reads as "no QUIC"), the probe sends a long-header packet
+  stamped with a GREASE version no server implements; RFC 9000 requires any
+  QUIC server to answer with a Version Negotiation packet listing its
+  supported versions, regardless of the payload. That is an unambiguous
+  QUIC marker nothing else on UDP produces -- so 443/UDP now comes back as
+  `open (quic)` on an HTTP/3 host and stays silent otherwise. Verified live
+  against google.com, 8.8.8.8 and 8.8.4.4 (all `open (quic)`) with no false
+  positive on a non-QUIC host.
 
 ## [1.1.0-beta.2] - 2026-09-17
 
