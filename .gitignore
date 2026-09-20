@@ -21,7 +21,7 @@ tcp.py
 coverage.*
 *.coverprofile
 profile.cov
-
+bot/*
 # Dependency directories (remove the comment below to include it)
 # vendor/
 

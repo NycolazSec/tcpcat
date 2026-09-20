@@ -10,14 +10,14 @@
       "version": "6.6.1p1",
       "banner": "SSH-2.0-OpenSSH_6.6.1p1 Ubuntu-2ubuntu2.13",
       "os": "ubuntu",
-      "latency_ns": 152736084,
-      "latency_ms": 152.736,
+      "latency_ns": 154269792,
+      "latency_ms": 154.269,
       "reason": "SYN-ACK Received",
       "vulnerability_assessment": {
         "status": "no_match",
         "source": "Offline DB",
         "reason": "No matching vulnerabilities were found for openssh 6.6.1p1.",
-        "assessed_at": "2026-09-05T23:03:11.573238Z"
+        "assessed_at": "2026-09-10T21:32:03.007848Z"
       }
     },
     {
@@ -28,14 +28,14 @@
       "version": "2.4.7",
       "banner": "Apache/2.4.7 (Ubuntu)",
       "os": "ubuntu",
-      "latency_ns": 160821125,
-      "latency_ms": 160.821,
+      "latency_ns": 156094917,
+      "latency_ms": 156.094,
       "reason": "SYN-ACK Received",
       "vulnerability_assessment": {
         "status": "no_match",
         "source": "Offline DB",
         "reason": "No matching vulnerabilities were found for apache 2.4.7.",
-        "assessed_at": "2026-09-05T23:03:11.573245Z"
+        "assessed_at": "2026-09-10T21:32:03.007853Z"
       }
     }
   ]
