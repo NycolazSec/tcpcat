@@ -17,6 +17,7 @@ type ServiceInfo struct {
 	Banner      string           `json:"banner,omitempty"`
 	OS          string           `json:"os,omitempty"`
 	TLS         *TLSInfo         `json:"tls,omitempty"`
+	JARM        *JARMInfo        `json:"jarm,omitempty"`
 	HTTPPosture *HTTPPostureInfo `json:"http_posture,omitempty"`
 }
 
@@ -35,7 +36,7 @@ var osRegexps = map[string]*regexp.Regexp{
 // is only used to address name-based virtual hosts correctly (TLS SNI and
 // the HTTP Host header), never to choose what to connect to -- every
 // probe below dials ip itself.
-func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerify bool, hostname string) ServiceInfo {
+func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerify bool, hostname string, jarmEnabled bool) ServiceInfo {
 	info := ServiceInfo{
 		Name: "unknown",
 	}
@@ -54,6 +55,15 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 	var tlsInfo *TLSInfo
 	if isTLSPort {
 		tlsInfo = probeTLS(ip, port, timeout, hostname)
+	}
+
+	// JARM is opt-in (10 extra connections/handshakes per TLS port, with
+	// deliberately non-standard ClientHellos) -- same discipline as the
+	// probes above: its own independent connections, run to completion
+	// before the main `conn` below ever opens.
+	var jarmInfo *JARMInfo
+	if isTLSPort && jarmEnabled {
+		jarmInfo = ProbeJARM(ip, port, timeout, hostname)
 	}
 
 	// Same reasoning, same discipline: probeHTTPPosture runs its own
@@ -141,6 +151,7 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 
 		if isTLS {
 			info.TLS = tlsInfo
+			info.JARM = jarmInfo
 
 			tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify} // #nosec G402 -- opt-in via caller flag; banner grabbing must complete the handshake against untrusted/self-signed target certs
 			if hostname != "" {

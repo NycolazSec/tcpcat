@@ -225,6 +225,7 @@ pointed at an IPv6 target instead of silently misbehaving.
 -O                    Remote OS detection via TTL/MSS/window analysis
                       (needs -sS or --ebpf on Linux, as root, to read a raw SYN/ACK)
 --scripts <dir>       Load WASM detection modules
+--jarm                Active JARM TLS fingerprint on TLS ports (opt-in: 10 extra probes/target)
 ```
 On a `443`/`8443` port, `-sV` also runs an independent TLS/certificate
 probe and attaches the result as `tls` in JSON output: negotiated
@@ -233,6 +234,24 @@ self-signed or expired certificate, a hostname mismatch, a deprecated
 protocol version (< TLS 1.2), or a known-insecure cipher suite. It always
 inspects the certificate presented, valid or not -- an invalid cert is
 the finding, not a reason to skip the probe.
+
+The same probe also reports post-quantum readiness (`pqc_group`/`pqc_ready`
+in JSON): on TLS 1.3, tcpcat's Go toolchain offers a hybrid ML-KEM key
+exchange (`X25519MLKEM768`, `SecP256r1MLKEM768`, or `SecP384r1MLKEM1024`)
+by default, so whichever group the target actually negotiates says whether
+it's ready for the ongoing NIST post-quantum migration. A TLS 1.3 target
+that falls back to a classical group (e.g. plain `X25519`) is flagged with
+a warning.
+
+With `--jarm`, `-sV` also computes an active JARM fingerprint (`jarm.hash`
+in JSON) on TLS ports: 10 deliberately varied TLS ClientHellos (different
+versions, cipher orderings, GREASE, ALPN sets) whose responses are
+fuzzy-hashed into a 62-character fingerprint. Two servers running the same
+TLS stack/config produce the same JARM hash regardless of hostname or IP --
+useful for identifying C2 infrastructure, cloned or rogue servers, and
+misconfigured load balancers, and for cross-referencing public JARM
+threat-intel feeds. Opt-in because it's 10 extra connections with
+non-standard ClientHellos per target, not part of the default `-sV` probe.
 
 On a web port (`80`/`443`/`8080`/`8443`/`8000`/`8888`), `-sV` also runs an
 independent HTTP security posture probe and attaches the result as

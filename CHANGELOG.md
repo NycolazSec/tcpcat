@@ -11,6 +11,23 @@ Full diffs for every release are available via GitHub's
 ## [Unreleased]
 
 ### Added
+- `--jarm`: opt-in active JARM TLS server fingerprinting on TLS ports
+  (`internal/service/jarm.go`). Sends 10 deliberately varied ClientHellos
+  (TLS version, cipher ordering, GREASE, ALPN set, extension ordering) and
+  fuzzy-hashes the responses into a 62-char fingerprint -- a direct,
+  byte-for-byte port of the reference `salesforce/jarm` implementation
+  (BSD-3-Clause), validated against it live: identical hashes for
+  google.com, cloudflare.com, and github.com. Opt-in (10 extra
+  connections/non-standard ClientHellos per target), reported as
+  `jarm.hash` in JSON and an XML attribute.
+- `-sV`'s TLS probe now reports post-quantum key-exchange readiness
+  (`internal/service/tls.go`). Go 1.26's `crypto/tls` already offers a
+  hybrid ML-KEM group (`X25519MLKEM768`, `SecP256r1MLKEM768`, or
+  `SecP384r1MLKEM1024`) by default on every TLS 1.3 ClientHello; this reads
+  back which group the target actually negotiated (`pqc_group`/`pqc_ready`
+  in JSON, plus an XML attribute) and warns when a TLS 1.3 target falls
+  back to a classical-only group instead. No new handshake, no new flag --
+  it rides the existing independent TLS probe.
 - `--mptcp`: opt-in Multipath TCP detection. A SYN scan (`-sS` or `--ebpf`)
   advertises an MP_CAPABLE option (TCP kind 30, RFC 8684) in its SYN, and a
   target that also speaks MPTCP echoes MP_CAPABLE in the SYN/ACK -- so its

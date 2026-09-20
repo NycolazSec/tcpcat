@@ -163,6 +163,92 @@ func TestProbeTLSHealthyCertificate(t *testing.T) {
 	if len(info.Warnings) != 1 || info.Warnings[0] != "self-signed certificate" {
 		t.Errorf("Warnings = %v, want exactly [\"self-signed certificate\"]", info.Warnings)
 	}
+	// A bare TLS 1.3 listener on this Go toolchain already negotiates a
+	// hybrid post-quantum group by default (see CurvePreferences docs), so
+	// this handshake is expected to pick one up with no special setup.
+	if !info.PQCReady {
+		t.Errorf("PQCReady = false, want true (Go 1.26 defaults to a PQC hybrid group on TLS 1.3)")
+	}
+	if !isPQCGroup(mustParseCurveID(t, info.PQCGroup)) {
+		t.Errorf("PQCGroup = %q, want a hybrid post-quantum group name", info.PQCGroup)
+	}
+}
+
+// mustParseCurveID maps a CurveID.String() name back to its constant so
+// tests can assert on isPQCGroup without hardcoding the wire IDs twice.
+func mustParseCurveID(t *testing.T, name string) tls.CurveID {
+	t.Helper()
+	for _, id := range []tls.CurveID{tls.X25519MLKEM768, tls.SecP256r1MLKEM768, tls.SecP384r1MLKEM1024, tls.X25519, tls.CurveP256, tls.CurveP384, tls.CurveP521} {
+		if id.String() == name {
+			return id
+		}
+	}
+	t.Fatalf("mustParseCurveID: unrecognized group name %q", name)
+	return 0
+}
+
+func TestProbeTLSWarnsWhenNoPQCNegotiated(t *testing.T) {
+	cert := selfSignedCert(t, "127.0.0.1", time.Now().AddDate(1, 0, 0))
+
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{
+		Certificates:     []tls.Certificate{cert},
+		MinVersion:       tls.VersionTLS13,
+		MaxVersion:       tls.VersionTLS13,
+		CurvePreferences: []tls.CurveID{tls.X25519}, // force a classical-only negotiation
+	})
+	if err != nil {
+		t.Fatalf("tls.Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		if tlsConn, ok := conn.(*tls.Conn); ok {
+			_ = tlsConn.Handshake()
+		}
+	}()
+
+	port := ln.Addr().(*net.TCPAddr).Port
+	info := probeTLS("127.0.0.1", port, 2*time.Second, "")
+	if info == nil {
+		t.Fatal("probeTLS() = nil, want a result")
+	}
+	if info.PQCReady {
+		t.Error("PQCReady = true, want false (server was forced to classical X25519 only)")
+	}
+	if info.PQCGroup != "X25519" {
+		t.Errorf("PQCGroup = %q, want X25519", info.PQCGroup)
+	}
+
+	found := false
+	for _, w := range info.Warnings {
+		if w == "no post-quantum key exchange negotiated (X25519 only)" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Warnings = %v, want the no-PQC notice", info.Warnings)
+	}
+}
+
+func TestIsPQCGroup(t *testing.T) {
+	pqc := []tls.CurveID{tls.X25519MLKEM768, tls.SecP256r1MLKEM768, tls.SecP384r1MLKEM1024}
+	for _, id := range pqc {
+		if !isPQCGroup(id) {
+			t.Errorf("isPQCGroup(%s) = false, want true", id)
+		}
+	}
+
+	classical := []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384, tls.CurveP521}
+	for _, id := range classical {
+		if isPQCGroup(id) {
+			t.Errorf("isPQCGroup(%s) = true, want false", id)
+		}
+	}
 }
 
 func TestProbeTLSExpiredCertificate(t *testing.T) {

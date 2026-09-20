@@ -217,7 +217,7 @@ func enrichResults(results []scan.TargetResult, targetNames map[string]string) {
 			continue
 		}
 
-		serviceInfo := service.DetectService(result.IP, result.Port, 2*time.Second, false, targetNames[result.IP])
+		serviceInfo := service.DetectService(result.IP, result.Port, 2*time.Second, false, targetNames[result.IP], false) // JARM is CLI-only for now (--jarm), no web UI toggle yet
 		result.Service = serviceInfo.Name
 		result.Version = serviceInfo.Version
 		result.Banner = serviceInfo.Banner

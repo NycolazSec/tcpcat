@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -66,6 +67,7 @@ type Options struct {
 	ServiceDetect bool
 	OsDetect      bool
 	MPTCP         bool
+	JARM          bool
 
 	SourcePort   int
 	TTL          int
@@ -126,6 +128,20 @@ type Options struct {
 	WebAddr     string
 	Update      bool
 	ShowVersion bool
+}
+
+// looksLikeFlagValue reports whether s should be consumed as the value for
+// the preceding value-flag, rather than treated as the start of the next
+// flag. A bare "starts with -" check misreads a negative number (e.g. the
+// "-1" in "--rate -1") as another flag, drops it, and prints a misleading
+// "no value provided" warning even though the value is real -- so a "-"
+// immediately followed by a valid number still counts as a value here.
+func looksLikeFlagValue(s string) bool {
+	if !strings.HasPrefix(s, "-") {
+		return true
+	}
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
 }
 
 func ParseFlags() (*Options, error) {
@@ -189,7 +205,7 @@ func ParseFlags() (*Options, error) {
 		if strings.HasPrefix(arg, "-") {
 			if arg == "--decoy" {
 				flagsArgs = append(flagsArgs, arg)
-				if i+1 < len(rawArgs) && !strings.HasPrefix(rawArgs[i+1], "-") {
+				if i+1 < len(rawArgs) && looksLikeFlagValue(rawArgs[i+1]) {
 					flagsArgs = append(flagsArgs, rawArgs[i+1])
 					i++
 				} else {
@@ -197,13 +213,22 @@ func ParseFlags() (*Options, error) {
 				}
 				continue
 			}
-			flagsArgs = append(flagsArgs, arg)
-			if valueFlags[arg] && i+1 < len(rawArgs) && !strings.HasPrefix(rawArgs[i+1], "-") {
-				flagsArgs = append(flagsArgs, rawArgs[i+1])
-				i++
-			} else if valueFlags[arg] {
-
-				fmt.Printf("%s[!] Warning: flag %s expects a value but none was provided. It will be ignored.%s\n", Yellow, arg, Reset)
+			if valueFlags[arg] {
+				// A value-flag with nothing usable after it must be
+				// dropped entirely here, not just left unpaired: if
+				// "--rate" alone reached flag.Parse() below, it would
+				// consume whatever token comes next -- typically the
+				// following flag, e.g. "-sT" -- as --rate's own value,
+				// fail to parse it as a number, and abort into a usage
+				// dump instead of the graceful "ignored" this warns about.
+				if i+1 < len(rawArgs) && looksLikeFlagValue(rawArgs[i+1]) {
+					flagsArgs = append(flagsArgs, arg, rawArgs[i+1])
+					i++
+				} else {
+					fmt.Printf("%s[!] Warning: flag %s expects a value but none was provided. It will be ignored.%s\n", Yellow, arg, Reset)
+				}
+			} else {
+				flagsArgs = append(flagsArgs, arg)
 			}
 		} else {
 			posArgs = append(posArgs, arg)
@@ -235,6 +260,7 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.ServiceDetect, "sV", false, "Probe open ports for service/version info")
 	flag.BoolVar(&opts.OsDetect, "O", false, "Enable OS detection")
 	flag.BoolVar(&opts.MPTCP, "mptcp", false, "Advertise MP_CAPABLE in SYN probes and flag Multipath-TCP-capable hosts (needs -sS or --ebpf)")
+	flag.BoolVar(&opts.JARM, "jarm", false, "Compute an active JARM TLS fingerprint on TLS ports (10 extra non-standard ClientHellos per target)")
 
 	flag.IntVar(&opts.SourcePort, "g", 0, "Use given source port number")
 	flag.IntVar(&opts.TTL, "ttl", 0, "Set IP time-to-live field")
@@ -335,6 +361,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--vulners-apikey <key>%s Perform CVE lookup for detected services\n", Yellow, Reset)
 		fmt.Printf("  %s-O%s              Enable OS detection\n", Yellow, Reset)
 		fmt.Printf("  %s--mptcp%s         Detect Multipath-TCP-capable hosts (MP_CAPABLE in SYN; needs -sS or --ebpf)\n", Yellow, Reset)
+		fmt.Printf("  %s--jarm%s          Compute an active JARM TLS fingerprint on TLS ports (10 extra probes/target)\n", Yellow, Reset)
 		fmt.Println(Cyan + "\nEVASION & OPTIONS:" + Reset)
 		fmt.Printf("  %s-g <port>%s       Use specified source port\n", Yellow, Reset)
 		fmt.Printf("  %s--ttl <val>%s     Set custom IP Time-To-Live\n", Yellow, Reset)

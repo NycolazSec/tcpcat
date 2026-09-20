@@ -381,7 +381,7 @@ func main() {
 		fmt.Printf("%s[*] Running Service & Version Detection...%s\n", config.Red, config.Reset)
 		for i := range results {
 			if results[i].State == scan.StateOpen {
-				svc := service.DetectService(results[i].IP, results[i].Port, 2*time.Second, opts.InsecureTLS, targetNames[results[i].IP])
+				svc := service.DetectService(results[i].IP, results[i].Port, 2*time.Second, opts.InsecureTLS, targetNames[results[i].IP], opts.JARM)
 				results[i].Service = svc.Name
 				results[i].Banner = svc.Banner
 				results[i].Version = svc.Version
@@ -396,12 +396,20 @@ func main() {
 				}
 				results[i].OS = svc.OS
 				results[i].TLS = svc.TLS
+				results[i].JARM = svc.JARM
 				results[i].HTTPPosture = svc.HTTPPosture
 				fmt.Printf("%s[v] %s:%-5d ─ SERVICE: %s%s %s%s%s%s\n",
 					config.Bold, results[i].IP, results[i].Port, config.Bold, svc.Name, svc.Version, osDisp, config.Reset, bannerDisp)
 
 				if svc.TLS != nil {
 					fmt.Printf("    %s[tls] %s | %s%s\n", config.Cyan, svc.TLS.Version, svc.TLS.CipherSuite, config.Reset)
+					if svc.TLS.PQCGroup != "" {
+						pqcStatus := "not post-quantum"
+						if svc.TLS.PQCReady {
+							pqcStatus = "post-quantum ready"
+						}
+						fmt.Printf("    %s[tls] key exchange: %s (%s)%s\n", config.Cyan, svc.TLS.PQCGroup, pqcStatus, config.Reset)
+					}
 					if svc.TLS.CertSubject != "" {
 						fmt.Printf("    %s[tls] cert: %s (issuer: %s, expires %s)%s\n",
 							config.Cyan, svc.TLS.CertSubject, svc.TLS.CertIssuer, svc.TLS.CertExpiresAt, config.Reset)
@@ -409,6 +417,10 @@ func main() {
 					for _, warning := range svc.TLS.Warnings {
 						fmt.Printf("    %s[!] tls: %s%s\n", config.Yellow, warning, config.Reset)
 					}
+				}
+
+				if svc.JARM != nil {
+					fmt.Printf("    %s[tls] jarm: %s%s\n", config.Cyan, svc.JARM.Hash, config.Reset)
 				}
 
 				if svc.HTTPPosture != nil {
@@ -430,7 +442,12 @@ func main() {
 		if opts.VulnersAPIKey != "" {
 			vulnScanner, err = vuln.NewVulnersScanner(opts.VulnersAPIKey)
 		} else {
-			vulnScanner = offlineScanner
+			// OSV.dev needs no API key and covers real-world software
+			// (npm, PyPI, Debian, Alpine, Go, ...) far beyond the
+			// ~15-entry embedded database in offline.go, which now
+			// serves purely as the last-resort fallback below when a
+			// lookup errors (e.g. no network reachability).
+			vulnScanner = vuln.NewOSVScanner()
 		}
 
 		if err != nil {
@@ -461,7 +478,7 @@ func main() {
 					allVulnerabilities, err := vulnScanner.GetForSoftware(r.Service, r.Version)
 
 					if err != nil && offlineScanner != nil {
-						fmt.Printf("    %s[~] OSV lookup failed, falling back to offline DB for %s:%d%s\n", config.Yellow, r.IP, r.Port, config.Reset)
+						fmt.Printf("    %s[~] %s lookup failed, falling back to offline DB for %s:%d%s\n", config.Yellow, vulnScanner.SourceName(), r.IP, r.Port, config.Reset)
 						allVulnerabilities, err = offlineScanner.GetForSoftware(r.Service, r.Version)
 					}
 

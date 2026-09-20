@@ -15,8 +15,14 @@ import (
 // certificate is a *finding* this reports, not a handshake failure that
 // silently loses the information.
 type TLSInfo struct {
-	Version       string   `json:"version,omitempty"`
-	CipherSuite   string   `json:"cipher_suite,omitempty"`
+	Version     string `json:"version,omitempty"`
+	CipherSuite string `json:"cipher_suite,omitempty"`
+	PQCGroup    string `json:"pqc_group,omitempty"`
+	// No omitempty: false is the finding an audit is looking for (a target
+	// that did NOT negotiate post-quantum key exchange), so it must stay
+	// distinguishable from "TLS wasn't probed at all" (the whole TLSInfo is
+	// nil) rather than silently vanishing from the JSON like a default would.
+	PQCReady      bool     `json:"pqc_ready"`
 	CertSubject   string   `json:"cert_subject,omitempty"`
 	CertIssuer    string   `json:"cert_issuer,omitempty"`
 	CertExpiresAt string   `json:"cert_expires_at,omitempty"`
@@ -85,6 +91,22 @@ func probeTLS(ip string, port int, timeout time.Duration, hostname string) *TLSI
 		info.Warnings = append(info.Warnings, fmt.Sprintf("weak cipher suite: %s", info.CipherSuite))
 	}
 
+	// CurveID is 0 for a legacy RSA key exchange (no group negotiated at
+	// all), which isPQCGroup already treats as non-PQC -- but there's
+	// nothing meaningful to name in that case, so PQCGroup is left empty
+	// rather than reporting "CurveID(0)".
+	if state.CurveID != 0 {
+		info.PQCGroup = state.CurveID.String()
+		info.PQCReady = isPQCGroup(state.CurveID)
+		// Go's hybrid post-quantum groups only exist for TLS 1.3; on TLS
+		// 1.2 and below this would just repeat the version warning above
+		// (or fire on every TLS 1.2 server ever, which isn't a finding).
+		if state.Version == tls.VersionTLS13 && !info.PQCReady {
+			info.Warnings = append(info.Warnings,
+				fmt.Sprintf("no post-quantum key exchange negotiated (%s only)", info.PQCGroup))
+		}
+	}
+
 	if len(state.PeerCertificates) > 0 {
 		cert := state.PeerCertificates[0]
 		info.CertSubject = cert.Subject.CommonName
@@ -144,4 +166,17 @@ func isWeakCipherSuite(id uint16) bool {
 		}
 	}
 	return false
+}
+
+// isPQCGroup reports whether id is one of the hybrid post-quantum key
+// exchange groups crypto/tls offers by default in TLS 1.3 ClientHellos on
+// this Go toolchain (X25519MLKEM768 since Go 1.24, the SecP256r1/SecP384r1
+// MLKEM hybrids since Go 1.26) rather than a classical elliptic-curve group.
+func isPQCGroup(id tls.CurveID) bool {
+	switch id {
+	case tls.X25519MLKEM768, tls.SecP256r1MLKEM768, tls.SecP384r1MLKEM1024:
+		return true
+	default:
+		return false
+	}
 }

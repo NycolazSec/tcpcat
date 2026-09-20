@@ -35,6 +35,7 @@ type XMLPort struct {
 	State           XMLState            `xml:"state"`
 	Service         *XMLService         `xml:"service,omitempty"`
 	TLS             *XMLTLS             `xml:"tls,omitempty"`
+	JARM            string              `xml:"jarm,attr,omitempty"`
 	HTTPPosture     *XMLHTTPPosture     `xml:"http-posture,omitempty"`
 	Vulnerabilities *XMLVulnerabilities `xml:"vulnerabilities,omitempty"`
 }
@@ -56,8 +57,11 @@ type XMLService struct {
 }
 
 type XMLTLS struct {
-	Version       string   `xml:"version,attr,omitempty"`
-	CipherSuite   string   `xml:"cipher,attr,omitempty"`
+	Version     string `xml:"version,attr,omitempty"`
+	CipherSuite string `xml:"cipher,attr,omitempty"`
+	PQCGroup    string `xml:"pqc_group,attr,omitempty"`
+	// No omitempty, same reasoning as TLSInfo.PQCReady in internal/service/tls.go.
+	PQCReady      bool     `xml:"pqc_ready,attr"`
 	CertSubject   string   `xml:"cert_subject,attr,omitempty"`
 	CertIssuer    string   `xml:"cert_issuer,attr,omitempty"`
 	CertExpiresAt string   `xml:"cert_expires,attr,omitempty"`
@@ -94,10 +98,16 @@ func buildXMLPort(r scan.TargetResult) XMLPort {
 		}
 	}
 
+	if r.JARM != nil {
+		port.JARM = r.JARM.Hash
+	}
+
 	if r.TLS != nil {
 		port.TLS = &XMLTLS{
 			Version:       r.TLS.Version,
 			CipherSuite:   r.TLS.CipherSuite,
+			PQCGroup:      r.TLS.PQCGroup,
+			PQCReady:      r.TLS.PQCReady,
 			CertSubject:   r.TLS.CertSubject,
 			CertIssuer:    r.TLS.CertIssuer,
 			CertExpiresAt: r.TLS.CertExpiresAt,
