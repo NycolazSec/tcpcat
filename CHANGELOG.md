@@ -10,6 +10,8 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-23
+
 ### Added
 - `--jarm`: opt-in active JARM TLS server fingerprinting on TLS ports
   (`internal/service/jarm.go`). Sends 10 deliberately varied ClientHellos
@@ -507,6 +509,7 @@ Full diffs for every release are available via GitHub's
   visibility-testing controls, and a WASM-based scripting engine for custom
   detectors and exploit modules.
 
-[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/NycolazSec/tcpcat/compare/v1.1.0-beta.2...v1.1.0
 [1.0.1]: https://github.com/NycolazSec/tcpcat/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/NycolazSec/tcpcat/releases/tag/v1.0.0
