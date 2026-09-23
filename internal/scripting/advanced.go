@@ -94,51 +94,47 @@ func (csd *CustomServiceDetectors) Detect(banner string, port int) (string, floa
 	return bestMatch, bestConfidence
 }
 
-type ExploitModule struct {
+// VulnerabilityAdvisory is a piece of CVE metadata used for correlating a
+// detected service/version against known vulnerabilities. It is pure data:
+// it carries no executable payload and never runs anything against a target.
+type VulnerabilityAdvisory struct {
 	CVE         string
 	Name        string
 	Description string
 	CVSS        float64
 	Affected    []string
-	Code        []byte
 }
 
-type ExploitFrameworkV2 struct {
-	Exploits map[string]*ExploitModule
-	Engine   *ScriptEngineV2
+// AdvisoryCatalog looks up which known CVEs apply to a given service version.
+// It only ever compares version strings; it does not connect to, or execute
+// code against, any host.
+type AdvisoryCatalog struct {
+	Advisories map[string]*VulnerabilityAdvisory
 }
 
-func NewExploitFrameworkV2(engine *ScriptEngineV2) *ExploitFrameworkV2 {
-	return &ExploitFrameworkV2{
-		Exploits: make(map[string]*ExploitModule),
-		Engine:   engine,
+func NewAdvisoryCatalog() *AdvisoryCatalog {
+	return &AdvisoryCatalog{
+		Advisories: make(map[string]*VulnerabilityAdvisory),
 	}
 }
 
-func (ef *ExploitFrameworkV2) RegisterExploit(exploit *ExploitModule) error {
-	if exploit.CVE == "" {
-		return fmt.Errorf("exploit missing CVE identifier")
+func (ac *AdvisoryCatalog) RegisterAdvisory(advisory *VulnerabilityAdvisory) error {
+	if advisory.CVE == "" {
+		return fmt.Errorf("advisory missing CVE identifier")
 	}
 
-	ef.Exploits[exploit.CVE] = exploit
-
-	if exploit.Code != nil && ef.Engine != nil {
-		if err := ef.Engine.LoadDetectionScript(exploit.CVE, exploit.Code); err != nil {
-			log.Printf("Warning: failed to load exploit code for %s: %v", exploit.CVE, err)
-		}
-	}
-
-	log.Printf("Registered exploit: %s (CVSS: %.1f)", exploit.CVE, exploit.CVSS)
+	ac.Advisories[advisory.CVE] = advisory
+	log.Printf("Registered vulnerability advisory: %s (CVSS: %.1f)", advisory.CVE, advisory.CVSS)
 	return nil
 }
 
-func (ef *ExploitFrameworkV2) FindApplicableExploits(serviceVersion string) []*ExploitModule {
-	var applicable []*ExploitModule
+func (ac *AdvisoryCatalog) FindApplicableAdvisories(serviceVersion string) []*VulnerabilityAdvisory {
+	var applicable []*VulnerabilityAdvisory
 
-	for _, exploit := range ef.Exploits {
-		for _, affected := range exploit.Affected {
+	for _, advisory := range ac.Advisories {
+		for _, affected := range advisory.Affected {
 			if isVulnerable(serviceVersion, affected) {
-				applicable = append(applicable, exploit)
+				applicable = append(applicable, advisory)
 			}
 		}
 	}
@@ -146,7 +142,7 @@ func (ef *ExploitFrameworkV2) FindApplicableExploits(serviceVersion string) []*E
 	return applicable
 }
 
-var BuiltInExploits = []*ExploitModule{
+var BuiltInAdvisories = []*VulnerabilityAdvisory{
 	{
 		CVE:         "CVE-2018-15473",
 		Name:        "OpenSSH Username Enumeration",
@@ -168,25 +164,6 @@ var BuiltInExploits = []*ExploitModule{
 		CVSS:        5.0,
 		Affected:    []string{"Apache 2.4.6", "Apache 2.4.7"},
 	},
-}
-
-type PayloadGenerator struct {
-	Templates map[string]string
-}
-
-func NewPayloadGenerator() *PayloadGenerator {
-	return &PayloadGenerator{
-		Templates: make(map[string]string),
-	}
-}
-
-func (pg *PayloadGenerator) Generate(templateName string, params map[string]interface{}) ([]byte, error) {
-	_, ok := pg.Templates[templateName]
-	if !ok {
-		return nil, fmt.Errorf("template %s not found", templateName)
-	}
-
-	return nil, nil
 }
 
 func matchesPattern(text, pattern string) bool {

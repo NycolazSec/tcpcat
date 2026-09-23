@@ -81,82 +81,62 @@ func TestServiceDetection(t *testing.T) {
 	}
 }
 
-func TestExploitModuleRegistration(t *testing.T) {
-	ctx := context.Background()
-	engine, _ := NewScriptEngineV2(ctx)
-	defer func() { _ = engine.Close() }()
+func TestVulnerabilityAdvisoryRegistration(t *testing.T) {
+	catalog := NewAdvisoryCatalog()
 
-	framework := NewExploitFrameworkV2(engine)
-
-	exploit := &ExploitModule{
+	advisory := &VulnerabilityAdvisory{
 		CVE:         "CVE-2021-0001",
-		Name:        "Test Exploit",
+		Name:        "Test Advisory",
 		Description: "Test vulnerability",
 		CVSS:        7.5,
 		Affected:    []string{"1.0.0", "1.0.1"},
 	}
 
-	err := framework.RegisterExploit(exploit)
+	err := catalog.RegisterAdvisory(advisory)
 	if err != nil {
-		t.Fatalf("Failed to register exploit: %v", err)
+		t.Fatalf("Failed to register advisory: %v", err)
 	}
 
-	if len(framework.Exploits) != 1 {
-		t.Errorf("Expected 1 exploit, got %d", len(framework.Exploits))
-	}
-}
-
-func TestBuiltInExploitsAvailable(t *testing.T) {
-	if len(BuiltInExploits) == 0 {
-		t.Error("BuiltInExploits should not be empty")
-	}
-
-	for _, exploit := range BuiltInExploits {
-		if exploit.CVE == "" {
-			t.Error("Exploit missing CVE")
-		}
-		if exploit.Name == "" {
-			t.Error("Exploit missing Name")
-		}
-		if exploit.CVSS == 0 {
-			t.Error("Exploit missing CVSS score")
-		}
+	if len(catalog.Advisories) != 1 {
+		t.Errorf("Expected 1 advisory, got %d", len(catalog.Advisories))
 	}
 }
 
-func TestFindApplicableExploits(t *testing.T) {
-	ctx := context.Background()
-	engine, _ := NewScriptEngineV2(ctx)
-	defer func() { _ = engine.Close() }()
+func TestBuiltInAdvisoriesAvailable(t *testing.T) {
+	if len(BuiltInAdvisories) == 0 {
+		t.Error("BuiltInAdvisories should not be empty")
+	}
 
-	framework := NewExploitFrameworkV2(engine)
+	for _, advisory := range BuiltInAdvisories {
+		if advisory.CVE == "" {
+			t.Error("Advisory missing CVE")
+		}
+		if advisory.Name == "" {
+			t.Error("Advisory missing Name")
+		}
+		if advisory.CVSS == 0 {
+			t.Error("Advisory missing CVSS score")
+		}
+	}
+}
 
-	exploit := &ExploitModule{
+func TestFindApplicableAdvisories(t *testing.T) {
+	catalog := NewAdvisoryCatalog()
+
+	advisory := &VulnerabilityAdvisory{
 		CVE:      "CVE-2021-0001",
 		Name:     "Test",
 		CVSS:     7.5,
 		Affected: []string{"7.4", "7.5"},
 	}
-	if err := framework.RegisterExploit(exploit); err != nil {
-		t.Fatalf("Failed to register exploit: %v", err)
+	if err := catalog.RegisterAdvisory(advisory); err != nil {
+		t.Fatalf("Failed to register advisory: %v", err)
 	}
 
-	applicable := framework.FindApplicableExploits("7.4")
+	applicable := catalog.FindApplicableAdvisories("7.4")
 
 	if applicable == nil {
-		t.Log("No exploits found (expected until version matching is implemented)")
-	}
-}
-
-func TestPayloadGeneratorCreation(t *testing.T) {
-	gen := NewPayloadGenerator()
-
-	if gen == nil {
-		t.Fatal("PayloadGenerator should not be nil")
-	}
-
-	if len(gen.Templates) != 0 {
-		t.Errorf("Expected empty templates, got %d", len(gen.Templates))
+		t.Log("No advisories found (expected until version matching is implemented)")
 	}
 }
 
@@ -217,25 +197,21 @@ func BenchmarkServiceDetection(b *testing.B) {
 	}
 }
 
-func BenchmarkExploitLookup(b *testing.B) {
-	ctx := context.Background()
-	engine, _ := NewScriptEngineV2(ctx)
-	defer func() { _ = engine.Close() }()
-
-	framework := NewExploitFrameworkV2(engine)
+func BenchmarkAdvisoryLookup(b *testing.B) {
+	catalog := NewAdvisoryCatalog()
 
 	for i := 0; i < 50; i++ {
-		exploit := &ExploitModule{
+		advisory := &VulnerabilityAdvisory{
 			CVE:      "CVE-2021-000" + string(rune(i)),
 			CVSS:     7.5,
 			Affected: []string{"1.0.0"},
 		}
-		_ = framework.RegisterExploit(exploit)
+		_ = catalog.RegisterAdvisory(advisory)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = framework.FindApplicableExploits("1.0.0")
+		_ = catalog.FindApplicableAdvisories("1.0.0")
 	}
 }
 
