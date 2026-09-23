@@ -181,8 +181,8 @@ func buildProbe(host string, p jarmProfile, rng *rand.Rand) []byte {
 	clientHello = append(clientHello, getExtensions(host, p, rng)...)
 
 	handshakeBody := make([]byte, 0, 4+len(clientHello))
-	handshakeBody = append(handshakeBody, 0x01) // ClientHello
-	handshakeBody = append(handshakeBody, 0x00) // length is a 3-byte
+	handshakeBody = append(handshakeBody, 0x01)                          // ClientHello
+	handshakeBody = append(handshakeBody, 0x00)                          // length is a 3-byte
 	handshakeBody = append(handshakeBody, uint16be(len(clientHello))...) //   uint24; bodies here always fit in 2 bytes
 	handshakeBody = append(handshakeBody, clientHello...)
 
@@ -263,12 +263,12 @@ func getExtensions(host string, p jarmProfile, rng *rand.Rand) []byte {
 		grease = true
 	}
 	all = append(all, extensionServerName(host)...)
-	all = append(all, 0x00, 0x17, 0x00, 0x00) // extended_master_secret
-	all = append(all, 0x00, 0x01, 0x00, 0x01, 0x01) // max_fragment_length
-	all = append(all, 0xff, 0x01, 0x00, 0x01, 0x00) // renegotiation_info
+	all = append(all, 0x00, 0x17, 0x00, 0x00)                                                             // extended_master_secret
+	all = append(all, 0x00, 0x01, 0x00, 0x01, 0x01)                                                       // max_fragment_length
+	all = append(all, 0xff, 0x01, 0x00, 0x01, 0x00)                                                       // renegotiation_info
 	all = append(all, 0x00, 0x0a, 0x00, 0x0a, 0x00, 0x08, 0x00, 0x1d, 0x00, 0x17, 0x00, 0x18, 0x00, 0x19) // supported_groups
-	all = append(all, 0x00, 0x0b, 0x00, 0x02, 0x01, 0x00) // ec_point_formats
-	all = append(all, 0x00, 0x23, 0x00, 0x00)             // session_ticket
+	all = append(all, 0x00, 0x0b, 0x00, 0x02, 0x01, 0x00)                                                 // ec_point_formats
+	all = append(all, 0x00, 0x23, 0x00, 0x00)                                                             // session_ticket
 	all = append(all, appLayerProtoNegotiation(p)...)
 	all = append(all, 0x00, 0x0d, 0x00, 0x14, 0x00, 0x12, 0x04, 0x03, 0x08, 0x04, 0x04, 0x01, 0x05, 0x03, 0x08, 0x05, 0x05, 0x01, 0x08, 0x06, 0x06, 0x01, 0x02, 0x01) // signature_algorithms
 	all = append(all, keyShare(grease, rng)...)
