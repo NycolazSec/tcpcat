@@ -389,13 +389,40 @@ Packet variation, fragmentation, and decoy traffic can help an authorized team a
 
 ## Legal & Ethical Notice
 
-**AUTHORIZATION REQUIRED**: tcpcat is for authorized security audits, penetration testing, and network administration only. Unauthorized access to computer networks is illegal in most jurisdictions (Computer Fraud & Abuse Act, GDPR, etc.). 
+**AUTHORIZATION REQUIRED.** tcpcat is a dual-use tool for authorized security
+audits, penetration testing, network engineering research, and system
+administration only. It is not a hosted or managed scanning service — there
+is no remote infrastructure, no user accounts, and no scanning performed on
+anyone's behalf by the maintainers. Unauthorized access to, or interference
+with, a computer system is a criminal offense in most jurisdictions,
+including under the U.S. Computer Fraud and Abuse Act, Articles 323-1 to
+323-3-1 of the French *Code pénal*, the UK Computer Misuse Act 1990, and
+equivalent statutes elsewhere.
 
-Advanced options such as decoy traffic, fragmentation, and packet variation are provided to support authorized monitoring-validation scenarios. They do not guarantee IDS/IPS bypass, reduced detection, or access to a target. Operators are responsible for obtaining authorization and complying with applicable laws, policies, and regulations.
+Before scanning any system or network you do not solely own or administer,
+you must hold **explicit, written authorization** from its owner, covering a
+documented scope and assessment window. The Operator — not the maintainers
+— bears full and exclusive criminal and civil responsibility for every
+packet the binary emits and every consequence that follows, including
+collateral impact, unintended denial of service, and violations of a
+network or hosting provider's Acceptable Use Policy.
 
-See [NOTICE.md](NOTICE.md) for the project's dual-use, authorized-use, sanctions, export-control, web-interface, contribution, and no-warranty guidance. This document is informational and is not legal advice or a compliance certification.
+Advanced options such as decoy traffic, fragmentation, and packet variation
+exist to help an authorized team validate what its own IDS/IPS and
+monitoring stack records under varied traffic patterns. They are
+visibility-testing instruments, not a warranty: they do not guarantee
+security-control bypass, reduced detection, or access to a target, and a
+version/banner-based CVE match is a lead requiring validation, not
+confirmation of exploitability.
 
-The authors assume **zero liability** for misuse.
+tcpcat is provided **"AS IS", with zero warranty and zero liability** for
+the authors and contributors, to the maximum extent permitted by law (Apache
+License 2.0, §§7–8). See [NOTICE.md](NOTICE.md) for the full legal notice —
+software status, operator responsibility, disclaimer of warranty, dual-use
+capabilities, sanctions/export-control guidance, and the contribution policy
+— and [SECURITY.md](SECURITY.md) to report a vulnerability in tcpcat itself
+through a private GitHub Security Advisory. Neither document is legal advice
+or a compliance certification.
 
 ---
 

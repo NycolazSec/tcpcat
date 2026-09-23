@@ -5,8 +5,8 @@ Only the latest major/minor release is actively maintained and patched for secur
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
-| < 1.0   | :x:                |
+| 1.1.x   | :white_check_mark: |
+| < 1.1   | :x:                |
 
 ## Reporting a Vulnerability
 If you discover a potential vulnerability in **tcpcat**, please disclose it responsibly:
