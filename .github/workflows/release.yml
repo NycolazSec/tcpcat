@@ -35,12 +35,18 @@ jobs:
   macos-installers:
     name: Build macOS installers
     needs: goreleaser
-    runs-on: macos-13
-    # macOS runners are occasionally unavailable for a long time (GitHub-side
-    # queueing, not a build failure). Cap the wait instead of leaving the run
-    # stuck indefinitely, and don't let it fail the release: the goreleaser
-    # job above already published linux/darwin/windows archives and Linux
-    # packages, so a missing .dmg/.pkg here is a soft-fail, not a blocker.
+    runs-on: macos-latest
+    # `macos-13` was retired and never got scheduled: every release since
+    # v1.0.1 sat queued on this job until the run was cancelled. `macos-latest`
+    # tracks whatever image GitHub currently supports, so this job stops
+    # silently rotting every time an old pinned version ages out.
+    #
+    # macOS runners can still occasionally queue for a long time even on a
+    # supported image (GitHub-side queueing, not a build failure). Cap the
+    # wait instead of leaving the run stuck indefinitely, and don't let it
+    # fail the release: the goreleaser job above already published
+    # linux/darwin/windows archives and Linux packages, so a missing
+    # .dmg/.pkg here is a soft-fail, not a blocker.
     timeout-minutes: 20
     continue-on-error: true
     steps:
