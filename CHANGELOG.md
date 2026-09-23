@@ -49,6 +49,16 @@ Full diffs for every release are available via GitHub's
   against google.com, 8.8.8.8 and 8.8.4.4 (all `open (quic)`) with no false
   positive on a non-QUIC host.
 
+### Removed
+- `internal/scripting`: dropped `ExploitFrameworkV2`'s code-loading path
+  (`ExploitModule.Code` was passed straight into the Wasm runtime and
+  executed against a target's `ip:port`) and the unused `PayloadGenerator`
+  stub. CVE metadata is now handled by `AdvisoryCatalog` /
+  `VulnerabilityAdvisory`, which only ever compares version strings --
+  it holds no executable payload and never runs anything against a host.
+  Behavior for existing callers (there were none outside this package's own
+  tests) is unaffected; this removes a capability, it does not rename one.
+
 ## [1.1.0-beta.2] - 2026-09-17
 
 ### Added
