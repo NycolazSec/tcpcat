@@ -21,54 +21,67 @@ type bannerSignature struct {
 	// Pattern matches the banner. When it has a capture group, the first
 	// group is taken as the version.
 	Pattern *regexp.Regexp
+
+	// Binary marks a signature whose underlying protocol isn't itself a
+	// text banner -- MySQL/MariaDB's wire handshake and Telnet's IAC
+	// negotiation both lead with a raw binary packet (length header,
+	// sequence byte, salt/capability bytes for MySQL; IAC control bytes
+	// for Telnet) that the regex happens to find a match inside. Those
+	// surrounding bytes are not something a human would ever read as a
+	// banner -- often illegible control characters, sometimes printable
+	// ASCII by pure chance -- so the caller reports just the matched
+	// substring as the banner instead of the raw response.
+	Binary bool
 }
 
 // bannerSignatures are tried in order; the first match wins, so more
 // specific products (a named FTP daemon) precede generic ones (bare FTP).
 var bannerSignatures = []bannerSignature{
 	// --- SSH ---
-	{"openssh", regexp.MustCompile(`SSH-[\d.]+-OpenSSH[_-]([\w.]+)`)},
-	{"dropbear", regexp.MustCompile(`SSH-[\d.]+-dropbear[_-]?([\w.]+)?`)},
-	{"libssh", regexp.MustCompile(`SSH-[\d.]+-libssh[_-]([\w.]+)`)},
+	{"openssh", regexp.MustCompile(`SSH-[\d.]+-OpenSSH[_-]([\w.]+)`), false},
+	{"dropbear", regexp.MustCompile(`SSH-[\d.]+-dropbear[_-]?([\w.]+)?`), false},
+	{"libssh", regexp.MustCompile(`SSH-[\d.]+-libssh[_-]([\w.]+)`), false},
 
 	// --- FTP --- (banners usually begin "220")
-	{"vsftpd", regexp.MustCompile(`(?i)\(vsFTPd ([\d.]+)\)`)},
-	{"proftpd", regexp.MustCompile(`(?i)ProFTPD ([\d.]+[\w.]*)`)},
-	{"pure-ftpd", regexp.MustCompile(`(?i)Pure-FTPd`)},
-	{"filezilla-ftp", regexp.MustCompile(`(?i)FileZilla Server[^\d]*([\d.]+)?`)},
-	{"microsoft-ftpd", regexp.MustCompile(`(?i)Microsoft FTP Service`)},
+	{"vsftpd", regexp.MustCompile(`(?i)\(vsFTPd ([\d.]+)\)`), false},
+	{"proftpd", regexp.MustCompile(`(?i)ProFTPD ([\d.]+[\w.]*)`), false},
+	{"pure-ftpd", regexp.MustCompile(`(?i)Pure-FTPd`), false},
+	{"filezilla-ftp", regexp.MustCompile(`(?i)FileZilla Server[^\d]*([\d.]+)?`), false},
+	{"microsoft-ftpd", regexp.MustCompile(`(?i)Microsoft FTP Service`), false},
 
 	// --- SMTP --- (banners usually begin "220")
-	{"postfix", regexp.MustCompile(`(?i)\bPostfix\b`)},
-	{"exim", regexp.MustCompile(`(?i)\bExim ([\d.]+)`)},
-	{"sendmail", regexp.MustCompile(`(?i)Sendmail[^\d]*([\d.]+[\w./]*)`)},
-	{"microsoft-esmtp", regexp.MustCompile(`(?i)Microsoft ESMTP MAIL Service[^\d]*([\d.]+)?`)},
+	{"postfix", regexp.MustCompile(`(?i)\bPostfix\b`), false},
+	{"exim", regexp.MustCompile(`(?i)\bExim ([\d.]+)`), false},
+	{"sendmail", regexp.MustCompile(`(?i)Sendmail[^\d]*([\d.]+[\w./]*)`), false},
+	{"microsoft-esmtp", regexp.MustCompile(`(?i)Microsoft ESMTP MAIL Service[^\d]*([\d.]+)?`), false},
 
 	// --- POP3 / IMAP ---
-	{"dovecot", regexp.MustCompile(`(?i)\bDovecot\b`)},
-	{"courier", regexp.MustCompile(`(?i)Courier`)},
+	{"dovecot", regexp.MustCompile(`(?i)\bDovecot\b`), false},
+	{"courier", regexp.MustCompile(`(?i)Courier`), false},
 
 	// --- Web servers (from a Server: header the banner grab captured) ---
-	{"nginx", regexp.MustCompile(`(?i)nginx/([\d.]+)`)},
-	{"apache", regexp.MustCompile(`(?i)Apache/([\d.]+)`)},
-	{"lighttpd", regexp.MustCompile(`(?i)lighttpd/([\d.]+)`)},
-	{"iis", regexp.MustCompile(`(?i)Microsoft-IIS/([\d.]+)`)},
-	{"caddy", regexp.MustCompile(`(?i)\bCaddy\b`)},
+	{"nginx", regexp.MustCompile(`(?i)nginx/([\d.]+)`), false},
+	{"apache", regexp.MustCompile(`(?i)Apache/([\d.]+)`), false},
+	{"lighttpd", regexp.MustCompile(`(?i)lighttpd/([\d.]+)`), false},
+	{"iis", regexp.MustCompile(`(?i)Microsoft-IIS/([\d.]+)`), false},
+	{"caddy", regexp.MustCompile(`(?i)\bCaddy\b`), false},
 
 	// --- Databases / caches / brokers ---
-	{"mongodb", regexp.MustCompile(`(?i)MongoDB`)},
-	{"elasticsearch", regexp.MustCompile(`(?i)"version"\s*:\s*\{\s*"number"\s*:\s*"([\d.]+)"`)},
-	{"rabbitmq", regexp.MustCompile(`(?i)RabbitMQ`)},
-	{"mariadb", regexp.MustCompile(`(?i)([\d.]+)-MariaDB`)},
+	{"mongodb", regexp.MustCompile(`(?i)MongoDB`), false},
+	{"elasticsearch", regexp.MustCompile(`(?i)"version"\s*:\s*\{\s*"number"\s*:\s*"([\d.]+)"`), false},
+	{"rabbitmq", regexp.MustCompile(`(?i)RabbitMQ`), false},
+	{"mariadb", regexp.MustCompile(`(?i)([\d.]+)-MariaDB`), true},
 
 	// --- Other common daemons ---
-	{"telnet", regexp.MustCompile(`(?i)^\xff[\xfb-\xfe]`)}, // Telnet IAC negotiation
+	{"telnet", regexp.MustCompile(`(?i)^\xff[\xfb-\xfe]`), true}, // Telnet IAC negotiation
 }
 
 // matchBannerSignature runs the signature table against a banner and, on
-// the first match, returns the product name and any captured version.
-// A miss returns ok=false, leaving the caller's existing logic untouched.
-func matchBannerSignature(banner string) (name, version string, ok bool) {
+// the first match, returns the product name, any captured version, the
+// full matched substring (matched), and whether the underlying protocol is
+// binary (see bannerSignature.Binary). A miss returns ok=false, leaving the
+// caller's existing logic untouched.
+func matchBannerSignature(banner string) (name, version, matched string, binary bool, ok bool) {
 	for _, sig := range bannerSignatures {
 		m := sig.Pattern.FindStringSubmatch(banner)
 		if m == nil {
@@ -77,7 +90,7 @@ func matchBannerSignature(banner string) (name, version string, ok bool) {
 		if len(m) > 1 {
 			version = m[1]
 		}
-		return sig.Name, version, true
+		return sig.Name, version, m[0], sig.Binary, true
 	}
-	return "", "", false
+	return "", "", "", false, false
 }

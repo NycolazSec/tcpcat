@@ -27,7 +27,7 @@ func TestMatchBannerSignature(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			name, version, ok := matchBannerSignature(tt.banner)
+			name, version, _, _, ok := matchBannerSignature(tt.banner)
 			if ok != tt.wantOK {
 				t.Fatalf("ok = %v, want %v (name=%q version=%q)", ok, tt.wantOK, name, version)
 			}
@@ -50,7 +50,7 @@ func TestMatchBannerSignatureNoFalsePositive(t *testing.T) {
 		"+OK POP3 ready",
 		"HTTP/1.1 200 OK",
 	} {
-		if name, _, ok := matchBannerSignature(banner); ok {
+		if name, _, _, _, ok := matchBannerSignature(banner); ok {
 			t.Errorf("banner %q matched %q, want no match", banner, name)
 		}
 	}

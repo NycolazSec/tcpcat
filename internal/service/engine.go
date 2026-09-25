@@ -108,10 +108,18 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 		// or "smtp" matches no CVEs. A miss falls through to the generic
 		// prefix cascade below, so an unrecognised banner is no worse off
 		// than before.
-		if name, version, ok := matchBannerSignature(rawBanner); ok {
+		if name, version, matched, binary, ok := matchBannerSignature(rawBanner); ok {
 			info.Name = name
 			info.Version = version
 			info.OS = extractOSFromBanner(rawBanner)
+			if binary {
+				// The raw banner is a binary protocol packet (see
+				// bannerSignature.Binary) -- report the matched substring
+				// instead of the surrounding bytes, which are meaningless
+				// (and sometimes coincidentally printable) protocol/salt
+				// bytes, not something a human would read as a banner.
+				info.Banner = sanitizeBanner(matched)
+			}
 			return info
 		}
 
@@ -148,6 +156,13 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 		if version, ok := parseMySQLHandshake(buf[:n]); ok {
 			info.Name = "mysql"
 			info.Version = version
+			// Overrides the raw-packet banner sanitizeBanner(rawBanner) set
+			// above: that binary handshake's length header, sequence byte,
+			// and protocol-version byte all sit before the version string
+			// parseMySQLHandshake actually extracted, so the generic banner
+			// is junk even after stripNonPrintable -- this is the one clean
+			// human-readable value the wire actually offered.
+			info.Banner = sanitizeBanner(version)
 			return info
 		}
 	}
@@ -252,10 +267,29 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 func sanitizeBanner(b string) string {
 	cleaned := strings.ReplaceAll(b, "\r", "")
 	cleaned = strings.ReplaceAll(cleaned, "\n", " ")
+	cleaned = stripNonPrintable(cleaned)
 	if len(cleaned) > 60 {
 		return cleaned[:60] + "..."
 	}
 	return cleaned
+}
+
+// stripNonPrintable drops every byte outside the printable ASCII range
+// (space through tilde). A text-based banner (SSH, FTP, SMTP, ...) is
+// unaffected, but a binary handshake treated as a banner -- MySQL/MariaDB's
+// initial packet, for one, leads with a 3-byte length header, a sequence
+// byte, and a raw protocol-version byte (0x0a) before any human-readable
+// version string -- would otherwise print as illegible control characters
+// and mangled multi-byte junk instead of being caught by a signature match.
+func stripNonPrintable(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c >= 0x20 && c <= 0x7e {
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
 }
 
 func extractServerHeader(httpResp string) (banner string, software string, version string, os string) {

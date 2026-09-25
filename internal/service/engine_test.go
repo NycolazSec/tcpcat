@@ -118,6 +118,7 @@ func TestSanitizeBanner(t *testing.T) {
 		{"short", "SSH-2.0-OpenSSH_8.9", "SSH-2.0-OpenSSH_8.9"},
 		{"strips crlf", "SSH-2.0-OpenSSH_8.9\r\nExtra\n", "SSH-2.0-OpenSSH_8.9 Extra "},
 		{"truncates long banners", strings.Repeat("A", 80), strings.Repeat("A", 60) + "..."},
+		{"strips control bytes and high-bit garbage", "8.0.34\x00\x01\x02\xff\xfe", "8.0.34"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -452,6 +453,32 @@ func TestParseMySQLHandshake(t *testing.T) {
 	}
 }
 
+// TestDetectServiceMariaDBBinaryBanner guards the case matchBannerSignature
+// (not parseMySQLHandshake) actually handles: a real MariaDB handshake's
+// "-MariaDB" signature match, surrounded by protocol/salt bytes that
+// happen to be printable ASCII by pure chance -- stripNonPrintable alone
+// can't clean this (the junk isn't non-printable), only reporting the
+// matched substring as the banner does.
+func TestDetectServiceMariaDBBinaryBanner(t *testing.T) {
+	payload := []byte{0x4a, 0x00, 0x00, 0x00, 0x0a}
+	payload = append(payload, []byte("5.5.5-10.6.12-MariaDB-1:10.6.12+maria~ubu2004-log")...)
+	payload = append(payload, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x21, 0x7a, 0x3d, 0x5c, 0x2b, 0x60, 0x21, 0x00)
+
+	port := startBannerServer(t, string(payload))
+
+	result := DetectService("127.0.0.1", port, 2*time.Second, false, "", false)
+
+	if result.Name != "mariadb" {
+		t.Errorf("Name = %q, want mariadb", result.Name)
+	}
+	if result.Version != "10.6.12" {
+		t.Errorf("Version = %q, want 10.6.12", result.Version)
+	}
+	if result.Banner != "10.6.12-MariaDB" {
+		t.Errorf("Banner = %q, want the matched \"10.6.12-MariaDB\" substring, not the raw handshake packet", result.Banner)
+	}
+}
+
 func TestDetectServiceMySQLHandshake(t *testing.T) {
 	payload := []byte{0x00, 0x00, 0x00, 0x00, 0x0a}
 	payload = append(payload, []byte("8.0.34")...)
@@ -466,6 +493,14 @@ func TestDetectServiceMySQLHandshake(t *testing.T) {
 	}
 	if result.Version != "8.0.34" {
 		t.Errorf("Version = %q, want 8.0.34", result.Version)
+	}
+	// Regression guard: the banner used to be the raw handshake packet
+	// (length header, sequence byte, 0x0a protocol-version byte, and
+	// trailing connection-ID bytes all included verbatim), which printed
+	// as illegible binary junk instead of the version MySQL/MariaDB
+	// clients actually display.
+	if result.Banner != "8.0.34" {
+		t.Errorf("Banner = %q, want the clean parsed version 8.0.34, not the raw handshake packet", result.Banner)
 	}
 }
 
