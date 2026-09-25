@@ -12,6 +12,8 @@ import (
 	"tcpcat/internal/scan"
 	"tcpcat/internal/service"
 	"tcpcat/internal/vuln"
+
+	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 func TestExportAuditJSONLWritesOneRecord(t *testing.T) {
@@ -36,6 +38,53 @@ func TestExportSARIFIncludesCVEs(t *testing.T) {
 	if err != nil || !strings.Contains(string(data), `"version": "2.1.0"`) || !strings.Contains(string(data), "CVE-2021-41773") {
 		t.Fatalf("invalid SARIF report: %q, error = %v", data, err)
 	}
+}
+
+// TestExportSARIFValidatesAgainstSchema loads the real, published SARIF
+// 2.1.0 JSON schema (testdata/sarif-2.1.0-schema.json, a verbatim copy of
+// json.schemastore.org/sarif-2.1.0.json) and checks that ExportSARIF's
+// output actually conforms to it -- not just that it looks plausible. This
+// guards two real bugs found by this exact check: a nil `results`/`rules`
+// slice serializes as JSON `null`, which the schema's `type: array`
+// rejects, and `shortDescription` must be a message object ({"text":
+// "..."}), not a bare string.
+func TestExportSARIFValidatesAgainstSchema(t *testing.T) {
+	schema, err := jsonschema.Compile("testdata/sarif-2.1.0-schema.json")
+	if err != nil {
+		t.Fatalf("compile SARIF schema: %v", err)
+	}
+
+	validate := func(t *testing.T, results []scan.TargetResult) {
+		t.Helper()
+		filePath := filepath.Join(t.TempDir(), "report.sarif")
+		if err := ExportSARIF(filePath, results); err != nil {
+			t.Fatalf("ExportSARIF() error = %v", err)
+		}
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("read SARIF file: %v", err)
+		}
+		var doc interface{}
+		if err := json.Unmarshal(data, &doc); err != nil {
+			t.Fatalf("SARIF output is not valid JSON: %v", err)
+		}
+		if err := schema.Validate(doc); err != nil {
+			t.Errorf("SARIF output does not conform to the 2.1.0 schema: %v\noutput: %s", err, data)
+		}
+	}
+
+	t.Run("no results at all", func(t *testing.T) {
+		validate(t, nil)
+	})
+	t.Run("open ports, no CVEs", func(t *testing.T) {
+		validate(t, []scan.TargetResult{{IP: "127.0.0.1", Port: 22, State: scan.StateOpen}})
+	})
+	t.Run("open port with a CVE", func(t *testing.T) {
+		validate(t, []scan.TargetResult{{
+			IP: "127.0.0.1", Port: 8080, State: scan.StateOpen,
+			Vulnerabilities: []vuln.Vulnerability{{ID: "CVE-2021-41773", Title: "Apache issue", CVSS: 7.5}},
+		}})
+	})
 }
 
 func sampleResults() []scan.TargetResult {

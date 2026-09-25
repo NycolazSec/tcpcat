@@ -591,11 +591,15 @@ func main() {
 		}
 		if err := output.ExportAuditJSONL(opts.AuditLog, displayTarget, auditOptions, results, duration); err != nil {
 			fmt.Printf("%s[!] Failed to write audit log: %v%s\n", config.Red, err, config.Reset)
+		} else {
+			fmt.Printf("%s[✓] Audit record appended to: %s%s\n", config.Green, opts.AuditLog, config.Reset)
 		}
 	}
 	if opts.SARIFOutput != "" {
 		if err := output.ExportSARIF(opts.SARIFOutput, results); err != nil {
 			fmt.Printf("%s[!] Failed to export SARIF: %v%s\n", config.Red, err, config.Reset)
+		} else {
+			fmt.Printf("%s[✓] Results exported to SARIF file: %s%s\n", config.Green, opts.SARIFOutput, config.Reset)
 		}
 	}
 	for _, export := range []struct {

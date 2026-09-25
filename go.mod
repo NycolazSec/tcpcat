@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.3
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.329.0
 	github.com/cilium/ebpf v0.22.0
+	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/sys v0.48.0
 )

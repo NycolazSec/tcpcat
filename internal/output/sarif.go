@@ -29,8 +29,8 @@ type sarifDriver struct {
 }
 
 type sarifRule struct {
-	ID               string `json:"id"`
-	ShortDescription string `json:"shortDescription"`
+	ID               string       `json:"id"`
+	ShortDescription sarifMessage `json:"shortDescription"`
 }
 
 type sarifResult struct {
@@ -57,7 +57,14 @@ type sarifArtifactLocation struct {
 }
 
 func ExportSARIF(filePath string, results []scan.TargetResult) error {
-	run := sarifRun{Tool: sarifTool{Driver: sarifDriver{Name: "tcpcat"}}}
+	// SARIF 2.1.0 requires results/rules to be an array when present (an
+	// omitted-or-null value fails schema validation) -- initialized here
+	// rather than left as a nil slice, which encoding/json renders as
+	// `null` instead of `[]` for an empty scan (no open ports at all).
+	run := sarifRun{
+		Tool:    sarifTool{Driver: sarifDriver{Name: "tcpcat", Rules: []sarifRule{}}},
+		Results: []sarifResult{},
+	}
 	rules := make(map[string]string)
 	for _, result := range results {
 		if result.State != scan.StateOpen {
@@ -80,7 +87,7 @@ func ExportSARIF(filePath string, results []scan.TargetResult) error {
 		}
 	}
 	for id, description := range rules {
-		run.Tool.Driver.Rules = append(run.Tool.Driver.Rules, sarifRule{ID: id, ShortDescription: description})
+		run.Tool.Driver.Rules = append(run.Tool.Driver.Rules, sarifRule{ID: id, ShortDescription: sarifMessage{Text: description}})
 	}
 	report := sarifReport{Version: "2.1.0", Schema: "https://json.schemastore.org/sarif-2.1.0.json", Runs: []sarifRun{run}}
 	data, err := json.MarshalIndent(report, "", "  ")
