@@ -10,6 +10,44 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-25
+
+### Added
+- `-sV`/`--jarm` now enumerate exactly which TLS versions a server
+  completes a handshake with (down to TLS 1.0), separate from the version
+  it negotiates by default -- a server can default to TLS 1.3 while
+  still accepting a downgrade to TLS 1.0/1.1 from a client that asks for
+  it, which is the real legacy-protocol exposure an audit cares about.
+  Flags legacy-version acceptance as a finding
+  (`internal/service/tls.go`'s `probeSupportedTLSVersions`).
+- `--jarm` now matches a computed hash against a small, sourced table of
+  known JARM fingerprints -- Cobalt Strike, Metasploit, AsyncRAT, Merlin
+  C2, Trickbot, and major CDN/service families, cross-referenced against
+  the reference `salesforce/jarm` README, plus a Go `net/http` default
+  TLS server fingerprint captured and verified locally
+  (`internal/service/jarm_db.go`).
+
+### Fixed
+- `-sV` no longer prints `(OS: )` with nothing after it when OS detection
+  left the field genuinely undetermined rather than explicitly
+  "unknown".
+- A TLS handshake that succeeds but whose application layer nothing
+  above recognises (e.g. an HTTP/2 endpoint whose binary preface never
+  looks like "HTTP/") now reports `ssl/h2`/`ssl/http`/`ssl/unknown`
+  (via the negotiated ALPN) instead of a bare `unknown`, which discarded
+  the one thing that was actually verified.
+- A certificate expiring within 48h now escalates to a critical,
+  hour-granular warning (`~24h`) instead of a misleadingly calm
+  "expires in 0 day(s)" from a floored day count.
+- A certificate SAN mismatch is downgraded to informational, with the
+  actual SANs listed, when the target was scanned by bare IP (expected --
+  most certificates only carry DNS SANs); scanning by the wrong hostname
+  still reports at full warning severity.
+- Vulnerability lookup now prints an explicit message when it's skipped
+  (no service version detected) or finds zero matches, instead of
+  staying silent in both cases indistinguishably from "not run yet".
+- Section separators lengthened to match the JARM hash line's width.
+
 ## [1.2.0] - 2026-09-25
 
 ### Added
@@ -528,7 +566,8 @@ Full diffs for every release are available via GitHub's
   visibility-testing controls, and a WASM-based scripting engine for custom
   detectors and exploit modules.
 
-[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/NycolazSec/tcpcat/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/NycolazSec/tcpcat/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/NycolazSec/tcpcat/compare/v1.1.0-beta.2...v1.1.0
 [1.0.1]: https://github.com/NycolazSec/tcpcat/compare/v1.0.0...v1.0.1
