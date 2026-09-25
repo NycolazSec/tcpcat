@@ -424,8 +424,13 @@ func main() {
 				results[i].TLS = svc.TLS
 				results[i].JARM = svc.JARM
 				results[i].HTTPPosture = svc.HTTPPosture
+				results[i].Findings = svc.Findings
 				fmt.Printf("%s[v] %s:%-5d ─ SERVICE: %s%s %s%s%s%s\n",
 					config.Bold, results[i].IP, results[i].Port, config.Bold, svc.Name, svc.Version, osDisp, config.Reset, bannerDisp)
+
+				for _, finding := range svc.Findings {
+					fmt.Printf("    %s[!] %s%s\n", config.Yellow, finding, config.Reset)
+				}
 
 				if svc.TLS != nil {
 					fmt.Printf("    %s[tls] %s | %s%s\n", config.Cyan, svc.TLS.Version, svc.TLS.CipherSuite, config.Reset)

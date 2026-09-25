@@ -593,6 +593,13 @@ func TestProbePostgresSSLNotOffered(t *testing.T) {
 	if !ok || got.Name != "postgresql" {
 		t.Errorf("probePostgres() = %+v, %v, want Name=postgresql, true", got, ok)
 	}
+	// Regression guard: a Postgres server offering no TLS at all means
+	// every session, including authentication, is plaintext on the wire --
+	// that used to be visible only by reading Banner closely, not surfaced
+	// as its own finding.
+	if len(got.Findings) != 1 || !strings.Contains(got.Findings[0], "plaintext") {
+		t.Errorf("Findings = %v, want a finding mentioning plaintext transport", got.Findings)
+	}
 }
 
 func TestProbePostgresRejectsUnexpectedByte(t *testing.T) {

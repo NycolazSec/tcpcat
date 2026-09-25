@@ -533,7 +533,15 @@ func probePostgres(conn net.Conn, timeout time.Duration) (ServiceInfo, bool) {
 	case 'S':
 		return ServiceInfo{Name: "postgresql", Banner: "PostgreSQL, SSL supported"}, true
 	case 'N':
-		return ServiceInfo{Name: "postgresql", Banner: "PostgreSQL, SSL not offered"}, true
+		return ServiceInfo{
+			Name:   "postgresql",
+			Banner: "PostgreSQL, SSL not offered",
+			// Not just banner text: a Postgres server with no TLS at all
+			// means every session -- including authentication -- is
+			// plaintext on the wire, worth its own flagged finding rather
+			// than something only visible by reading the banner closely.
+			Findings: []string{"PostgreSQL does not offer TLS -- authentication and all data travel in plaintext"},
+		}, true
 	default:
 		return ServiceInfo{}, false
 	}

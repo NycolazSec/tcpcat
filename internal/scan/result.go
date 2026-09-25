@@ -28,6 +28,7 @@ type TargetResult struct {
 	TLS             *service.TLSInfo         `json:"tls,omitempty"`
 	JARM            *service.JARMInfo        `json:"jarm,omitempty"`
 	HTTPPosture     *service.HTTPPostureInfo `json:"http_posture,omitempty"`
+	Findings        []string                 `json:"findings,omitempty"`
 	Latency         time.Duration            `json:"latency_ns"`
 	LatencyMs       float64                  `json:"latency_ms"`
 	Reason          string                   `json:"reason"`
