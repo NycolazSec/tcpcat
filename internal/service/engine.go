@@ -55,6 +55,16 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 	var tlsInfo *TLSInfo
 	if isTLSPort {
 		tlsInfo = probeTLS(ip, port, timeout, hostname)
+		if tlsInfo != nil {
+			tlsInfo.SupportedVersions = probeSupportedTLSVersions(ip, port, timeout, hostname)
+			for _, v := range tlsInfo.SupportedVersions {
+				if v == "TLS 1.0" || v == "TLS 1.1" {
+					tlsInfo.Weak = true
+					tlsInfo.Warnings = append(tlsInfo.Warnings,
+						fmt.Sprintf("also accepts a downgrade to %s (legacy protocol still enabled)", v))
+				}
+			}
+		}
 	}
 
 	// JARM is opt-in (10 extra connections/handshakes per TLS port, with
@@ -148,12 +158,16 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 
 		isTLS := port == 443 || port == 8443
 		var probeConn = conn
+		var negotiatedALPN string
 
 		if isTLS {
 			info.TLS = tlsInfo
 			info.JARM = jarmInfo
 
-			tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify} // #nosec G402 -- opt-in via caller flag; banner grabbing must complete the handshake against untrusted/self-signed target certs
+			tlsConfig := &tls.Config{ // #nosec G402 -- opt-in via caller flag; banner grabbing must complete the handshake against untrusted/self-signed target certs
+				InsecureSkipVerify: insecureSkipVerify,
+				NextProtos:         []string{"h2", "http/1.1"},
+			}
 			if hostname != "" {
 				tlsConfig.ServerName = hostname
 			}
@@ -166,6 +180,7 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 
 			if err := tlsClient.Handshake(); err == nil {
 				probeConn = tlsClient
+				negotiatedALPN = tlsClient.ConnectionState().NegotiatedProtocol
 			}
 		}
 
@@ -198,6 +213,29 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 					}
 				}
 			}
+		}
+
+		// The TLS handshake above genuinely succeeded (probeConn is the
+		// wrapped tlsClient, not the raw conn) even though nothing above
+		// managed to identify an application-layer service on top of it --
+		// an HTTP/2 endpoint whose binary preface never starts with
+		// "HTTP/", or one that just didn't answer the plaintext GET at
+		// all. Reporting "unknown" here would erase the one thing that was
+		// actually verified (a working TLS service); nmap's own
+		// convention in this situation is "ssl/unknown" rather than a bare
+		// "unknown", so an operator reading the output can tell "TLS
+		// handshake OK, app layer unidentified" apart from "nothing here
+		// answered at all".
+		if isTLS && probeConn != conn && info.Name == "unknown" {
+			switch negotiatedALPN {
+			case "h2":
+				info.Name = "ssl/h2"
+			case "http/1.1":
+				info.Name = "ssl/http"
+			default:
+				info.Name = "ssl/unknown"
+			}
+			return info
 		}
 	}
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,14 +28,38 @@ type TLSInfo struct {
 	CertIssuer    string   `json:"cert_issuer,omitempty"`
 	CertExpiresAt string   `json:"cert_expires_at,omitempty"`
 	CertDaysLeft  int      `json:"cert_days_left,omitempty"`
-	SelfSigned    bool     `json:"self_signed,omitempty"`
-	Weak          bool     `json:"weak,omitempty"`
-	Warnings      []string `json:"warnings,omitempty"`
+	// CertCritical marks an expiry warning severe enough to escalate past a
+	// routine warning (already expired, or expiring within
+	// certExpiryCriticalHours) -- callers printing Warnings can use this to
+	// pick a louder color instead of treating every entry the same.
+	CertCritical bool `json:"cert_critical,omitempty"`
+	// CertSANs is every Subject Alternative Name on the certificate (DNS
+	// names and IP addresses alike), shown regardless of whether
+	// verification against the scanned host passed -- so a "does not
+	// match" warning is never the only information available; the operator
+	// can see for themselves what the cert actually covers.
+	CertSANs []string `json:"cert_sans,omitempty"`
+	SelfSigned bool `json:"self_signed,omitempty"`
+	Weak       bool `json:"weak,omitempty"`
+	// SupportedVersions lists every TLS version (down to 1.0) the server
+	// completes a full handshake with, not just the one it negotiates by
+	// default -- a server can default to TLS 1.3 while still happily
+	// downgrading for a client that only offers TLS 1.0, which is the real
+	// legacy-protocol exposure (see probeSupportedTLSVersions in engine.go's
+	// caller).
+	SupportedVersions []string `json:"supported_tls_versions,omitempty"`
+	Warnings          []string `json:"warnings,omitempty"`
 }
 
 // certExpiryWarnDays is how close to expiry a certificate has to be before
 // probeTLS calls it out as a warning rather than just recording the date.
 const certExpiryWarnDays = 14
+
+// certExpiryCriticalHours is how close to expiry escalates the warning from
+// routine to critical, and switches its message from a day count (which
+// rounds "expires tomorrow" down to a misleadingly calm "0 day(s)") to an
+// hour count.
+const certExpiryCriticalHours = 48
 
 // probeTLS performs its own dedicated TLS handshake -- separate from the
 // one DetectService's HTTP banner grab does on the same port -- specifically
@@ -113,13 +138,24 @@ func probeTLS(ip string, port int, timeout time.Duration, hostname string) *TLSI
 		info.CertIssuer = cert.Issuer.CommonName
 		info.CertExpiresAt = cert.NotAfter.Format("2006-01-02")
 
-		daysLeft := int(time.Until(cert.NotAfter).Hours() / 24)
-		info.CertDaysLeft = daysLeft
+		// A Duration comparison, not a floored day count: a cert that
+		// expired 2 hours ago has timeLeft < 0 regardless, but
+		// int(timeLeft.Hours()/24) truncates toward zero to 0 (not -1),
+		// which would misreport a just-expired cert as merely "expiring
+		// soon". CertDaysLeft itself keeps the same floored-days value for
+		// JSON/XML consumers that already expect a day count.
+		timeLeft := time.Until(cert.NotAfter)
+		info.CertDaysLeft = int(timeLeft.Hours() / 24)
 		switch {
-		case daysLeft < 0:
-			info.Warnings = append(info.Warnings, "certificate has expired")
-		case daysLeft < certExpiryWarnDays:
-			info.Warnings = append(info.Warnings, fmt.Sprintf("certificate expires in %d day(s)", daysLeft))
+		case timeLeft < 0:
+			info.CertCritical = true
+			info.Warnings = append(info.Warnings, "CRITICAL: certificate has expired")
+		case timeLeft < certExpiryCriticalHours*time.Hour:
+			info.CertCritical = true
+			info.Warnings = append(info.Warnings,
+				fmt.Sprintf("CRITICAL: certificate expires in ~%.0fh", timeLeft.Hours()))
+		case info.CertDaysLeft < certExpiryWarnDays:
+			info.Warnings = append(info.Warnings, fmt.Sprintf("certificate expires in %d day(s)", info.CertDaysLeft))
 		}
 
 		if len(state.PeerCertificates) == 1 && cert.Issuer.String() == cert.Subject.String() {
@@ -127,17 +163,86 @@ func probeTLS(ip string, port int, timeout time.Duration, hostname string) *TLSI
 			info.Warnings = append(info.Warnings, "self-signed certificate")
 		}
 
+		info.CertSANs = append(info.CertSANs, cert.DNSNames...)
+		for _, sanIP := range cert.IPAddresses {
+			info.CertSANs = append(info.CertSANs, sanIP.String())
+		}
+
 		verifyAgainst := hostname
+		scannedByIP := hostname == ""
 		if verifyAgainst == "" {
 			verifyAgainst = ip
 		}
 		if err := cert.VerifyHostname(verifyAgainst); err != nil {
-			info.Warnings = append(info.Warnings,
-				fmt.Sprintf("certificate does not match %s", verifyAgainst))
+			sansDesc := "none"
+			if len(info.CertSANs) > 0 {
+				sansDesc = strings.Join(info.CertSANs, ", ")
+			}
+			if scannedByIP {
+				// A certificate covering only a DNS name (the vast
+				// majority of them) will always "fail" to verify against
+				// whatever bare IP it happened to be reached on -- that's
+				// expected, not a misconfiguration, so this stays
+				// informational rather than a same-severity warning as a
+				// real mismatch (e.g. scanning the wrong hostname).
+				info.Warnings = append(info.Warnings,
+					fmt.Sprintf("INFO: certificate has no SAN for %s (SANs: %s) -- expected when scanning by IP", verifyAgainst, sansDesc))
+			} else {
+				info.Warnings = append(info.Warnings,
+					fmt.Sprintf("certificate does not match %s (SANs: %s)", verifyAgainst, sansDesc))
+			}
 		}
 	}
 
 	return info
+}
+
+// probeSupportedVersionTargets is every TLS version probeSupportedTLSVersions
+// tests individually, oldest first.
+var probeSupportedVersionTargets = []uint16{
+	tls.VersionTLS10, tls.VersionTLS11, tls.VersionTLS12, tls.VersionTLS13,
+}
+
+// probeSupportedTLSVersions reports which TLS versions the server will
+// actually complete a handshake with, one dedicated connection per version
+// (MinVersion==MaxVersion pins the client to asking for exactly that one) --
+// deliberately separate from probeTLS's own single handshake above, which
+// only shows what the server negotiates *by default*. A server can default
+// to TLS 1.3 while still accepting a downgrade to TLS 1.0 from a client
+// that asks for it, which is the actual legacy-protocol exposure an audit
+// cares about, and the default-negotiation handshake alone can't reveal
+// that either way.
+//
+// Each attempt is capped well under the caller's own timeout: a server that
+// doesn't support a given version replies with a handshake-failure alert in
+// milliseconds, so there's nothing to gain from waiting the full timeout on
+// every one of the 4 attempts -- and something real to lose against a
+// listener that accepts the TCP connection but never speaks TLS at all
+// (dead weight, a non-TLS service on a TLS port), where every attempt would
+// otherwise wait out the complete timeout with nothing to show for it.
+func probeSupportedTLSVersions(ip string, port int, timeout time.Duration, hostname string) []string {
+	attemptTimeout := timeout
+	if attemptTimeout > time.Second {
+		attemptTimeout = time.Second
+	}
+
+	target := net.JoinHostPort(ip, strconv.Itoa(port))
+	var supported []string
+	for _, version := range probeSupportedVersionTargets {
+		dialer := &net.Dialer{Timeout: attemptTimeout}
+		conn, err := tls.DialWithDialer(dialer, "tcp", target, &tls.Config{
+			InsecureSkipVerify: true, // #nosec G402 -- probing which versions the server will accept, not verifying trust
+			MinVersion:         version,
+			MaxVersion:         version,
+			ServerName:         hostname,
+		})
+		if err != nil {
+			continue
+		}
+		supported = append(supported, tlsVersionName(version))
+		_ = conn.Close()
+	}
+	return supported
 }
 
 func tlsVersionName(version uint16) string {

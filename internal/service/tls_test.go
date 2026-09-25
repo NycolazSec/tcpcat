@@ -263,14 +263,45 @@ func TestProbeTLSExpiredCertificate(t *testing.T) {
 		t.Errorf("CertDaysLeft = %d, want negative (already expired)", info.CertDaysLeft)
 	}
 
+	if !info.CertCritical {
+		t.Error("CertCritical = false, want true for an expired certificate")
+	}
+
 	found := false
 	for _, w := range info.Warnings {
-		if w == "certificate has expired" {
+		if w == "CRITICAL: certificate has expired" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("Warnings = %v, want \"certificate has expired\" present", info.Warnings)
+		t.Errorf("Warnings = %v, want \"CRITICAL: certificate has expired\" present", info.Warnings)
+	}
+}
+
+func TestProbeTLSExpiringWithin48HoursIsCritical(t *testing.T) {
+	// The regression this guards: a cert expiring tomorrow used to floor to
+	// "expires in 0 day(s)" -- technically true, but read as "not urgent"
+	// by anyone skimming for whole-day counts. Under 48h now escalates to
+	// an hour-granularity, critical-severity warning instead.
+	cert := selfSignedCert(t, "127.0.0.1", time.Now().Add(10*time.Hour))
+	port := startTLSTestServer(t, cert, tls.VersionTLS12)
+
+	info := probeTLS("127.0.0.1", port, 2*time.Second, "")
+	if info == nil {
+		t.Fatal("probeTLS() = nil, want a result")
+	}
+	if !info.CertCritical {
+		t.Error("CertCritical = false, want true for a certificate expiring in ~10h")
+	}
+
+	found := false
+	for _, w := range info.Warnings {
+		if strings.HasPrefix(w, "CRITICAL: certificate expires in ~") && strings.HasSuffix(w, "h") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Warnings = %v, want a \"CRITICAL: certificate expires in ~Nh\" entry", info.Warnings)
 	}
 }
 
@@ -297,7 +328,12 @@ func TestProbeTLSExpiringSoonCertificate(t *testing.T) {
 	}
 }
 
-func TestProbeTLSHostnameMismatch(t *testing.T) {
+func TestProbeTLSHostnameMismatchByIPIsInformational(t *testing.T) {
+	// Scanning by bare IP against a certificate that (like the vast
+	// majority of them) only carries a DNS SAN always "fails" a hostname
+	// check -- that's expected, not a misconfiguration, so it's downgraded
+	// to an INFO-level note (with the actual SANs listed) rather than a
+	// same-severity warning as a real mismatch.
 	cert := selfSignedCert(t, "totally-different-name.example", time.Now().AddDate(1, 0, 0))
 	port := startTLSTestServer(t, cert, tls.VersionTLS12)
 
@@ -306,14 +342,44 @@ func TestProbeTLSHostnameMismatch(t *testing.T) {
 		t.Fatal("probeTLS() = nil, want a result")
 	}
 
+	if len(info.CertSANs) != 1 || info.CertSANs[0] != "totally-different-name.example" {
+		t.Errorf("CertSANs = %v, want [\"totally-different-name.example\"]", info.CertSANs)
+	}
+
 	found := false
 	for _, w := range info.Warnings {
-		if w == "certificate does not match 127.0.0.1" {
+		if strings.HasPrefix(w, "INFO: certificate has no SAN for 127.0.0.1") && strings.Contains(w, "totally-different-name.example") {
+			found = true
+		}
+		if strings.HasPrefix(w, "certificate does not match") {
+			t.Errorf("Warnings = %v, want no full-severity mismatch entry when scanning by bare IP", info.Warnings)
+		}
+	}
+	if !found {
+		t.Errorf("Warnings = %v, want an INFO-level SAN note", info.Warnings)
+	}
+}
+
+func TestProbeTLSHostnameMismatchByNameIsFullSeverity(t *testing.T) {
+	// The IP case above is downgraded to INFO; scanning by the wrong name
+	// on purpose (or a genuinely misconfigured vhost) is a real finding
+	// and must stay at full warning severity.
+	cert := selfSignedCert(t, "totally-different-name.example", time.Now().AddDate(1, 0, 0))
+	port := startTLSTestServer(t, cert, tls.VersionTLS12)
+
+	info := probeTLS("127.0.0.1", port, 2*time.Second, "requested-name.example")
+	if info == nil {
+		t.Fatal("probeTLS() = nil, want a result")
+	}
+
+	found := false
+	for _, w := range info.Warnings {
+		if w == "certificate does not match requested-name.example (SANs: totally-different-name.example)" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("Warnings = %v, want a hostname-mismatch entry", info.Warnings)
+		t.Errorf("Warnings = %v, want a full-severity hostname-mismatch entry naming the SANs", info.Warnings)
 	}
 }
 
@@ -405,6 +471,50 @@ func TestProbeTLSWeakVersionIsFlagged(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("Warnings = %v, want the TLS 1.1 deprecation notice", info.Warnings)
+	}
+}
+
+func TestProbeSupportedTLSVersions(t *testing.T) {
+	cert := selfSignedCert(t, "127.0.0.1", time.Now().AddDate(1, 0, 0))
+
+	// Unlike startTLSTestServer (one accept, matching probeTLS's single
+	// handshake), this probe makes one connection per version tested, so
+	// the fixture here must actually keep serving new connections.
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12, // the "server" only ever accepts 1.2 and 1.3
+	})
+	if err != nil {
+		t.Fatalf("tls.Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer func() { _ = c.Close() }()
+				if tlsConn, ok := c.(*tls.Conn); ok {
+					_ = tlsConn.Handshake()
+				}
+			}(conn)
+		}
+	}()
+
+	port := ln.Addr().(*net.TCPAddr).Port
+	supported := probeSupportedTLSVersions("127.0.0.1", port, 2*time.Second, "")
+
+	want := map[string]bool{"TLS 1.2": true, "TLS 1.3": true}
+	if len(supported) != len(want) {
+		t.Errorf("probeSupportedTLSVersions() = %v, want exactly %v", supported, want)
+	}
+	for _, v := range supported {
+		if !want[v] {
+			t.Errorf("probeSupportedTLSVersions() included %q, want only TLS 1.2/1.3 (server's MinVersion excludes 1.0/1.1)", v)
+		}
 	}
 }
 

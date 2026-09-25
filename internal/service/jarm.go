@@ -47,6 +47,10 @@ import (
 // not a TLS server, or reset every connection).
 type JARMInfo struct {
 	Hash string `json:"hash,omitempty"`
+	// Label is what a match against knownJARMHashes (jarm_db.go) says this
+	// fingerprint is known to belong to -- empty when the hash isn't in
+	// that (necessarily incomplete) table.
+	Label string `json:"label,omitempty"`
 }
 
 // jarmZeroHash is what jarm_hash() in the reference returns when all 10
@@ -118,7 +122,8 @@ func ProbeJARM(ip string, port int, timeout time.Duration, hostname string) *JAR
 		results[i] = readServerHello(data)
 	}
 
-	return &JARMInfo{Hash: jarmHash(results)}
+	hash := jarmHash(results)
+	return &JARMInfo{Hash: hash, Label: lookupJARM(hash)}
 }
 
 // sendProbe opens its own connection, writes payload, and reads back up to

@@ -220,7 +220,7 @@ func main() {
 
 		fmt.Printf("%s[*] Executing TCP Traceroute to %s:%d (max %d hops)...%s\n", config.Yellow, targetIPs[0], traceroutePort, maxHops, config.Reset)
 		fmt.Printf("%s%-4s %-25s %-30s %-10s%s\n", config.Bold, "Hop", "IP Address", "Hostname", "Latency", config.Reset)
-		fmt.Println(config.Bold + "───────────────────────────────────────────────────────────────────────────" + config.Reset)
+		fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
 
 		hops := discovery.RunTraceroute(targetIPs[0], traceroutePort, maxHops, 2*time.Second)
 		for _, h := range hops {
@@ -324,7 +324,7 @@ func main() {
 	}
 
 	fmt.Printf("%s[*] Ports loaded: %d port(s) targeted%s\n", config.White, len(targetedPorts), config.Reset)
-	fmt.Println(config.Bold + "───────────────────────────────────────────────────────────────────────────" + config.Reset)
+	fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -367,7 +367,7 @@ func main() {
 	results := engine.Execute(activeTargets, targetedPorts)
 
 	if opts.DeepInspect || opts.ProtocolTracing || opts.TimingAnalysis || opts.PayloadAnalysis {
-		fmt.Println(config.Bold + "───────────────────────────────────────────────────────────────────────────" + config.Reset)
+		fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
 		fmt.Printf("%s[*] Running Deep Packet Inspection...%s\n", config.Yellow, config.Reset)
 		osiV := opts.OSIVerbosity
 		if osiV == 0 {
@@ -381,7 +381,7 @@ func main() {
 	}
 
 	if opts.ServiceDetect {
-		fmt.Println(config.Bold + "───────────────────────────────────────────────────────────────────────────" + config.Reset)
+		fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
 		fmt.Printf("%s[*] Running Service & Version Detection...%s\n", config.Red, config.Reset)
 		for i := range results {
 			if results[i].State == scan.StateOpen {
@@ -395,7 +395,7 @@ func main() {
 					bannerDisp = fmt.Sprintf(" | banner=[%s]", svc.Banner)
 				}
 				osDisp := ""
-				if svc.OS != "unknown" {
+				if svc.OS != "" && svc.OS != "unknown" {
 					osDisp = fmt.Sprintf(" (OS: %s)", svc.OS)
 				}
 				results[i].OS = svc.OS
@@ -418,13 +418,32 @@ func main() {
 						fmt.Printf("    %s[tls] cert: %s (issuer: %s, expires %s)%s\n",
 							config.Cyan, svc.TLS.CertSubject, svc.TLS.CertIssuer, svc.TLS.CertExpiresAt, config.Reset)
 					}
+					if len(svc.TLS.SupportedVersions) > 0 {
+						fmt.Printf("    %s[tls] accepted versions: %s%s\n", config.Cyan, strings.Join(svc.TLS.SupportedVersions, ", "), config.Reset)
+					}
 					for _, warning := range svc.TLS.Warnings {
-						fmt.Printf("    %s[!] tls: %s%s\n", config.Yellow, warning, config.Reset)
+						// A severity prefix picks the color and is stripped
+						// from the printed text (still present verbatim in
+						// JSON/XML export, which reads Warnings directly) --
+						// CRITICAL for an escalated cert-expiry finding,
+						// INFO for the "expected when scanning by IP" SAN
+						// note, plain "[!] tls:" otherwise.
+						label, color := "[!] tls:", config.Yellow
+						switch {
+						case strings.HasPrefix(warning, "CRITICAL: "):
+							label, color, warning = "[!!] tls:", config.Red, strings.TrimPrefix(warning, "CRITICAL: ")
+						case strings.HasPrefix(warning, "INFO: "):
+							label, color, warning = "[i] tls:", config.Cyan, strings.TrimPrefix(warning, "INFO: ")
+						}
+						fmt.Printf("    %s%s %s%s\n", color, label, warning, config.Reset)
 					}
 				}
 
 				if svc.JARM != nil {
 					fmt.Printf("    %s[tls] jarm: %s%s\n", config.Cyan, svc.JARM.Hash, config.Reset)
+					if svc.JARM.Label != "" {
+						fmt.Printf("    %s[!] jarm match: %s%s\n", config.Red, svc.JARM.Label, config.Reset)
+					}
 				}
 
 				if svc.HTTPPosture != nil {
@@ -459,7 +478,7 @@ func main() {
 		} else if vulnScanner == nil {
 			fmt.Printf("%s[!] No vulnerability scanner is available.%s\n", config.Red, config.Reset)
 		} else {
-			fmt.Println(config.Bold + "───────────────────────────────────────────────────────────────────────────" + config.Reset)
+			fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
 			fmt.Printf("%s[*] Running Vulnerability Lookup (Source: %s)...%s\n", config.Red, vulnScanner.SourceName(), config.Reset)
 
 			for i := range results {
@@ -475,6 +494,7 @@ func main() {
 				}
 				if r.Service == "unknown" || r.Version == "" {
 					r.Assessment.Reason = "No reliable service version was detected."
+					fmt.Printf("    %s[~] %s:%-5d - no version detected, vulnerability lookup skipped%s\n", config.White, r.IP, r.Port, config.Reset)
 					continue
 				}
 
@@ -531,6 +551,8 @@ func main() {
 						}
 					} else if initialCount > 0 {
 						fmt.Printf("%s[+] %s:%-5d - 0 CVEs found after strict version filtering.%s\n", config.Green, r.IP, r.Port, config.Reset)
+					} else {
+						fmt.Printf("%s[+] %s:%-5d - 0 vulnerabilities found for %s %s.%s\n", config.Green, r.IP, r.Port, r.Service, r.Version, config.Reset)
 					}
 				}
 			}
@@ -546,7 +568,7 @@ func main() {
 		}
 	}
 
-	fmt.Println(config.Bold + "───────────────────────────────────────────────────────────────────────────" + config.Reset)
+	fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
 	fmt.Printf("%s[✓] Scan completed in %v. Found %d open port(s) across %d active target(s).%s\n",
 		config.Green, duration.Round(time.Millisecond), openCount, len(activeTargets), config.Reset)
 
