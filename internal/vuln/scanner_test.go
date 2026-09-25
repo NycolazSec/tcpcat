@@ -226,3 +226,69 @@ func BenchmarkFilterRelevantCVEs(b *testing.B) {
 		_ = FilterRelevantCVEs(vulns, "linux")
 	}
 }
+
+func TestAnnotateApplicabilityFlagsOSMismatch(t *testing.T) {
+	// Real title text seen in a live scan: an upstream MySQL/MariaDB
+	// advisory that only applies to a Windows build, surfaced against a
+	// Linux (Ubuntu) host.
+	vulns := []Vulnerability{
+		{ID: "CVE-2026-44170", Title: "MariaDB: Argument injection in CONNECT REST Xcurl on Windows via unsanitized URL"},
+	}
+	got := AnnotateApplicability(vulns, "ubuntu")
+	if got[0].Applicability != "not_applicable_os:windows" {
+		t.Errorf("Applicability = %q, want not_applicable_os:windows", got[0].Applicability)
+	}
+}
+
+func TestAnnotateApplicabilityAllowsMatchingOS(t *testing.T) {
+	vulns := []Vulnerability{
+		{ID: "CVE-x", Title: "Something that also mentions Windows registry-style paths but affects Windows hosts"},
+	}
+	got := AnnotateApplicability(vulns, "windows")
+	if got[0].Applicability != "" {
+		t.Errorf("Applicability = %q, want empty (detected OS matches the title's OS)", got[0].Applicability)
+	}
+}
+
+func TestAnnotateApplicabilityFlagsOptionalComponent(t *testing.T) {
+	vulns := []Vulnerability{
+		{ID: "CVE-2026-48163", Title: "MariaDB: wsrep SST unsafe parameter handling on the donor side (rsync)"},
+	}
+	got := AnnotateApplicability(vulns, "ubuntu")
+	if got[0].Applicability != "requires_component:wsrep" {
+		t.Errorf("Applicability = %q, want requires_component:wsrep", got[0].Applicability)
+	}
+}
+
+func TestAnnotateApplicabilityLeavesOrdinaryCVEsAlone(t *testing.T) {
+	vulns := []Vulnerability{
+		{ID: "CVE-x", Title: "Buffer overflow in the SQL parser"},
+	}
+	got := AnnotateApplicability(vulns, "ubuntu")
+	if got[0].Applicability != "" {
+		t.Errorf("Applicability = %q, want empty", got[0].Applicability)
+	}
+}
+
+func TestAnnotateApplicabilityUnknownOSNeverFlagsMismatch(t *testing.T) {
+	vulns := []Vulnerability{
+		{ID: "CVE-x", Title: "Some issue on Windows Server"},
+	}
+	got := AnnotateApplicability(vulns, "unknown")
+	if got[0].Applicability != "" {
+		t.Errorf("Applicability = %q, want empty (no detected OS to compare against)", got[0].Applicability)
+	}
+}
+
+func TestAnnotateApplicabilityFlagsComponentAsIdentifierPrefix(t *testing.T) {
+	// Real title from a live scan: "wsrep_notify_cmd" is an identifier, so
+	// the trailing underscore is a word character -- \bwsrep\b alone
+	// would not match here.
+	vulns := []Vulnerability{
+		{ID: "CVE-2026-49261", Title: "MariaDB server has unsafe parameter handling in `wsrep_notify_cmd`"},
+	}
+	got := AnnotateApplicability(vulns, "ubuntu")
+	if got[0].Applicability != "requires_component:wsrep" {
+		t.Errorf("Applicability = %q, want requires_component:wsrep", got[0].Applicability)
+	}
+}

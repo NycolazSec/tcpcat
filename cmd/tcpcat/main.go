@@ -569,9 +569,22 @@ func main() {
 						return vulnerabilities[i].CVSS > vulnerabilities[j].CVSS
 					})
 					vulnerabilities = vuln.Enrich(vulnerabilities)
+					vulnerabilities = vuln.AnnotateApplicability(vulnerabilities, r.OS)
 					r.Vulnerabilities = vulnerabilities
 					if len(vulnerabilities) > 0 {
+						// The headline severity should reflect what this host is
+						// actually at risk from -- the highest-CVSS entry among
+						// those with no flagged precondition (see
+						// AnnotateApplicability), not just index 0 blindly, which
+						// could be a Windows-only CVE on a Linux host outscoring
+						// every entry that's actually applicable here.
 						r.RiskSeverity = vulnerabilities[0].Severity
+						for _, v := range vulnerabilities {
+							if v.Applicability == "" {
+								r.RiskSeverity = v.Severity
+								break
+							}
+						}
 						r.Assessment.Status = "matched"
 						r.Assessment.Reason = fmt.Sprintf("Matched %s %s against %s.", r.Service, r.Version, vulnScanner.SourceName())
 					} else {
@@ -593,7 +606,14 @@ func main() {
 							default:
 								cvssColor = config.White
 							}
-							fmt.Printf("    |_ %s (%sCVSS: %.1f%s) - %s\n", v.ID, cvssColor, v.CVSS, config.Reset, v.Title)
+							note := ""
+							switch {
+							case strings.HasPrefix(v.Applicability, "not_applicable_os:"):
+								note = fmt.Sprintf(" %s[not applicable: %s-only]%s", config.White, strings.TrimPrefix(v.Applicability, "not_applicable_os:"), config.Reset)
+							case strings.HasPrefix(v.Applicability, "requires_component:"):
+								note = fmt.Sprintf(" %s[requires %s]%s", config.White, strings.TrimPrefix(v.Applicability, "requires_component:"), config.Reset)
+							}
+							fmt.Printf("    |_ %s (%sCVSS: %.1f%s) - %s%s\n", v.ID, cvssColor, v.CVSS, config.Reset, v.Title, note)
 						}
 						if filteredCount > 0 {
 							fmt.Printf("    %s[~] %d CVEs filtered by OS (%s)%s\n", config.Yellow, filteredCount, r.OS, config.Reset)
