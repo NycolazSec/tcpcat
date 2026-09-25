@@ -20,23 +20,42 @@ const (
 	Cyan   = "\033[96m" // Corrigé (était \033[97m = blanc)
 )
 
-var Banner = fmt.Sprintf(`
-%s  [eth0]====-%s._     _,-'""'-._%s       %s%s _____ ____ ____   ____    _  _____ %s
+const bannerTemplate = `
+%s  [%s]====-%s._     _,-'""'-._%s       %s%s _____ ____ ____   ____    _  _____ %s
 %s         (,-.'._,'(       |\'-/|%s      %s%s|_   _/ ___|  _ \ / ___|  / \|_   _|%s
 %s             '-.-' \ )-'( , %s%so o%s%s)%s      %s%s  | || |   | |_) | |     / _ \ | |  %s
 %s                   '-    \'_'"'-%s      %s%s  | || |___|  __/| |___ / ___ \| |  %s
 %s    <--[SYN]--(sniffing)--[ACK]-->%s    %s%s  |_| \____|_|    \____/_/   \_\_|  %s
                                         %s%sModular Security & Network Engine%s
                                          %s[ eBPF / AF_XDP ] %sby NycolazSec%s
-`,
-	White, Red, Reset, Red, Bold, Reset,
-	Red, Reset, Red, Bold, Reset,
-	Red, Green, Bold, Reset, Red, Reset, Red, Bold, Reset,
-	Red, Reset, Red, Bold, Reset,
-	Yellow, Reset, Red, Bold, Reset,
-	White, Bold, Reset,
-	Yellow, White, Reset,
-)
+`
+
+// RenderBanner renders the startup banner with the ASCII bridge icon
+// showing iface -- the interface tcpcat is actually using (explicit
+// -i/--interface, or the auto-detected default-route interface) -- instead
+// of the hardcoded "eth0" that used to print regardless of the real
+// interface (a Docker bridge, a secondary NIC, ...). iface == "" falls
+// back to the generic "eth0" placeholder, for callers that don't know the
+// real interface yet (e.g. --help, printed before any target/interface
+// resolution).
+func RenderBanner(iface string) string {
+	if iface == "" {
+		iface = "eth0"
+	}
+	return fmt.Sprintf(bannerTemplate,
+		White, iface, Red, Reset, Red, Bold, Reset,
+		Red, Reset, Red, Bold, Reset,
+		Red, Green, Bold, Reset, Red, Reset, Red, Bold, Reset,
+		Red, Reset, Red, Bold, Reset,
+		Yellow, Reset, Red, Bold, Reset,
+		White, Bold, Reset,
+		Yellow, White, Reset,
+	)
+}
+
+// Banner is the generic-interface rendering, used wherever the real
+// interface isn't known yet (see RenderBanner).
+var Banner = RenderBanner("")
 
 type Options struct {
 	Target      string

@@ -15,6 +15,7 @@ import (
 	"tcpcat/config"
 	"tcpcat/internal/compare"
 	"tcpcat/internal/discovery"
+	"tcpcat/internal/netiface"
 	"tcpcat/internal/output"
 	"tcpcat/internal/ports"
 	"tcpcat/internal/scan"
@@ -46,7 +47,13 @@ func main() {
 		return
 	}
 
-	fmt.Println(config.Banner)
+	bannerIface := opts.Interface
+	if bannerIface == "" {
+		if name, err := netiface.DefaultInterfaceName(); err == nil {
+			bannerIface = name
+		}
+	}
+	fmt.Println(config.RenderBanner(bannerIface))
 
 	if opts.Profile == "safe-production" {
 		fmt.Printf("%s[*] Profile: safe-production active -- rate capped at %d pps, timing T%d, evasion/fragmentation/decoys disabled, -sV forced on.%s\n",

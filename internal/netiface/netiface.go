@@ -46,3 +46,39 @@ func MAC(ifaceName string) (net.HardwareAddr, error) {
 	}
 	return iface.HardwareAddr, nil
 }
+
+// DefaultInterfaceName reports the name of the interface the default route
+// would send traffic through -- the same interface auto-detection (no
+// -i/--interface given) ends up using, resolved cheaply here (no packets
+// sent) purely for cosmetic/display purposes, e.g. showing the operator
+// which interface is actually in play instead of a generic placeholder.
+func DefaultInterfaceName() (string, error) {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return "", fmt.Errorf("no route to determine a default interface: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	localAddr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		return "", fmt.Errorf("could not determine local address")
+	}
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", fmt.Errorf("list interfaces: %w", err)
+	}
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if ok && ipNet.IP.Equal(localAddr.IP) {
+				return iface.Name, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no interface owns local address %s", localAddr.IP)
+}
