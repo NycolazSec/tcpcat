@@ -21,6 +21,7 @@ func TestMatchBannerSignature(t *testing.T) {
 		{"apache", "Server: Apache/2.4.41 (Ubuntu)", "apache", "2.4.41", true},
 		{"iis", "Server: Microsoft-IIS/10.0", "iis", "10.0", true},
 		{"mariadb", "5.5.5-10.6.12-MariaDB", "mariadb", "10.6.12", true},
+		{"mariadb with distro suffix", "5.5.5-10.6.12-MariaDB-1:10.6.12+maria~ubu2004-log", "mariadb", "10.6.12", true},
 		{"elasticsearch", `{"name":"n","version":{"number":"8.11.1"}}`, "elasticsearch", "8.11.1", true},
 		{"unrecognised", "220 generic ftp ready", "", "", false},
 		{"empty", "", "", "", false},

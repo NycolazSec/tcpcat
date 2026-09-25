@@ -20,7 +20,13 @@ func Enrich(vulns []Vulnerability) []Vulnerability {
 	for i := range vulns {
 		vulns[i].Severity = SeverityForCVSS(vulns[i].CVSS)
 		vulns[i].Remediation = "Update the affected software to a vendor-supported version and verify the remediation."
-		vulns[i].Confidence = "version-based"
+		// A caller may have already tagged this entry (e.g. the distro-aware
+		// lookup in cmd/tcpcat/main.go marking one "potential (upstream
+		// version match)" when only an upstream, not a distro-backport,
+		// match was confirmed) -- don't clobber that with the generic default.
+		if vulns[i].Confidence == "" {
+			vulns[i].Confidence = "version-based"
+		}
 	}
 	return vulns
 }

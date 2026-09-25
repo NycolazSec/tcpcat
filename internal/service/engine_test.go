@@ -474,8 +474,12 @@ func TestDetectServiceMariaDBBinaryBanner(t *testing.T) {
 	if result.Version != "10.6.12" {
 		t.Errorf("Version = %q, want 10.6.12", result.Version)
 	}
-	if result.Banner != "10.6.12-MariaDB" {
-		t.Errorf("Banner = %q, want the matched \"10.6.12-MariaDB\" substring, not the raw handshake packet", result.Banner)
+	// The distro-packaging suffix ("-1:10.6.12+maria~ubu2004-log") is kept
+	// in the matched substring on purpose -- internal/vuln's distro-aware
+	// CVE lookup parses it back out of Banner (see DetectDistroPackage).
+	wantBanner := "10.6.12-MariaDB-1:10.6.12+maria~ubu2004-log"
+	if result.Banner != wantBanner {
+		t.Errorf("Banner = %q, want %q (the matched substring including the distro suffix, not the raw handshake packet)", result.Banner, wantBanner)
 	}
 }
 

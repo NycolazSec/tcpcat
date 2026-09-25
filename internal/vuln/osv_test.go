@@ -293,3 +293,44 @@ func TestExtractCVSSScore(t *testing.T) {
 		})
 	}
 }
+
+func TestOSVScannerGetForDistroPackageSendsEcosystem(t *testing.T) {
+	var gotQuery osvQuery
+	s := newTestOSVScanner(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&gotQuery)
+		resp := osvResponse{Vulns: []osvVulnerability{
+			{
+				ID: "DEBIAN-CVE-2024-21096",
+				Affected: []osvAffected{{Ranges: []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{
+					{Introduced: "0"},
+					{Fixed: "1:10.11.11-0+deb12u1"},
+				}}}}},
+			},
+		}}
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+
+	got, err := s.GetForDistroPackage(DistroPackage{Ecosystem: "Debian:12", Name: "mariadb", Version: "1:10.11.6-0+deb12u1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotQuery.Package.Ecosystem != "Debian:12" || gotQuery.Package.Name != "mariadb" {
+		t.Errorf("query sent package = %+v, want ecosystem=Debian:12 name=mariadb", gotQuery.Package)
+	}
+	if len(got) != 1 || got[0].ID != "CVE-2024-21096" {
+		t.Errorf("got %+v, want a single CVE-2024-21096 result", got)
+	}
+}
+
+func TestOSVScannerGetForDistroPackageEmptyArgs(t *testing.T) {
+	s := NewOSVScanner()
+	for _, pkg := range []DistroPackage{
+		{Name: "", Version: "1.0", Ecosystem: "Debian:12"},
+		{Name: "x", Version: "", Ecosystem: "Debian:12"},
+		{Name: "x", Version: "1.0", Ecosystem: ""},
+	} {
+		if got, err := s.GetForDistroPackage(pkg); err != nil || got != nil {
+			t.Errorf("GetForDistroPackage(%+v) = (%v, %v), want (nil, nil)", pkg, got, err)
+		}
+	}
+}

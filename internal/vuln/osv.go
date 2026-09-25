@@ -63,10 +63,25 @@ func (s *OSVScanner) GetForSoftware(software, version string) ([]Vulnerability, 
 	if software == "" || version == "" {
 		return nil, nil
 	}
+	return s.query(osvPackage{Name: software}, version)
+}
 
+// GetForDistroPackage runs an ecosystem-scoped query (e.g. "Debian:12",
+// "Ubuntu:24.04" -- see internal/vuln/distro.go's DetectDistroPackage)
+// instead of an upstream-only one, so a distro's own backported fix (which
+// routinely lands well before, or entirely without, a matching upstream
+// version bump) is reflected instead of missed.
+func (s *OSVScanner) GetForDistroPackage(pkg DistroPackage) ([]Vulnerability, error) {
+	if pkg.Name == "" || pkg.Version == "" || pkg.Ecosystem == "" {
+		return nil, nil
+	}
+	return s.query(osvPackage{Name: pkg.Name, Ecosystem: pkg.Ecosystem}, pkg.Version)
+}
+
+func (s *OSVScanner) query(pkg osvPackage, version string) ([]Vulnerability, error) {
 	query := osvQuery{
 		Version: version,
-		Package: osvPackage{Name: software},
+		Package: pkg,
 	}
 
 	body, err := json.Marshal(query)
@@ -142,7 +157,8 @@ type osvQuery struct {
 	Package osvPackage `json:"package"`
 }
 type osvPackage struct {
-	Name string `json:"name"`
+	Name      string `json:"name"`
+	Ecosystem string `json:"ecosystem,omitempty"`
 }
 type osvResponse struct {
 	Vulns []osvVulnerability `json:"vulns"`

@@ -70,7 +70,12 @@ var bannerSignatures = []bannerSignature{
 	{"mongodb", regexp.MustCompile(`(?i)MongoDB`), false},
 	{"elasticsearch", regexp.MustCompile(`(?i)"version"\s*:\s*\{\s*"number"\s*:\s*"([\d.]+)"`), false},
 	{"rabbitmq", regexp.MustCompile(`(?i)RabbitMQ`), false},
-	{"mariadb", regexp.MustCompile(`(?i)([\d.]+)-MariaDB`), true},
+	// The trailing [\w.:+~-]* deliberately keeps whatever distro-packaging
+	// suffix follows "-MariaDB" (e.g. "-1:10.6.12+maria~ubu2004-log" or
+	// "-0+deb13u1") in the matched substring: it's legitimate, printable
+	// version information (not binary junk to strip), and is what
+	// internal/vuln's distro-aware CVE lookup parses back out of Banner.
+	{"mariadb", regexp.MustCompile(`(?i)([\d.]+)-MariaDB[\w.:+~-]*`), true},
 
 	// --- Other common daemons ---
 	{"telnet", regexp.MustCompile(`(?i)^\xff[\xfb-\xfe]`), true}, // Telnet IAC negotiation

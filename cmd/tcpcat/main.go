@@ -525,6 +525,42 @@ func main() {
 						continue
 					}
 
+					// Distro-aware refinement: a banner carrying a
+					// recognisable Debian/Ubuntu packaging suffix (e.g.
+					// MariaDB's "-0+deb13u1") often lags the *upstream*
+					// fix while the distro already backported it into its
+					// own package revision -- an upstream-only match can
+					// flag a host as vulnerable to something already
+					// patched. Only meaningful for OSV (Vulners has no
+					// ecosystem concept) and only when a suffix is
+					// actually recognised (see DetectDistroPackage).
+					if osvScanner, isOSV := vulnScanner.(*vuln.OSVScanner); isOSV {
+						if pkg, found := vuln.DetectDistroPackage(r.Service, r.Version, r.Banner); found {
+							if distroVulns, dErr := osvScanner.GetForDistroPackage(pkg); dErr == nil {
+								distroConfirmed := make(map[string]bool, len(distroVulns))
+								for _, v := range distroVulns {
+									distroConfirmed[v.ID] = true
+								}
+								byID := make(map[string]bool, len(allVulnerabilities))
+								for _, v := range allVulnerabilities {
+									byID[v.ID] = true
+								}
+								for _, v := range distroVulns {
+									if !byID[v.ID] {
+										allVulnerabilities = append(allVulnerabilities, v)
+									}
+								}
+								for i := range allVulnerabilities {
+									if distroConfirmed[allVulnerabilities[i].ID] {
+										allVulnerabilities[i].Confidence = "distro-backport-confirmed"
+									} else {
+										allVulnerabilities[i].Confidence = "potential (upstream version match)"
+									}
+								}
+							}
+						}
+					}
+
 					initialCount := len(allVulnerabilities)
 					vulnerabilities := vuln.FilterRelevantCVEs(allVulnerabilities, r.OS)
 					filteredCount := initialCount - len(vulnerabilities)

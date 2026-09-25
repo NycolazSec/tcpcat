@@ -83,8 +83,25 @@ func IsVersionAffected(targetVersion string, affected []osvAffected) bool {
 	}
 
 	for _, a := range affected {
+		// A distro ecosystem entry (Debian/Ubuntu/...) commonly lists the
+		// exact affected dpkg versions directly, alongside (or instead of)
+		// a range -- an exact hit here is authoritative regardless of
+		// whether CompareVersions' generic tokenizer would have ordered
+		// the range boundaries correctly for dpkg's epoch:upstream-revision
+		// scheme (it doesn't handle "~" pre-release ordering).
+		for _, v := range a.Versions {
+			if v == targetVersion {
+				return true
+			}
+		}
+
 		for _, r := range a.Ranges {
-			if r.Type == "SEMVER" {
+			// SEMVER covers most OSV feeds (GHSA, npm, PyPI, ...). ECOSYSTEM
+			// is what Debian/Ubuntu's own OSV export uses for dpkg version
+			// strings (e.g. "1:10.11.6-0+deb12u1") instead -- same
+			// introduced/fixed event structure, just a different version
+			// syntax, so the same walk applies.
+			if r.Type == "SEMVER" || r.Type == "ECOSYSTEM" {
 				// Events are ordered per the OSV schema (introduced, then an
 				// optional later fixed, possibly repeating). A version is
 				// affected once it reaches an "introduced" boundary, and
