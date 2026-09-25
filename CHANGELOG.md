@@ -10,6 +10,8 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-25
+
 ### Added
 - `-i`/`--interface <iface>`: pin a scan to a specific network interface
   instead of the auto-detected default-gateway interface. Fixes scanning
@@ -526,7 +528,8 @@ Full diffs for every release are available via GitHub's
   visibility-testing controls, and a WASM-based scripting engine for custom
   detectors and exploit modules.
 
-[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/NycolazSec/tcpcat/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/NycolazSec/tcpcat/compare/v1.1.0-beta.2...v1.1.0
 [1.0.1]: https://github.com/NycolazSec/tcpcat/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/NycolazSec/tcpcat/releases/tag/v1.0.0
