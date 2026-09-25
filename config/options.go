@@ -21,7 +21,7 @@ const (
 )
 
 const bannerTemplate = `
-%s  [%s]====-%s._     _,-'""'-._%s       %s%s _____ ____ ____   ____    _  _____ %s
+%s  [eth0]====-%s._     _,-'""'-._%s       %s%s _____ ____ ____   ____    _  _____ %s
 %s         (,-.'._,'(       |\'-/|%s      %s%s|_   _/ ___|  _ \ / ___|  / \|_   _|%s
 %s             '-.-' \ )-'( , %s%so o%s%s)%s      %s%s  | || |   | |_) | |     / _ \ | |  %s
 %s                   '-    \'_'"'-%s      %s%s  | || |___|  __/| |___ / ___ \| |  %s
@@ -43,7 +43,7 @@ func RenderBanner(iface string) string {
 		iface = "eth0"
 	}
 	return fmt.Sprintf(bannerTemplate,
-		White, iface, Red, Reset, Red, Bold, Reset,
+		White, Red, Reset, Red, Bold, Reset,
 		Red, Reset, Red, Bold, Reset,
 		Red, Green, Bold, Reset, Red, Reset, Red, Bold, Reset,
 		Red, Reset, Red, Bold, Reset,
