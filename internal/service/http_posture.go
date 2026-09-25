@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/net/http2"
 )
 
 // HTTPPostureInfo is the result of an independent, read-only HTTP security
@@ -19,6 +21,17 @@ type HTTPPostureInfo struct {
 	MissingHeaders []string `json:"missing_headers,omitempty"`
 	ExposedPaths   []string `json:"exposed_paths,omitempty"`
 	Warnings       []string `json:"warnings,omitempty"`
+	// Server/Software/Version/OS identify the HTTP server from its own
+	// Server response header, read via a real net/http client -- which
+	// negotiates ALPN and speaks HTTP/2 transparently when a server
+	// selects it. DetectService's own hand-rolled plaintext GET (its only
+	// HTTP identification attempt on a TLS port before this) can't parse
+	// an HTTP/2 response at all, which is why a TLS port serving h2 used
+	// to come back "unknown" despite answering every request.
+	Server   string `json:"server,omitempty"`
+	Software string `json:"software,omitempty"`
+	Version  string `json:"version,omitempty"`
+	OS       string `json:"os,omitempty"`
 }
 
 // securityHeaderChecks are checked unconditionally (independent of
@@ -83,11 +96,24 @@ func probeHTTPPosture(ip string, port int, timeout time.Duration, useTLS bool, i
 	}
 	base := fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(ip, strconv.Itoa(port)))
 
-	tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify} // #nosec G402 -- opt-in via caller flag, same semantics as the existing banner-grab path
+	tlsConfig := &tls.Config{ // #nosec G402 -- opt-in via caller flag, same semantics as the existing banner-grab path
+		InsecureSkipVerify: insecureSkipVerify,
+		NextProtos:         []string{"h2", "http/1.1"},
+	}
 	if hostname != "" {
 		tlsConfig.ServerName = hostname
 	}
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	// Setting TLSClientConfig ourselves opts this Transport out of Go's
+	// usual *automatic* HTTP/2 wiring (net/http only self-configures h2
+	// when TLSClientConfig is left nil) -- offering "h2" in NextProtos
+	// above is necessary but not sufficient on its own; without this call
+	// the client negotiates the ALPN protocol but then still speaks plain
+	// HTTP/1.1 text over it, which an h2-only server rejects outright as a
+	// garbled preface.
+	if err := http2.ConfigureTransport(transport); err != nil {
+		return nil
+	}
 	client := &http.Client{
 		Timeout:   timeout,
 		Transport: transport,
@@ -115,6 +141,11 @@ func probeHTTPPosture(ip string, port int, timeout time.Duration, useTLS bool, i
 	_ = resp.Body.Close()
 
 	info := &HTTPPostureInfo{}
+
+	if server := resp.Header.Get("Server"); server != "" {
+		info.Server = server
+		info.Software, info.Version, info.OS = parseServerHeaderValue(server)
+	}
 
 	if useTLS && resp.Header.Get("Strict-Transport-Security") == "" {
 		info.MissingHeaders = append(info.MissingHeaders, "Strict-Transport-Security")

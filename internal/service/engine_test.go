@@ -3,6 +3,8 @@ package service
 import (
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -397,6 +399,39 @@ func TestDetectServiceTLSHandshakeFailureFallsBack(t *testing.T) {
 
 	if result.Name != "unknown" {
 		t.Errorf("Name = %q, want unknown (8443 has no resolveDefaultPortName case)", result.Name)
+	}
+}
+
+// TestDetectServiceIdentifiesHTTP2OverTLS is the regression case this
+// point actually fixes: DetectService's own hand-rolled plaintext GET
+// can't parse an HTTP/2 response (its binary preface never starts with
+// "HTTP/"), which used to leave an h2-only TLS port reported as bare
+// "unknown" even though probeHTTPPosture's real net/http client (fixed to
+// actually negotiate ALPN/h2, see http_posture_test.go) got a perfectly
+// good answer from the same server.
+func TestDetectServiceIdentifiesHTTP2OverTLS(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", "nginx/1.24.0")
+	})
+	server := httptest.NewUnstartedServer(mux)
+	server.EnableHTTP2 = true
+	_ = server.Listener.Close()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:8443")
+	if err != nil {
+		t.Skipf("could not bind 127.0.0.1:8443 (already in use?): %v", err)
+	}
+	server.Listener = ln
+	server.StartTLS()
+	t.Cleanup(server.Close)
+
+	result := DetectService("127.0.0.1", 8443, 2*time.Second, true, "", false)
+	if result.Name != "nginx" {
+		t.Errorf("Name = %q, want nginx", result.Name)
+	}
+	if result.Version != "1.24.0" {
+		t.Errorf("Version = %q, want 1.24.0", result.Version)
 	}
 }
 

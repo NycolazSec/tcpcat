@@ -128,3 +128,39 @@ func startHTTPTestServer(t *testing.T, handler http.Handler) (string, int) {
 	addr := server.Listener.Addr().(*net.TCPAddr)
 	return addr.IP.String(), addr.Port
 }
+
+// TestProbeHTTPPostureReadsServerHeaderOverHTTP2 guards the ALPN gotcha
+// this fixes: setting InsecureSkipVerify on tls.Config without also
+// setting NextProtos silently disables Go's automatic HTTP/2 support,
+// which meant this probe's own client never actually spoke HTTP/2 to a
+// server that offered it (server.EnableHTTP2 forces the test server to
+// require it, so a client stuck on http/1.1-only ALPN can't even connect).
+func TestProbeHTTPPostureReadsServerHeaderOverHTTP2(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", "nginx/1.24.0")
+	})
+	server := httptest.NewUnstartedServer(mux)
+	server.EnableHTTP2 = true
+	server.StartTLS()
+	t.Cleanup(server.Close)
+
+	addr := server.Listener.Addr().(*net.TCPAddr)
+	info := probeHTTPPosture("127.0.0.1", addr.Port, 2*time.Second, true, true, "")
+	if info == nil {
+		t.Fatal("probeHTTPPosture() = nil, want a result")
+	}
+	if info.Server != "nginx/1.24.0" {
+		t.Errorf("Server = %q, want nginx/1.24.0", info.Server)
+	}
+	if info.Software != "nginx" || info.Version != "1.24.0" {
+		t.Errorf("Software/Version = %q/%q, want nginx/1.24.0", info.Software, info.Version)
+	}
+}
+
+func TestParseServerHeaderValue(t *testing.T) {
+	software, version, os := parseServerHeaderValue("Apache/2.4.41 (Ubuntu)")
+	if software != "apache" || version != "2.4.41" || os != "ubuntu" {
+		t.Errorf("parseServerHeaderValue() = (%q, %q, %q), want (apache, 2.4.41, ubuntu)", software, version, os)
+	}
+}

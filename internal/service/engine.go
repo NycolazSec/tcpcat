@@ -237,13 +237,34 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 			}
 		}
 
+		// The plaintext GET above can't parse an HTTP/2 response (its
+		// binary preface never starts with "HTTP/"), which used to be the
+		// only HTTP identification DetectService attempted on a TLS port
+		// -- but probeHTTPPosture already ran its own real net/http
+		// request (which negotiates ALPN and speaks HTTP/2 transparently)
+		// and read back the same Server header, so prefer that before
+		// falling back to a bare ALPN-name label.
+		if info.Name == "unknown" && httpPostureInfo != nil {
+			switch {
+			case httpPostureInfo.Software != "":
+				info.Name = httpPostureInfo.Software
+				info.Version = httpPostureInfo.Version
+				info.OS = httpPostureInfo.OS
+				info.Banner = httpPostureInfo.Server
+				return info
+			case httpPostureInfo.Server != "":
+				info.Name = "http"
+				info.Banner = httpPostureInfo.Server
+				return info
+			}
+		}
+
 		// The TLS handshake above genuinely succeeded (probeConn is the
-		// wrapped tlsClient, not the raw conn) even though nothing above
-		// managed to identify an application-layer service on top of it --
-		// an HTTP/2 endpoint whose binary preface never starts with
-		// "HTTP/", or one that just didn't answer the plaintext GET at
-		// all. Reporting "unknown" here would erase the one thing that was
-		// actually verified (a working TLS service); nmap's own
+		// wrapped tlsClient, not the raw conn) even though nothing above --
+		// including probeHTTPPosture's real net/http client, checked just
+		// above -- managed to identify an application-layer service on top
+		// of it. Reporting "unknown" here would erase the one thing that
+		// was actually verified (a working TLS service); nmap's own
 		// convention in this situation is "ssl/unknown" rather than a bare
 		// "unknown", so an operator reading the output can tell "TLS
 		// handshake OK, app layer unidentified" apart from "nothing here
@@ -299,20 +320,30 @@ func stripNonPrintable(s string) string {
 	return b.String()
 }
 
+// parseServerHeaderValue extracts a software name/version and any OS
+// mention out of a Server header's value (e.g. "nginx/1.24.0" or
+// "Apache/2.4.41 (Ubuntu)") -- shared between extractServerHeader's
+// hand-parsed raw-text path and probeHTTPPosture's net/http-based one
+// (see HTTPPostureInfo.Server).
+func parseServerHeaderValue(value string) (software, version, os string) {
+	parts := strings.Fields(value)
+	if len(parts) > 0 {
+		versionParts := strings.Split(parts[0], "/")
+		if len(versionParts) > 1 {
+			software = strings.ToLower(versionParts[0])
+			version = versionParts[1]
+		}
+	}
+	os = extractOSFromBanner(value)
+	return
+}
+
 func extractServerHeader(httpResp string) (banner string, software string, version string, os string) {
 	lines := strings.Split(httpResp, "\r\n")
 	for _, line := range lines {
 		if strings.HasPrefix(strings.ToLower(line), "server:") {
 			banner = strings.TrimSpace(line[7:])
-			parts := strings.Fields(banner)
-			if len(parts) > 0 {
-				versionParts := strings.Split(parts[0], "/")
-				if len(versionParts) > 1 {
-					software = strings.ToLower(versionParts[0])
-					version = versionParts[1]
-				}
-			}
-			os = extractOSFromBanner(banner)
+			software, version, os = parseServerHeaderValue(banner)
 			return
 		}
 	}
