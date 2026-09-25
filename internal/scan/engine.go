@@ -280,45 +280,78 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	var finalResults []TargetResult
 	var currentHost string
 	hostOSShown := false
+	hiddenClosed := 0
+
+	// flushClosedSummary prints the pending per-host closed-port count (if
+	// any) and resets it -- called on every host change and once more
+	// after the loop, so the last host's count isn't dropped.
+	flushClosedSummary := func() {
+		if hiddenClosed > 0 {
+			fmt.Printf("%s[~] %s ─ Not shown: %d closed port(s)%s\n",
+				config.Bold+config.White, currentHost, hiddenClosed, config.Reset)
+			hiddenClosed = 0
+		}
+	}
+
 	for _, res := range allResults {
 		if res.IP != currentHost {
+			flushClosedSummary()
 			currentHost = res.IP
 			hostOSShown = false
 		}
-		if res.State == StateOpen || !e.opts.OnlyOpen {
-			finalResults = append(finalResults, res)
+		if res.State != StateOpen && e.opts.OnlyOpen {
+			continue
+		}
+		finalResults = append(finalResults, res)
 
-			// OS is fingerprinted independently per port (each open port's
-			// own SYN/ACK is its own sample), but shown at most once per
-			// host here -- repeating "guessed OS: X (Y%)" on every single
-			// open port added nothing and made a multi-port host's output
-			// harder to scan. The full per-port confidence is still in the
-			// exported JSON (OS/OSConfidence on every matching result), just
-			// not repeated on the console.
-			if res.OS != "" && !hostOSShown {
-				fmt.Printf("%s[i] %s ─ OS: %s (%.0f%% confidence)%s\n",
-					config.Bold+config.Cyan, res.IP, res.OS, res.OSConfidence*100, config.Reset)
-				hostOSShown = true
-			}
+		// CLOSED ports are hidden by default (--show-closed to opt back
+		// in) and rolled into one per-host summary line instead -- a
+		// scan of a full /24 with mostly-closed hosts used to bury the
+		// open ports that actually matter under thousands of CLOSED
+		// lines. This is purely a console-display choice: finalResults
+		// (and so every export format) still includes every port
+		// regardless, exactly as before.
+		if res.State == StateClosed && !e.opts.ShowClosed {
+			hiddenClosed++
+			continue
+		}
 
-			color := config.White
-			switch res.State {
-			case StateOpen:
-				color = config.Green
-			case StateClosed:
-				color = config.Red
-			}
-			fmt.Printf("%s[+] %s:%-5d ─ %-8s%s (time=%.2fms | reason=%s)\n",
-				config.Bold+color, res.IP, res.Port, res.State, config.Reset, res.LatencyMs, res.Reason)
+		// OS is fingerprinted independently per port (each open port's
+		// own SYN/ACK is its own sample), but shown at most once per
+		// host here -- repeating "guessed OS: X (Y%)" on every single
+		// open port added nothing and made a multi-port host's output
+		// harder to scan. The full per-port confidence is still in the
+		// exported JSON (OS/OSConfidence on every matching result), just
+		// not repeated on the console.
+		if res.OS != "" && !hostOSShown {
+			fmt.Printf("%s[i] %s ─ OS: %s (%.0f%% confidence)%s\n",
+				config.Bold+config.Cyan, res.IP, res.OS, res.OSConfidence*100, config.Reset)
+			hostOSShown = true
+		}
 
-			if e.scriptEngine != nil && res.State == StateOpen {
-				scriptResults := e.scriptEngine.RunAll(res.IP, res.Port)
-				for _, sr := range scriptResults {
-					fmt.Printf("    |_ %s: %v\n", sr.ScriptName, sr.Output)
-				}
+		// [+] is reserved for OPEN; every other state (CLOSED when
+		// --show-closed is given, FILTERED, OPEN|FILTERED, UNFILTERED)
+		// gets its own [-]/[~] prefix instead, so a skimmed scroll of
+		// the output can't mistake a filtered or closed port for an
+		// open one.
+		prefix, color := "[~]", config.White
+		switch res.State {
+		case StateOpen:
+			prefix, color = "[+]", config.Green
+		case StateClosed:
+			prefix, color = "[-]", config.Red
+		}
+		fmt.Printf("%s%s %s:%-5d ─ %-8s%s (time=%.2fms | reason=%s)\n",
+			config.Bold+color, prefix, res.IP, res.Port, res.State, config.Reset, res.LatencyMs, res.Reason)
+
+		if e.scriptEngine != nil && res.State == StateOpen {
+			scriptResults := e.scriptEngine.RunAll(res.IP, res.Port)
+			for _, sr := range scriptResults {
+				fmt.Printf("    |_ %s: %v\n", sr.ScriptName, sr.Output)
 			}
 		}
 	}
+	flushClosedSummary()
 
 	return finalResults
 }

@@ -376,3 +376,33 @@ func TestXDPEligibleAllowsNormalTargets(t *testing.T) {
 		})
 	}
 }
+
+// TestEngineHidesClosedPortsFromConsoleButNotFromResults guards the
+// console-vs-data split --show-closed relies on: CLOSED ports are hidden
+// from the console by default (rolled into one per-host summary line
+// instead), but Execute()'s returned results -- which every export format
+// (JSON, SARIF, ...) is built from -- must still include every one of
+// them exactly as before, since --show-closed is a display-only setting.
+func TestEngineHidesClosedPortsFromConsoleButNotFromResults(t *testing.T) {
+	opts := &config.Options{
+		MaxWorkers: 4,
+		RateLimit:  0,
+		Timing:     3,
+		// ShowClosed and OnlyOpen both default false: this is the
+		// "hide closed from console" default case.
+	}
+	engine := NewEngine(opts)
+
+	// 127.0.0.1 with nothing listening on these ports reliably yields
+	// CLOSED (connection refused) for a -sT-style connect scan.
+	results := engine.Execute([]string{"127.0.0.1"}, []int{1, 2})
+
+	if len(results) != 2 {
+		t.Fatalf("Execute() returned %d results, want 2 (closed ports must still be in the data)", len(results))
+	}
+	for _, r := range results {
+		if r.State != StateClosed {
+			t.Errorf("result %+v: want State=CLOSED for an unlistened port", r)
+		}
+	}
+}

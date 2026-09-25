@@ -80,6 +80,7 @@ type Options struct {
 	UdpScan     bool
 	UseXDP      bool
 	OnlyOpen    bool
+	ShowClosed  bool
 
 	Ports    string
 	TopPorts int
@@ -280,6 +281,7 @@ func ParseFlags() (*Options, error) {
 	flag.IntVar(&opts.TopPorts, "top-ports", 0, "Scan <number> most common ports")
 	flag.BoolVar(&opts.UseXDP, "ebpf", false, "Enable experimental AF_XDP/eBPF engine")
 	flag.BoolVar(&opts.OnlyOpen, "open", false, "Show only open ports")
+	flag.BoolVar(&opts.ShowClosed, "show-closed", false, "Show CLOSED ports individually instead of a per-host summary count")
 
 	flag.BoolVar(&opts.ServiceDetect, "sV", false, "Probe open ports for service/version info")
 	flag.BoolVar(&opts.OsDetect, "O", false, "Enable OS detection")
@@ -379,6 +381,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s-sI <zombie>%s   TCP Idle Scan (fully blind)\n", Yellow, Reset)
 		fmt.Printf("  %s-sU%s             UDP Port Scan\n", Yellow, Reset)
 		fmt.Printf("  %s--open%s          Show only open ports\n", Yellow, Reset)
+		fmt.Printf("  %s--show-closed%s   Show CLOSED ports individually instead of a per-host summary count\n", Yellow, Reset)
 		fmt.Printf("  %s--ebpf%s          Enable experimental AF_XDP/eBPF engine (Extreme Performance)\n", Yellow, Reset)
 		fmt.Println(Cyan + "\nSERVICE & OS DETECTION:" + Reset)
 		fmt.Printf("  %s-sV%s             Service & Version detection\n", Yellow, Reset)
