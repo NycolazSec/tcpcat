@@ -164,8 +164,8 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 			info.TLS = tlsInfo
 			info.JARM = jarmInfo
 
-			tlsConfig := &tls.Config{ // #nosec G402 -- opt-in via caller flag; banner grabbing must complete the handshake against untrusted/self-signed target certs
-				InsecureSkipVerify: insecureSkipVerify,
+			tlsConfig := &tls.Config{
+				InsecureSkipVerify: insecureSkipVerify, // #nosec G402 -- opt-in via caller flag; banner grabbing must complete the handshake against untrusted/self-signed target certs
 				NextProtos:         []string{"h2", "http/1.1"},
 			}
 			if hostname != "" {
