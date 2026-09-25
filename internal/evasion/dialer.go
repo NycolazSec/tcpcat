@@ -7,6 +7,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"tcpcat/internal/netiface"
 )
 
 type CustomDialer struct {
@@ -23,8 +25,14 @@ func NewCustomDialer(cfg *Config, timeout time.Duration) *CustomDialer {
 
 func (d *CustomDialer) Dial(network, address string) (net.Conn, error) {
 	var localAddr net.Addr
-	if d.Config != nil && d.Config.SourcePort > 0 {
-		localAddr = &net.TCPAddr{Port: d.Config.SourcePort}
+	if d.Config != nil && (d.Config.SourcePort > 0 || d.Config.Interface != "") {
+		tcpAddr := &net.TCPAddr{Port: d.Config.SourcePort}
+		if d.Config.Interface != "" {
+			if ip, _, err := netiface.Lookup(d.Config.Interface); err == nil {
+				tcpAddr.IP = ip
+			}
+		}
+		localAddr = tcpAddr
 	}
 
 	netDialer := &net.Dialer{
@@ -33,6 +41,10 @@ func (d *CustomDialer) Dial(network, address string) (net.Conn, error) {
 		Control: func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
 				_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+
+				if d.Config != nil && d.Config.Interface != "" {
+					_ = netiface.BindToDevice(int(fd), d.Config.Interface)
+				}
 
 				if d.Config != nil && d.Config.TTL > 0 {
 					if strings.Contains(network, "6") {

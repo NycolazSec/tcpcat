@@ -7,6 +7,10 @@ type Config struct {
 	Proxy      *ProxyConfig
 	Spoof      *SpoofConfig
 	Decoys     *DecoyConfig
+	// Interface, when set (-i/--interface), forces the dial to originate
+	// from that interface's own address instead of whatever the kernel's
+	// routing table would otherwise pick -- see dialer.go's Dial/Control.
+	Interface string
 }
 
 func NewConfig(sourcePort int, ttl int, dataStr string, dataHex string, proxyStr string, decoyStr string) (*Config, error) {

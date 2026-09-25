@@ -10,6 +10,23 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Added
+- `-i`/`--interface <iface>`: pin a scan to a specific network interface
+  instead of the auto-detected default-gateway interface. Fixes scanning
+  targets only reachable through a local virtual interface -- a Docker
+  bridge (`br-*`), a VPN tunnel, or a secondary NIC -- which auto-detection
+  never picks since none of those carry the default route. Validated at
+  startup via `net.InterfaceByName` (a clear fatal error if the interface
+  doesn't exist), and threaded through every scan path: the AF_XDP/eBPF
+  engine attaches its XDP hook to this exact interface
+  (`internal/scan/xdp.go`), raw-socket scans (`-sS`/`-sA`/`-sW`/`-sN`/
+  `-sF`/`-sX`) bind their send/receive sockets to it via `SO_BINDTODEVICE`
+  on Linux (`internal/scan/raw_tcp.go`), and TCP Connect scans (`-sT`)
+  dial from its address (`internal/scan/connect.go`,
+  `internal/evasion/dialer.go`). New shared `internal/netiface` package
+  resolves the interface's IP/subnet/MAC directly, bypassing the old
+  UDP-dial-based default-route guess.
+
 ## [1.1.0] - 2026-09-23
 
 ### Added

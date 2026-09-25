@@ -42,6 +42,7 @@ type Options struct {
 	Target      string
 	InputFile   string
 	ExcludeHost string
+	Interface   string
 
 	PingScan      bool
 	SkipDiscovery bool
@@ -153,6 +154,8 @@ func ParseFlags() (*Options, error) {
 
 	valueFlags := map[string]bool{
 		"-p":               true,
+		"-i":               true,
+		"--interface":      true,
 		"-iL":              true,
 		"-j":               true,
 		"-w":               true,
@@ -237,6 +240,8 @@ func ParseFlags() (*Options, error) {
 	os.Args = append([]string{os.Args[0]}, append(flagsArgs, posArgs...)...)
 
 	flag.StringVar(&opts.Ports, "p", "", "Port(s) to scan (e.g. 80 | 22,80,443 | 1-1000)")
+	flag.StringVar(&opts.Interface, "i", "", "Network interface to use (bypasses auto-detection)")
+	flag.StringVar(&opts.Interface, "interface", "", "Alias for -i")
 	flag.StringVar(&opts.InputFile, "iL", "", "Input target list from file")
 	flag.BoolVar(&opts.PingScan, "sn", false, "Ping Scan - disable port scan")
 	flag.BoolVar(&opts.SkipDiscovery, "Pn", false, "Treat all hosts as online")
@@ -331,6 +336,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("%sUsage:%s tcpcat <target> [options]\n\n", Bold, Reset)
 		fmt.Println(Cyan + "TARGET & DISCOVERY SPECIFICATION:" + Reset)
 		fmt.Printf("  %s<target>%s         Hostnames, IP addresses, CIDRs\n", Yellow, Reset)
+		fmt.Printf("  %s-i, --interface <iface>%s : Network interface to use (bypasses auto-detection)\n", Yellow, Reset)
 		fmt.Printf("  %s-iL <file>%s       Input target list from file\n", Yellow, Reset)
 		fmt.Printf("  %s--exclude <list>%s Comma-separated hosts/CIDRs/names to skip\n", Yellow, Reset)
 		fmt.Printf("  %s--scope-file <file>%s Restrict scans to authorized CIDRs, IPs, or domains\n", Yellow, Reset)
@@ -415,6 +421,12 @@ func ParseFlags() (*Options, error) {
 	}
 
 	flag.Parse()
+
+	if opts.Interface != "" {
+		if _, err := net.InterfaceByName(opts.Interface); err != nil {
+			return nil, fmt.Errorf("interface %q not found: %v", opts.Interface, err)
+		}
+	}
 
 	if opts.Timing < 0 || opts.Timing > 5 {
 		return nil, fmt.Errorf("timing must be between 0 and 5")

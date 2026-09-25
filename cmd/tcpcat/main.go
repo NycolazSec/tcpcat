@@ -76,7 +76,11 @@ func main() {
 	}
 
 	if opts.UseXDP && runtime.GOOS == "linux" {
-		fmt.Printf("%s[!] Warning: --ebpf attaches an XDP hook (generic/SKB mode -- no zero-copy on most virtualized NICs) to the auto-detected network interface. That is very likely the SAME interface carrying your own SSH/management connection.%s\n", config.Yellow, config.Reset)
+		ifaceDesc := "the auto-detected network interface"
+		if opts.Interface != "" {
+			ifaceDesc = fmt.Sprintf("interface '%s'", opts.Interface)
+		}
+		fmt.Printf("%s[!] Warning: --ebpf attaches an XDP hook (generic/SKB mode -- no zero-copy on most virtualized NICs) to %s. That may be the SAME interface carrying your own SSH/management connection.%s\n", config.Yellow, ifaceDesc, config.Reset)
 		fmt.Printf("%s[*] Tip: a large or fast scan can saturate that interface's own RX path -- including the session you're connected through. Test from console/out-of-band access first, or start with a conservative --rate, before scanning at scale from a remote box you administer over the same link.%s\n", config.Cyan, config.Reset)
 	}
 
@@ -336,7 +340,7 @@ func main() {
 	if opts.UseXDP {
 		fmt.Printf("%s[*] Booting experimental AF_XDP Engine...%s\n", config.Yellow, config.Reset)
 
-		xsk, err := scan.InitXDPEngine()
+		xsk, err := scan.InitXDPEngine(opts.Interface)
 		if err != nil {
 			fmt.Printf("%s[!] Fatal XDP Error: %v%s\n", config.Red, err, config.Reset)
 			os.Exit(1)

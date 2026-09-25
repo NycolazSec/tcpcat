@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"tcpcat/config"
+	"tcpcat/internal/netiface"
 )
 
 type rawTCPPacket struct {
@@ -80,7 +81,7 @@ func rawRxKey(remoteIP net.IP, remotePort, localPort int) string {
 	return remoteIP.String() + "|" + strconv.Itoa(remotePort) + "|" + strconv.Itoa(localPort)
 }
 
-func ensureRawRxLoop() error {
+func ensureRawRxLoop(ifaceName string) error {
 	rawRxOnce.Do(func() {
 		// IPPROTO_TCP, not IPPROTO_RAW: on Linux, a SOCK_RAW socket opened
 		// with protocol IPPROTO_RAW is send-only (it implies IP_HDRINCL for
@@ -93,6 +94,15 @@ func ensureRawRxLoop() error {
 		if err != nil {
 			rawRxErr = fmt.Errorf("raw receive socket error (sudo required): %w", err)
 			return
+		}
+		// This shared RX socket is created once per process (sync.Once), so
+		// whichever -i the first scan job passes in wins for the process's
+		// lifetime -- fine for a single CLI invocation, which has exactly
+		// one -i value throughout.
+		if ifaceName != "" {
+			if err := netiface.BindToDevice(fd, ifaceName); err != nil {
+				fmt.Printf("%s[!] Warning: could not bind raw receive socket to interface %q: %v%s\n", config.Yellow, ifaceName, err, config.Reset)
+			}
 		}
 		go rawRxLoop(fd)
 	})
@@ -164,11 +174,21 @@ func newRawTCPScanner(targetIP string, port int, opts *config.Options, timeout t
 		return nil, fmt.Errorf("invalid IP address: %q", targetIP)
 	}
 
-	if err := ensureRawRxLoop(); err != nil {
+	ifaceName := ""
+	if opts != nil {
+		ifaceName = opts.Interface
+	}
+
+	if err := ensureRawRxLoop(ifaceName); err != nil {
 		return nil, err
 	}
 
 	srcIP := getLocalIPv4()
+	if ifaceName != "" {
+		if ifaceIP, _, err := netiface.Lookup(ifaceName); err == nil {
+			srcIP = ifaceIP
+		}
+	}
 	if spoofedSrcIP != nil {
 		srcIP = spoofedSrcIP.To4()
 	}
@@ -176,6 +196,11 @@ func newRawTCPScanner(targetIP string, port int, opts *config.Options, timeout t
 	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_RAW)
 	if err != nil {
 		return nil, fmt.Errorf("raw Socket error (sudo required): %v", err)
+	}
+	if ifaceName != "" {
+		if err := netiface.BindToDevice(fd, ifaceName); err != nil {
+			fmt.Printf("%s[!] Warning: could not bind raw send socket to interface %q: %v%s\n", config.Yellow, ifaceName, err, config.Reset)
+		}
 	}
 
 	srcPort := 54321

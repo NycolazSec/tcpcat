@@ -32,10 +32,13 @@ func ScanConnectPooled(hostIP string, port int, opts *config.Options, timeout ti
 		return TargetResult{IP: hostIP, Port: port, State: StateFiltered, Reason: "Relay not supported for Connect Scan"}
 	}
 
-	useEvasion := opts != nil && (opts.SourcePort > 0 || opts.TTL > 0 || opts.DecoyIPs != "")
+	useEvasion := opts != nil && (opts.SourcePort > 0 || opts.TTL > 0 || opts.DecoyIPs != "" || opts.Interface != "")
 
 	if useEvasion {
 		cfg, _ := evasion.NewConfig(opts.SourcePort, opts.TTL, opts.DataString, opts.DataHex, "", opts.DecoyIPs)
+		if cfg != nil {
+			cfg.Interface = opts.Interface
+		}
 		dialer := evasion.NewCustomDialer(cfg, timeout)
 		conn, err = dialer.Dial("tcp", targetAddr)
 	} else if pool != nil {

@@ -15,6 +15,7 @@ import (
 
 	"tcpcat/config"
 	"tcpcat/internal/evasion"
+	"tcpcat/internal/netiface"
 	"tcpcat/internal/osdetect"
 
 	"github.com/asavie/xdp"
@@ -120,15 +121,32 @@ func getGatewayMAC(ifaceName string) (net.HardwareAddr, error) {
 	return net.ParseMAC("ff:ff:ff:ff:ff:ff")
 }
 
-func InitXDPEngine() (any, error) {
+// InitXDPEngine boots the AF_XDP engine on ifaceName, or on the
+// auto-detected default-gateway interface when ifaceName is empty. An
+// explicit interface (-i/--interface) is required for targets only
+// reachable through a local virtual interface -- a Docker bridge (br-*), a
+// VPN tunnel, or a secondary NIC -- since none of those are ever the
+// default route's interface that auto-detection would otherwise pick.
+func InitXDPEngine(ifaceName string) (any, error) {
 	if xdpRunning {
 		log.Println("[*] XDP engine already initialized.")
 		return GlobalXsk, nil
 	}
 
-	ifaceName, ip, ipNet, err := getDefaultNetworkInfo()
-	if err != nil {
-		return nil, fmt.Errorf("network interface detection error: %v", err)
+	var ip net.IP
+	var ipNet *net.IPNet
+	var err error
+
+	if ifaceName != "" {
+		ip, ipNet, err = netiface.Lookup(ifaceName)
+		if err != nil {
+			return nil, fmt.Errorf("interface %q network info error: %v", ifaceName, err)
+		}
+	} else {
+		ifaceName, ip, ipNet, err = getDefaultNetworkInfo()
+		if err != nil {
+			return nil, fmt.Errorf("network interface detection error: %v", err)
+		}
 	}
 	localIP = ip
 	localSubnet = ipNet
