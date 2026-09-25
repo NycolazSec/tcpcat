@@ -385,6 +385,8 @@ func resolveDefaultPortName(port int) string {
 		return "http"
 	case 110:
 		return "pop3"
+	case 139:
+		return "netbios-ssn"
 	case 143:
 		return "imap"
 	case 443:
