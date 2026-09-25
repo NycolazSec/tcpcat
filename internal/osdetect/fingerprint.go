@@ -49,7 +49,12 @@ func ttlBucket(ttl uint8) uint8 {
 // order and would just tie against each other.
 var KnownFingerprints = []Fingerprint{
 	{
-		Name: "Linux 3.x-5.x",
+		// Covers 3.x through 6.x: TTL/window-scale/SACK/timestamp defaults
+		// haven't meaningfully changed across that range for a stock
+		// sysctl config, so a kernel this signature matches could equally
+		// be a fresh 6.x install -- "3.x-5.x" used to under-claim the
+		// range and mislabel a perfectly-matched modern kernel.
+		Name: "Linux 3.x-6.x",
 		Sig: TCPSignature{
 			TTL: 64, Window: 29200, MSS: 1460, WScale: 7,
 			SACKPerm: true, TSPerm: true,
@@ -308,6 +313,16 @@ func Match(observed TCPSignature) (name string, confidence float64) {
 
 	if bestScore < 0.4 { // too little agreement to call it a match
 		return "", 0
+	}
+	// A single SYN/ACK is one passive sample against a small, hand-curated
+	// signature table -- even a perfect field-by-field match (which would
+	// otherwise score exactly 1.0) is corroborating evidence, not proof:
+	// plenty of real, distinct stacks share an identical TTL/window/option
+	// fingerprint, and a middlebox can normalize headers in transit.
+	// Capped so a single response can never be reported as 100% certain.
+	const maxSingleSampleConfidence = 0.9
+	if bestScore > maxSingleSampleConfidence {
+		bestScore = maxSingleSampleConfidence
 	}
 	return best.Name, bestScore
 }

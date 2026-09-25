@@ -278,9 +278,29 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	})
 
 	var finalResults []TargetResult
+	var currentHost string
+	hostOSShown := false
 	for _, res := range allResults {
+		if res.IP != currentHost {
+			currentHost = res.IP
+			hostOSShown = false
+		}
 		if res.State == StateOpen || !e.opts.OnlyOpen {
 			finalResults = append(finalResults, res)
+
+			// OS is fingerprinted independently per port (each open port's
+			// own SYN/ACK is its own sample), but shown at most once per
+			// host here -- repeating "guessed OS: X (Y%)" on every single
+			// open port added nothing and made a multi-port host's output
+			// harder to scan. The full per-port confidence is still in the
+			// exported JSON (OS/OSConfidence on every matching result), just
+			// not repeated on the console.
+			if res.OS != "" && !hostOSShown {
+				fmt.Printf("%s[i] %s ─ OS: %s (%.0f%% confidence)%s\n",
+					config.Bold+config.Cyan, res.IP, res.OS, res.OSConfidence*100, config.Reset)
+				hostOSShown = true
+			}
+
 			color := config.White
 			switch res.State {
 			case StateOpen:

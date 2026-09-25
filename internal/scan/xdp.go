@@ -554,18 +554,19 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 			osName := resp.osName
 			if state == StateOpen && resp.osSig != "" {
 				reason = fmt.Sprintf("SYN-ACK [%s]", resp.osSig)
-				if osName != "" {
-					reason = fmt.Sprintf("%s, guessed OS: %s (%.0f%% confidence)", reason, osName, resp.osConfidence*100)
-				}
 			} else if state == StateClosed {
 				reason = "RST Received (AF_XDP)"
 			}
 			if resp.mptcp {
 				reason += " [MPTCP]"
 			}
+			// OS/OSConfidence are reported per-port (each SYN/ACK is its own
+			// independent fingerprint sample) but only shown once per host on
+			// the console -- see the per-host dedup in engine.go's result
+			// printer -- rather than repeated in Reason on every open port.
 			return TargetResult{
 				IP: ip, Port: port, State: state, Reason: reason, MPTCP: resp.mptcp,
-				OS: osName, Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
+				OS: osName, OSConfidence: resp.osConfidence, Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
 			}
 		case <-time.After(attemptTimeout):
 			lastLatency = time.Since(t0)

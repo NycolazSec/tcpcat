@@ -73,7 +73,7 @@ func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.D
 			if opts.OsDetect && resp.Frame != nil {
 				if osName, confidence := osdetect.ClassifyOS(resp.Frame, resp.IPStart, resp.TCPStart); osName != "" {
 					res.OS = osName
-					res.Reason = fmt.Sprintf("%s, guessed OS: %s (%.0f%% confidence)", res.Reason, osName, confidence*100)
+					res.OSConfidence = confidence
 				}
 			}
 			// A SYN/ACK echoing MP_CAPABLE (kind 30) marks a Multipath-TCP

@@ -411,7 +411,16 @@ func main() {
 				if svc.OS != "" && svc.OS != "unknown" {
 					osDisp = fmt.Sprintf(" (OS: %s)", svc.OS)
 				}
-				results[i].OS = svc.OS
+				// Don't clobber a real -O TCP-fingerprint guess (already on
+				// results[i].OS from the scan itself) with an empty/unknown
+				// banner-derived one -- -sV's banner parsing frequently has
+				// no OS opinion at all, and used to silently erase -O's
+				// result whenever both ran together (exactly opts.OsDetect
+				// && opts.ServiceDetect, which --profile safe-production
+				// forces on unconditionally).
+				if svc.OS != "" && svc.OS != "unknown" {
+					results[i].OS = svc.OS
+				}
 				results[i].TLS = svc.TLS
 				results[i].JARM = svc.JARM
 				results[i].HTTPPosture = svc.HTTPPosture

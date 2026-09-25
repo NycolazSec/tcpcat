@@ -70,16 +70,30 @@ func TestParseTCPSignatureTooShort(t *testing.T) {
 
 func TestMatchIdentifiesLinux(t *testing.T) {
 	linux := KnownFingerprints[0]
-	if linux.Name != "Linux 3.x-5.x" {
+	if linux.Name != "Linux 3.x-6.x" {
 		t.Fatalf("test assumes KnownFingerprints[0] is Linux, got %s", linux.Name)
 	}
 
 	name, confidence := Match(linux.Sig)
-	if name != "Linux 3.x-5.x" {
+	if name != "Linux 3.x-6.x" {
 		t.Errorf("Match(exact Linux signature) = %q, want %q", name, linux.Name)
 	}
 	if confidence < 0.9 {
 		t.Errorf("confidence for an exact match = %.2f, want >= 0.9", confidence)
+	}
+}
+
+// TestMatchNeverReportsFullCertainty guards the cap directly: a single
+// SYN/ACK is one passive sample, never grounds for reporting 100%
+// confidence, no matter how perfectly it matches a known signature.
+func TestMatchNeverReportsFullCertainty(t *testing.T) {
+	linux := KnownFingerprints[0]
+	_, confidence := Match(linux.Sig)
+	if confidence >= 1.0 {
+		t.Errorf("confidence for an exact single-sample match = %.2f, want < 1.0 (never fully certain)", confidence)
+	}
+	if confidence != 0.9 {
+		t.Errorf("confidence for an exact match = %.2f, want exactly the 0.9 cap", confidence)
 	}
 }
 

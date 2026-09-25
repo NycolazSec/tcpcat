@@ -23,6 +23,7 @@ type TargetResult struct {
 	Version         string                   `json:"version,omitempty"`
 	Banner          string                   `json:"banner,omitempty"`
 	OS              string                   `json:"os,omitempty"`
+	OSConfidence    float64                  `json:"os_confidence,omitempty"`
 	MPTCP           bool                     `json:"mptcp,omitempty"`
 	TLS             *service.TLSInfo         `json:"tls,omitempty"`
 	JARM            *service.JARMInfo        `json:"jarm,omitempty"`
