@@ -107,7 +107,7 @@ func checkExportedFilePerm(t *testing.T, filePath string) {
 
 func TestExportJSON(t *testing.T) {
 	filePath := filepath.Join(t.TempDir(), "report.json")
-	if err := ExportJSON(filePath, "127.0.0.1", sampleResults(), 2*time.Second); err != nil {
+	if err := ExportJSON(filePath, "127.0.0.1", sampleResults(), 2*time.Second, nil); err != nil {
 		t.Fatalf("ExportJSON() error = %v", err)
 	}
 	checkExportedFilePerm(t, filePath)
@@ -122,6 +122,32 @@ func TestExportJSON(t *testing.T) {
 	}
 	if report.Target != "127.0.0.1" || len(report.Results) != 2 {
 		t.Errorf("got %+v, want target=127.0.0.1 with 2 results", report)
+	}
+}
+
+func TestExportJSONIncludesCertificateReuse(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "report.json")
+	reuse := []service.CertReuseGroup{{
+		Fingerprint: "abc123",
+		Hosts: []service.CertObservation{
+			{Host: "10.0.0.1", Port: 443},
+			{Host: "10.0.0.2", Port: 443, JARM: "somejarm"},
+		},
+	}}
+	if err := ExportJSON(filePath, "10.0.0.0/24", sampleResults(), 2*time.Second, reuse); err != nil {
+		t.Fatalf("ExportJSON() error = %v", err)
+	}
+
+	var report JSONReport
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("read exported file: %v", err)
+	}
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatalf("exported file is not valid JSON: %v", err)
+	}
+	if len(report.CertificateReuse) != 1 || report.CertificateReuse[0].Fingerprint != "abc123" {
+		t.Errorf("CertificateReuse = %+v, want the reuse group passed in", report.CertificateReuse)
 	}
 }
 

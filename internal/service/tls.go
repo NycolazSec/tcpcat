@@ -1,7 +1,9 @@
 package service
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"strconv"
@@ -38,9 +40,17 @@ type TLSInfo struct {
 	// verification against the scanned host passed -- so a "does not
 	// match" warning is never the only information available; the operator
 	// can see for themselves what the cert actually covers.
-	CertSANs   []string `json:"cert_sans,omitempty"`
-	SelfSigned bool     `json:"self_signed,omitempty"`
-	Weak       bool     `json:"weak,omitempty"`
+	CertSANs []string `json:"cert_sans,omitempty"`
+	// CertFingerprint is the SHA-256 of the certificate's raw DER bytes --
+	// stable across scans of the same cert, used to detect the same
+	// certificate (and so, very likely, the same private key) served by
+	// more than one host (see RecordCertObservation/FindReusedCertificates
+	// in cert_registry.go): a shared load balancer/CDN certificate
+	// ordinarily, but also how an unintended shared private key across
+	// otherwise-unrelated hosts would show up.
+	CertFingerprint string `json:"cert_fingerprint,omitempty"`
+	SelfSigned      bool   `json:"self_signed,omitempty"`
+	Weak            bool   `json:"weak,omitempty"`
 	// SupportedVersions lists every TLS version (down to 1.0) the server
 	// completes a full handshake with, not just the one it negotiates by
 	// default -- a server can default to TLS 1.3 while still happily
@@ -137,6 +147,8 @@ func probeTLS(ip string, port int, timeout time.Duration, hostname string) *TLSI
 		info.CertSubject = cert.Subject.CommonName
 		info.CertIssuer = cert.Issuer.CommonName
 		info.CertExpiresAt = cert.NotAfter.Format("2006-01-02")
+		fingerprint := sha256.Sum256(cert.Raw)
+		info.CertFingerprint = hex.EncodeToString(fingerprint[:])
 
 		// A Duration comparison, not a floored day count: a cert that
 		// expired 2 hours ago has timeLeft < 0 regardless, but

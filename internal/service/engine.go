@@ -83,6 +83,14 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 		jarmInfo = ProbeJARM(ip, port, timeout, hostname)
 	}
 
+	if tlsInfo != nil && tlsInfo.CertFingerprint != "" {
+		jarmHash := ""
+		if jarmInfo != nil {
+			jarmHash = jarmInfo.Hash
+		}
+		RecordCertObservation(tlsInfo.CertFingerprint, ip, port, jarmHash)
+	}
+
 	// Same reasoning, same discipline: probeHTTPPosture runs its own
 	// independent http.Client session (its own dial(s), reused via
 	// keep-alive across the header + path checks, then fully closed) to

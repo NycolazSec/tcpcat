@@ -393,6 +393,7 @@ func main() {
 		}
 	}
 
+	var reusedCerts []service.CertReuseGroup
 	if opts.ServiceDetect {
 		fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
 		fmt.Printf("%s[*] Running Service & Version Detection...%s\n", config.Red, config.Reset)
@@ -478,6 +479,23 @@ func main() {
 						fmt.Printf("    %s[!] http: %s%s\n", config.Yellow, warning, config.Reset)
 					}
 				}
+			}
+		}
+
+		reusedCerts = service.FindReusedCertificates()
+		if len(reusedCerts) > 0 {
+			fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
+			for _, group := range reusedCerts {
+				var parts []string
+				for _, obs := range group.Hosts {
+					if obs.JARM != "" {
+						parts = append(parts, fmt.Sprintf("%s:%d (JARM %s)", obs.Host, obs.Port, obs.JARM))
+					} else {
+						parts = append(parts, fmt.Sprintf("%s:%d", obs.Host, obs.Port))
+					}
+				}
+				fmt.Printf("%s[i] Certificate reused across %d hosts: %s%s\n",
+					config.Cyan, len(group.Hosts), strings.Join(parts, ", "), config.Reset)
 			}
 		}
 
@@ -656,7 +674,7 @@ func main() {
 		config.Green, duration.Round(time.Millisecond), openCount, len(activeTargets), config.Reset)
 
 	if opts.JsonOutput != "" {
-		err := output.ExportJSON(opts.JsonOutput, opts.Target, results, duration)
+		err := output.ExportJSON(opts.JsonOutput, opts.Target, results, duration, reusedCerts)
 		if err != nil {
 			fmt.Printf("%s[!] Failed to export JSON: %v%s\n", config.Red, err, config.Reset)
 		} else {
