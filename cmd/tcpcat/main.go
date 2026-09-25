@@ -47,6 +47,12 @@ func main() {
 	}
 
 	fmt.Println(config.Banner)
+
+	if opts.Profile == "safe-production" {
+		fmt.Printf("%s[*] Profile: safe-production active -- rate capped at %d pps, timing T%d, evasion/fragmentation/decoys disabled, -sV forced on.%s\n",
+			config.Cyan, opts.RateLimit, opts.Timing, config.Reset)
+	}
+
 	if opts.Update {
 		if err := update.Run(os.Args[0], "NycolazSec", "tcpcat"); err != nil {
 			fmt.Printf("%s[!] Update failed: %v%s\n", config.Red, err, config.Reset)
