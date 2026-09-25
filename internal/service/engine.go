@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"regexp"
@@ -19,6 +20,12 @@ type ServiceInfo struct {
 	TLS         *TLSInfo         `json:"tls,omitempty"`
 	JARM        *JARMInfo        `json:"jarm,omitempty"`
 	HTTPPosture *HTTPPostureInfo `json:"http_posture,omitempty"`
+	// Findings is a small, generic slot for a plain-language observation a
+	// protocol probe wants surfaced as its own console line (e.g. "SSL not
+	// offered", "SMBv1 (insecure) is enabled") -- distinct from Banner
+	// (the service's own version string) and from the TLS/HTTPPosture
+	// substructures' own typed Warnings, for probes that don't have one.
+	Findings []string `json:"findings,omitempty"`
 }
 
 var osRegexps = map[string]*regexp.Regexp{
@@ -575,6 +582,39 @@ func buildSMB2NegotiateRequest() []byte {
 	return append(packet, msg...)
 }
 
+// buildSMB1NegotiateRequest builds a legacy SMB1 (CIFS) NEGOTIATE request
+// offering only the "NT LM 0.12" dialect -- see smbv1Enabled, which sends
+// this on its own connection to check whether SMBv1 itself is still
+// enabled and usable.
+func buildSMB1NegotiateRequest() []byte {
+	const dialect = "NT LM 0.12"
+	dialectBuf := append([]byte{0x02}, append([]byte(dialect), 0x00)...)
+
+	body := make([]byte, 0, 4+len(dialectBuf))
+	body = append(body, 0)                                               // WordCount = 0
+	body = append(body, byte(len(dialectBuf)), byte(len(dialectBuf)>>8)) // ByteCount
+	body = append(body, dialectBuf...)
+
+	header := make([]byte, 0, 32)
+	header = append(header, 0xff, 'S', 'M', 'B') // Protocol
+	header = append(header, 0x72)                // Command = NEGOTIATE
+	header = append(header, 0, 0, 0, 0)          // Status
+	header = append(header, 0x00)                // Flags
+	header = append(header, 0x00, 0x00)          // Flags2
+	header = append(header, 0, 0)                // PIDHigh
+	header = append(header, make([]byte, 8)...)  // SecurityFeatures
+	header = append(header, 0, 0)                // Reserved
+	header = append(header, 0, 0)                // TID
+	header = append(header, 0, 0)                // PIDLow
+	header = append(header, 0, 0)                // UID
+	header = append(header, 0, 0)                // MID
+
+	msg := append(header, body...)
+	nbLen := len(msg)
+	packet := []byte{0x00, byte(nbLen >> 16), byte(nbLen >> 8), byte(nbLen)}
+	return append(packet, msg...)
+}
+
 // probeSMB sends an SMB2 NEGOTIATE request and reads back the server's
 // chosen DialectRevision, giving a real SMB protocol version (2.0.2
 // through 3.1.1) instead of just guessing "microsoft-ds" from the port.
@@ -594,11 +634,77 @@ func probeSMB(conn net.Conn, timeout time.Duration) (ServiceInfo, bool) {
 		return ServiceInfo{}, false
 	}
 	dialect := uint16(buf[4+64+4]) | uint16(buf[4+64+5])<<8
-	name, ok := smb2DialectNames[dialect]
+	dialectName, ok := smb2DialectNames[dialect]
 	if !ok {
 		return ServiceInfo{}, false
 	}
-	return ServiceInfo{Name: "microsoft-ds", Version: name, Banner: sanitizeBanner(name)}, true
+
+	// SecurityMode sits right next to DialectRevision in the same response
+	// (2 bytes, immediately before it) -- bit 0 is SMB2_NEGOTIATE_SIGNING_
+	// ENABLED, bit 1 is ...SIGNING_REQUIRED (MS-SMB2 2.2.4).
+	securityMode := uint16(buf[4+64+2]) | uint16(buf[4+64+3])<<8
+	signingRequired := securityMode&0x02 != 0
+	signingEnabled := securityMode&0x01 != 0
+
+	info := ServiceInfo{
+		Name: "microsoft-ds",
+		// The dialect ("SMB 2.1") is a protocol version, not a software
+		// version -- feeding it into Version used to send a nonsensical
+		// CVE lookup (GetForSoftware("microsoft-ds", "SMB 2.1")). Left
+		// empty deliberately, which makes the existing "no reliable
+		// version" skip apply; the dialect is still fully visible via
+		// Banner and the finding below.
+		Banner: sanitizeBanner(dialectName),
+	}
+	info.Findings = append(info.Findings, fmt.Sprintf("SMB dialect negotiated: %s", dialectName))
+	switch {
+	case signingRequired:
+		info.Findings = append(info.Findings, "SMB signing is required")
+	case signingEnabled:
+		info.Findings = append(info.Findings, "SMB signing is enabled but not required (a downgrade/relay attack can still disable it)")
+	default:
+		info.Findings = append(info.Findings, "SMB signing is not enabled -- sessions are vulnerable to relay/tampering")
+	}
+
+	if remoteAddr := conn.RemoteAddr(); remoteAddr != nil && smbv1Enabled(remoteAddr.String(), timeout) {
+		info.Findings = append(info.Findings, "SMBv1 (insecure, deprecated since 2014) is enabled")
+	}
+
+	return info, true
+}
+
+// smbv1Enabled sends a legacy SMB1 (CIFS) NEGOTIATE request offering only
+// the "NT LM 0.12" dialect -- deliberately no SMB2 magic dialect string
+// ("SMB 2.???") -- over its own independent connection (the SMB2 NEGOTIATE
+// above already used the shared one, and a second unrelated NEGOTIATE
+// doesn't cleanly reuse an already-negotiated connection). A server that
+// actually accepts this in SMB1 response format (rather than rejecting it
+// or never answering in SMB1 format at all) is proof SMBv1 itself is still
+// enabled and usable, not just present in some historical fallback list.
+func smbv1Enabled(addr string, timeout time.Duration) bool {
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = conn.Close() }()
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return false
+	}
+	if _, err := conn.Write(buildSMB1NegotiateRequest()); err != nil {
+		return false
+	}
+
+	buf := make([]byte, 128)
+	n, err := conn.Read(buf)
+	if err != nil || n < 4+32+1 {
+		return false
+	}
+	if buf[4] != 0xff || buf[5] != 'S' || buf[6] != 'M' || buf[7] != 'B' {
+		return false // upgraded to SMB2 (0xfe), or not SMB at all
+	}
+	status := binary.LittleEndian.Uint32(buf[9:13])
+	wordCount := buf[4+32]
+	return status == 0 && wordCount > 0
 }
 
 var rdpProtocolNames = map[uint32]string{

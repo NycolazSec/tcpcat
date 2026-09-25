@@ -521,15 +521,24 @@ func dialToStub(t *testing.T, response []byte) net.Conn {
 	}
 	t.Cleanup(func() { _ = ln.Close() })
 
+	// Loop-accepts (rather than a single Accept()) so a prober that opens
+	// more than one connection to the same address -- e.g. probeSMB's
+	// smbv1Enabled follow-up check -- gets served instead of hanging
+	// against a listener nothing is draining, all the way out to its own
+	// timeout.
 	go func() {
-		conn, err := ln.Accept()
-		if err != nil {
-			return
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer func() { _ = c.Close() }()
+				buf := make([]byte, 1024)
+				_, _ = c.Read(buf)
+				_, _ = c.Write(response)
+			}(conn)
 		}
-		defer func() { _ = conn.Close() }()
-		buf := make([]byte, 1024)
-		_, _ = conn.Read(buf)
-		_, _ = conn.Write(response)
 	}()
 
 	conn, err := net.Dial("tcp", ln.Addr().String())
@@ -602,8 +611,116 @@ func TestProbeSMBParsesDialect(t *testing.T) {
 	if !ok {
 		t.Fatal("probeSMB() ok = false, want true")
 	}
-	if got.Version != "SMB 3.1.1" {
-		t.Errorf("Version = %q, want SMB 3.1.1", got.Version)
+	// Regression guard: the dialect used to be reported as Version, which
+	// fed a nonsensical CVE lookup (GetForSoftware("microsoft-ds", "SMB
+	// 3.1.1")) -- it's a protocol version, not a software one. Left empty
+	// now; the dialect is still visible via Banner and the finding.
+	if got.Version != "" {
+		t.Errorf("Version = %q, want empty (dialect is not a software version)", got.Version)
+	}
+	if got.Banner != "SMB 3.1.1" {
+		t.Errorf("Banner = %q, want SMB 3.1.1", got.Banner)
+	}
+	if !containsSubstring(got.Findings, "SMB dialect negotiated: SMB 3.1.1") {
+		t.Errorf("Findings = %v, want a dialect finding", got.Findings)
+	}
+}
+
+func TestProbeSMBSigningNotRequired(t *testing.T) {
+	resp := make([]byte, 4+64+6)
+	resp[4], resp[5], resp[6], resp[7] = 0xfe, 'S', 'M', 'B'
+	resp[4+64+2] = 0x00 // SecurityMode: neither bit set
+	resp[4+64+4] = 0x02 // DialectRevision 0x0202 (SMB 2.0.2), little-endian
+	resp[4+64+5] = 0x02
+
+	got, ok := probeSMB(dialToStub(t, resp), 2*time.Second)
+	if !ok {
+		t.Fatal("probeSMB() ok = false, want true")
+	}
+	if !containsSubstring(got.Findings, "SMB signing is not enabled") {
+		t.Errorf("Findings = %v, want a signing-not-enabled finding", got.Findings)
+	}
+}
+
+func TestProbeSMBSigningRequired(t *testing.T) {
+	resp := make([]byte, 4+64+6)
+	resp[4], resp[5], resp[6], resp[7] = 0xfe, 'S', 'M', 'B'
+	resp[4+64+2] = 0x03 // SecurityMode: both ENABLED and REQUIRED bits set
+	resp[4+64+4] = 0x02 // DialectRevision 0x0202 (SMB 2.0.2), little-endian
+	resp[4+64+5] = 0x02
+
+	got, ok := probeSMB(dialToStub(t, resp), 2*time.Second)
+	if !ok {
+		t.Fatal("probeSMB() ok = false, want true")
+	}
+	if !containsSubstring(got.Findings, "SMB signing is required") {
+		t.Errorf("Findings = %v, want a signing-required finding", got.Findings)
+	}
+}
+
+func containsSubstring(haystack []string, substr string) bool {
+	for _, s := range haystack {
+		if strings.Contains(s, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestSMBv1EnabledAcceptsLegacyDialect(t *testing.T) {
+	// A real SMB1 NEGOTIATE success response: header + WordCount=17 (the
+	// standard core-protocol response size) with the rest zeroed -- only
+	// Protocol/Command/Status/WordCount actually matter to smbv1Enabled.
+	resp := make([]byte, 4+32+1)
+	resp[4], resp[5], resp[6], resp[7] = 0xff, 'S', 'M', 'B'
+	resp[8] = 0x72  // Command = NEGOTIATE
+	resp[4+32] = 17 // WordCount
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		buf := make([]byte, 1024)
+		_, _ = conn.Read(buf)
+		_, _ = conn.Write(resp)
+	}()
+
+	if !smbv1Enabled(ln.Addr().String(), 2*time.Second) {
+		t.Error("smbv1Enabled() = false, want true for a successful SMB1 NEGOTIATE response")
+	}
+}
+
+func TestSMBv1EnabledRejectsSMB2Upgrade(t *testing.T) {
+	// A server with SMBv1 disabled either upgrades to SMB2 format (0xfe)
+	// or returns a non-zero status -- either way, not usable SMBv1.
+	resp := make([]byte, 4+64+6)
+	resp[4], resp[5], resp[6], resp[7] = 0xfe, 'S', 'M', 'B'
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		buf := make([]byte, 1024)
+		_, _ = conn.Read(buf)
+		_, _ = conn.Write(resp)
+	}()
+
+	if smbv1Enabled(ln.Addr().String(), 2*time.Second) {
+		t.Error("smbv1Enabled() = true for an SMB2-format response, want false")
 	}
 }
 
