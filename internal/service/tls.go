@@ -23,11 +23,11 @@ type TLSInfo struct {
 	// that did NOT negotiate post-quantum key exchange), so it must stay
 	// distinguishable from "TLS wasn't probed at all" (the whole TLSInfo is
 	// nil) rather than silently vanishing from the JSON like a default would.
-	PQCReady      bool     `json:"pqc_ready"`
-	CertSubject   string   `json:"cert_subject,omitempty"`
-	CertIssuer    string   `json:"cert_issuer,omitempty"`
-	CertExpiresAt string   `json:"cert_expires_at,omitempty"`
-	CertDaysLeft  int      `json:"cert_days_left,omitempty"`
+	PQCReady      bool   `json:"pqc_ready"`
+	CertSubject   string `json:"cert_subject,omitempty"`
+	CertIssuer    string `json:"cert_issuer,omitempty"`
+	CertExpiresAt string `json:"cert_expires_at,omitempty"`
+	CertDaysLeft  int    `json:"cert_days_left,omitempty"`
 	// CertCritical marks an expiry warning severe enough to escalate past a
 	// routine warning (already expired, or expiring within
 	// certExpiryCriticalHours) -- callers printing Warnings can use this to
@@ -38,9 +38,9 @@ type TLSInfo struct {
 	// verification against the scanned host passed -- so a "does not
 	// match" warning is never the only information available; the operator
 	// can see for themselves what the cert actually covers.
-	CertSANs []string `json:"cert_sans,omitempty"`
-	SelfSigned bool `json:"self_signed,omitempty"`
-	Weak       bool `json:"weak,omitempty"`
+	CertSANs   []string `json:"cert_sans,omitempty"`
+	SelfSigned bool     `json:"self_signed,omitempty"`
+	Weak       bool     `json:"weak,omitempty"`
 	// SupportedVersions lists every TLS version (down to 1.0) the server
 	// completes a full handshake with, not just the one it negotiates by
 	// default -- a server can default to TLS 1.3 while still happily
