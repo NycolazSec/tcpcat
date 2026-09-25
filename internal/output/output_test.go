@@ -31,7 +31,7 @@ func TestExportAuditJSONLWritesOneRecord(t *testing.T) {
 func TestExportSARIFIncludesCVEs(t *testing.T) {
 	filePath := filepath.Join(t.TempDir(), "report.sarif")
 	results := []scan.TargetResult{{IP: "127.0.0.1", Port: 8080, State: scan.StateOpen, Vulnerabilities: []vuln.Vulnerability{{ID: "CVE-2021-41773", Title: "Apache issue", CVSS: 7.5}}}}
-	if err := ExportSARIF(filePath, results); err != nil {
+	if err := ExportSARIF(filePath, results, nil); err != nil {
 		t.Fatalf("ExportSARIF() error = %v", err)
 	}
 	data, err := os.ReadFile(filePath)
@@ -54,10 +54,10 @@ func TestExportSARIFValidatesAgainstSchema(t *testing.T) {
 		t.Fatalf("compile SARIF schema: %v", err)
 	}
 
-	validate := func(t *testing.T, results []scan.TargetResult) {
+	validate := func(t *testing.T, results []scan.TargetResult, summary []scan.SeveritySummaryEntry) {
 		t.Helper()
 		filePath := filepath.Join(t.TempDir(), "report.sarif")
-		if err := ExportSARIF(filePath, results); err != nil {
+		if err := ExportSARIF(filePath, results, summary); err != nil {
 			t.Fatalf("ExportSARIF() error = %v", err)
 		}
 		data, err := os.ReadFile(filePath)
@@ -74,16 +74,22 @@ func TestExportSARIFValidatesAgainstSchema(t *testing.T) {
 	}
 
 	t.Run("no results at all", func(t *testing.T) {
-		validate(t, nil)
+		validate(t, nil, nil)
 	})
 	t.Run("open ports, no CVEs", func(t *testing.T) {
-		validate(t, []scan.TargetResult{{IP: "127.0.0.1", Port: 22, State: scan.StateOpen}})
+		validate(t, []scan.TargetResult{{IP: "127.0.0.1", Port: 22, State: scan.StateOpen}}, nil)
 	})
 	t.Run("open port with a CVE", func(t *testing.T) {
 		validate(t, []scan.TargetResult{{
 			IP: "127.0.0.1", Port: 8080, State: scan.StateOpen,
 			Vulnerabilities: []vuln.Vulnerability{{ID: "CVE-2021-41773", Title: "Apache issue", CVSS: 7.5}},
-		}})
+		}}, nil)
+	})
+	t.Run("with a severity summary", func(t *testing.T) {
+		validate(t, []scan.TargetResult{{
+			IP: "127.0.0.1", Port: 8080, State: scan.StateOpen,
+			Vulnerabilities: []vuln.Vulnerability{{ID: "CVE-2021-41773", Title: "Apache issue", CVSS: 7.5, Severity: "high"}},
+		}}, []scan.SeveritySummaryEntry{{Severity: "high", Count: 1, Hosts: []string{"127.0.0.1"}}})
 	})
 }
 
@@ -107,7 +113,7 @@ func checkExportedFilePerm(t *testing.T, filePath string) {
 
 func TestExportJSON(t *testing.T) {
 	filePath := filepath.Join(t.TempDir(), "report.json")
-	if err := ExportJSON(filePath, "127.0.0.1", sampleResults(), 2*time.Second, nil); err != nil {
+	if err := ExportJSON(filePath, "127.0.0.1", sampleResults(), 2*time.Second, nil, nil); err != nil {
 		t.Fatalf("ExportJSON() error = %v", err)
 	}
 	checkExportedFilePerm(t, filePath)
@@ -134,7 +140,7 @@ func TestExportJSONIncludesCertificateReuse(t *testing.T) {
 			{Host: "10.0.0.2", Port: 443, JARM: "somejarm"},
 		},
 	}}
-	if err := ExportJSON(filePath, "10.0.0.0/24", sampleResults(), 2*time.Second, reuse); err != nil {
+	if err := ExportJSON(filePath, "10.0.0.0/24", sampleResults(), 2*time.Second, reuse, nil); err != nil {
 		t.Fatalf("ExportJSON() error = %v", err)
 	}
 

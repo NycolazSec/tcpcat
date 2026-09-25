@@ -20,14 +20,19 @@ type JSONReport struct {
 	// balancer/CDN certificate, but also how an unintended shared private
 	// key across otherwise-unrelated hosts would show up.
 	CertificateReuse []service.CertReuseGroup `json:"certificate_reuse,omitempty"`
+	// Summary aggregates every vulnerability across Results by severity
+	// tier (critical first), each with the hosts it was found on -- see
+	// scan.SummarizeSeverity.
+	Summary []scan.SeveritySummaryEntry `json:"summary,omitempty"`
 }
 
-func ExportJSON(filePath string, target string, results []scan.TargetResult, duration time.Duration, certReuse []service.CertReuseGroup) error {
+func ExportJSON(filePath string, target string, results []scan.TargetResult, duration time.Duration, certReuse []service.CertReuseGroup, summary []scan.SeveritySummaryEntry) error {
 	report := JSONReport{
 		Target:           target,
 		Duration:         duration.Round(time.Millisecond).String(),
 		Results:          results,
 		CertificateReuse: certReuse,
+		Summary:          summary,
 	}
 
 	data, err := json.MarshalIndent(report, "", "  ")

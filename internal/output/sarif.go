@@ -15,8 +15,9 @@ type sarifReport struct {
 }
 
 type sarifRun struct {
-	Tool    sarifTool     `json:"tool"`
-	Results []sarifResult `json:"results"`
+	Tool       sarifTool              `json:"tool"`
+	Results    []sarifResult          `json:"results"`
+	Properties map[string]interface{} `json:"properties,omitempty"`
 }
 
 type sarifTool struct {
@@ -56,7 +57,7 @@ type sarifArtifactLocation struct {
 	URI string `json:"uri"`
 }
 
-func ExportSARIF(filePath string, results []scan.TargetResult) error {
+func ExportSARIF(filePath string, results []scan.TargetResult, summary []scan.SeveritySummaryEntry) error {
 	// SARIF 2.1.0 requires results/rules to be an array when present (an
 	// omitted-or-null value fails schema validation) -- initialized here
 	// rather than left as a nil slice, which encoding/json renders as
@@ -88,6 +89,9 @@ func ExportSARIF(filePath string, results []scan.TargetResult) error {
 	}
 	for id, description := range rules {
 		run.Tool.Driver.Rules = append(run.Tool.Driver.Rules, sarifRule{ID: id, ShortDescription: sarifMessage{Text: description}})
+	}
+	if len(summary) > 0 {
+		run.Properties = map[string]interface{}{"severitySummary": summary}
 	}
 	report := sarifReport{Version: "2.1.0", Schema: "https://json.schemastore.org/sarif-2.1.0.json", Runs: []sarifRun{run}}
 	data, err := json.MarshalIndent(report, "", "  ")

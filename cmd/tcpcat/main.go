@@ -676,12 +676,32 @@ func main() {
 		}
 	}
 
+	severitySummary := scan.SummarizeSeverity(results)
+	if len(severitySummary) > 0 {
+		fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
+		fmt.Printf("%s[*] Findings summary:%s\n", config.Bold, config.Reset)
+		for _, entry := range severitySummary {
+			var color string
+			switch entry.Severity {
+			case "critical":
+				color = config.Red
+			case "high":
+				color = config.Yellow
+			case "medium":
+				color = config.Cyan
+			default:
+				color = config.White
+			}
+			fmt.Printf("    %s%-9s%s %d  (%s)\n", color, entry.Severity, config.Reset, entry.Count, strings.Join(entry.Hosts, ", "))
+		}
+	}
+
 	fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
 	fmt.Printf("%s[✓] Scan completed in %v. Found %d open port(s) across %d active target(s).%s\n",
 		config.Green, duration.Round(time.Millisecond), openCount, len(activeTargets), config.Reset)
 
 	if opts.JsonOutput != "" {
-		err := output.ExportJSON(opts.JsonOutput, opts.Target, results, duration, reusedCerts)
+		err := output.ExportJSON(opts.JsonOutput, opts.Target, results, duration, reusedCerts, severitySummary)
 		if err != nil {
 			fmt.Printf("%s[!] Failed to export JSON: %v%s\n", config.Red, err, config.Reset)
 		} else {
@@ -704,7 +724,7 @@ func main() {
 		}
 	}
 	if opts.SARIFOutput != "" {
-		if err := output.ExportSARIF(opts.SARIFOutput, results); err != nil {
+		if err := output.ExportSARIF(opts.SARIFOutput, results, severitySummary); err != nil {
 			fmt.Printf("%s[!] Failed to export SARIF: %v%s\n", config.Red, err, config.Reset)
 		} else {
 			fmt.Printf("%s[✓] Results exported to SARIF file: %s%s\n", config.Green, opts.SARIFOutput, config.Reset)
