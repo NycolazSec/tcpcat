@@ -539,7 +539,7 @@ func main() {
 				}
 				if r.Service == "unknown" || r.Version == "" {
 					r.Assessment.Reason = "No reliable service version was detected."
-					fmt.Printf("    %s[~] %s:%-5d - no version detected, vulnerability lookup skipped%s\n", config.White, r.IP, r.Port, config.Reset)
+					fmt.Printf("    %s[~] %s:%-5d - vulnerability lookup skipped (no reliable service version detected)%s\n", config.White, r.IP, r.Port, config.Reset)
 					continue
 				}
 
@@ -624,8 +624,14 @@ func main() {
 						r.Assessment.Reason = fmt.Sprintf("No matching vulnerabilities were found for %s %s.", r.Service, r.Version)
 					}
 
+					// One consistent format regardless of which of the three
+					// outcomes this is ("N vulnerabilities found ..."),
+					// rather than three differently-worded messages
+					// ("N CVEs found", "0 CVEs found after strict version
+					// filtering", "0 vulnerabilities found") for what a
+					// reader experiences as the same kind of result line.
 					if len(vulnerabilities) > 0 {
-						fmt.Printf("%s[!] %s:%-5d - %d CVEs found for %s %s%s\n", config.Red, r.IP, r.Port, len(vulnerabilities), r.Service, r.Version, config.Reset)
+						fmt.Printf("%s[!] %s:%-5d - %d vulnerabilities found for %s %s%s\n", config.Red, r.IP, r.Port, len(vulnerabilities), r.Service, r.Version, config.Reset)
 						for _, v := range vulnerabilities {
 							var cvssColor string
 							switch {
@@ -648,12 +654,13 @@ func main() {
 							fmt.Printf("    |_ %s (%sCVSS: %.1f%s) - %s%s\n", v.ID, cvssColor, v.CVSS, config.Reset, v.Title, note)
 						}
 						if filteredCount > 0 {
-							fmt.Printf("    %s[~] %d CVEs filtered by OS (%s)%s\n", config.Yellow, filteredCount, r.OS, config.Reset)
+							fmt.Printf("    %s[~] %d additional vulnerabilities excluded (not applicable to %s)%s\n", config.Yellow, filteredCount, r.OS, config.Reset)
 						}
 					} else if initialCount > 0 {
-						fmt.Printf("%s[+] %s:%-5d - 0 CVEs found after strict version filtering.%s\n", config.Green, r.IP, r.Port, config.Reset)
+						fmt.Printf("%s[+] %s:%-5d - 0 vulnerabilities found for %s %s (%d excluded, not applicable to %s)%s\n",
+							config.Green, r.IP, r.Port, r.Service, r.Version, filteredCount, r.OS, config.Reset)
 					} else {
-						fmt.Printf("%s[+] %s:%-5d - 0 vulnerabilities found for %s %s.%s\n", config.Green, r.IP, r.Port, r.Service, r.Version, config.Reset)
+						fmt.Printf("%s[+] %s:%-5d - 0 vulnerabilities found for %s %s%s\n", config.Green, r.IP, r.Port, r.Service, r.Version, config.Reset)
 					}
 				}
 			}
