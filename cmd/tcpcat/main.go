@@ -254,7 +254,8 @@ func main() {
 		fmt.Printf("%s[*] Host discovery skipped (-Pn). All %d target(s) will be scanned.%s\n", config.Yellow, len(targetIPs), config.Reset)
 	} else if scan.GlobalXsk != nil {
 		fmt.Printf("%s[*] Running Host Discovery (AF_XDP: ICMP + SYN/443 + ACK/80)...%s\n", config.White, config.Reset)
-		activeTargets = scan.DiscoverHostsXDP(targetIPs, 2*time.Second, scan.NewLimiterFromOptions(opts))
+		discoveryTimeout := time.Duration(opts.DiscoveryTimeout) * time.Millisecond
+		activeTargets = scan.DiscoverHostsXDP(targetIPs, discoveryTimeout, scan.NewLimiterFromOptions(opts))
 		for _, ip := range activeTargets {
 			fmt.Printf("    ├─ %s[UP]%s %s\n", config.Green, config.Reset, ip)
 		}
@@ -265,6 +266,7 @@ func main() {
 	} else {
 		fmt.Printf("%s[*] Running Host Discovery...%s\n", config.White, config.Reset)
 
+		discoveryTimeout := time.Duration(opts.DiscoveryTimeout) * time.Millisecond
 		var wg sync.WaitGroup
 		var mu sync.Mutex
 
@@ -274,7 +276,7 @@ func main() {
 				wg.Add(1)
 				go func(ip string) {
 					defer wg.Done()
-					if discovery.DiscoverHost(ip, opts.UdpPing, 2*time.Second) {
+					if discovery.DiscoverHost(ip, opts.UdpPing, discoveryTimeout) {
 						mu.Lock()
 						activeTargets = append(activeTargets, ip)
 						mu.Unlock()
@@ -304,7 +306,7 @@ func main() {
 					defer wg.Done()
 					defer func() { <-sem }()
 
-					if discovery.DiscoverHost(ip, opts.UdpPing, 2*time.Second) {
+					if discovery.DiscoverHost(ip, opts.UdpPing, discoveryTimeout) {
 						mu.Lock()
 						activeTargets = append(activeTargets, ip)
 						mu.Unlock()

@@ -63,11 +63,12 @@ type Options struct {
 	ExcludeHost string
 	Interface   string
 
-	PingScan      bool
-	SkipDiscovery bool
-	UdpPing       int
-	Traceroute    bool
-	MaxHops       int
+	PingScan         bool
+	SkipDiscovery    bool
+	UdpPing          int
+	Traceroute       bool
+	MaxHops          int
+	DiscoveryTimeout int
 
 	SynScan     bool
 	ConnectScan bool
@@ -173,45 +174,46 @@ func ParseFlags() (*Options, error) {
 	var posArgs []string
 
 	valueFlags := map[string]bool{
-		"-p":               true,
-		"-i":               true,
-		"--interface":      true,
-		"-iL":              true,
-		"-j":               true,
-		"-w":               true,
-		"--workers":        true,
-		"-g":               true,
-		"--ttl":            true,
-		"--data-string":    true,
-		"--data":           true,
-		"--top-ports":      true,
-		"--decoy":          true,
-		"-sI":              true,
-		"--scripts":        true,
-		"-T":               true,
-		"--vulners-apikey": true,
-		"--rate":           true,
-		"--max-retries":    true,
-		"--aws-region":     true,
-		"--aws-tags":       true,
-		"--web-addr":       true,
-		"--batch-size":     true,
-		"--conn-pool":      true,
-		"--relay-server":   true,
-		"-PU":              true,
-		"--max-hops":       true,
-		"--scope-file":     true,
-		"--resume":         true,
-		"--profile":        true,
-		"--audit-log":      true,
-		"--baseline":       true,
-		"--changes":        true,
-		"--sarif":          true,
-		"--exclude":        true,
-		"-oX":              true,
-		"-oG":              true,
-		"-oN":              true,
-		"-oS":              true,
+		"-p":                  true,
+		"-i":                  true,
+		"--interface":         true,
+		"-iL":                 true,
+		"-j":                  true,
+		"-w":                  true,
+		"--workers":           true,
+		"-g":                  true,
+		"--ttl":               true,
+		"--data-string":       true,
+		"--data":              true,
+		"--top-ports":         true,
+		"--decoy":             true,
+		"-sI":                 true,
+		"--scripts":           true,
+		"-T":                  true,
+		"--vulners-apikey":    true,
+		"--rate":              true,
+		"--max-retries":       true,
+		"--aws-region":        true,
+		"--aws-tags":          true,
+		"--web-addr":          true,
+		"--batch-size":        true,
+		"--conn-pool":         true,
+		"--relay-server":      true,
+		"-PU":                 true,
+		"--max-hops":          true,
+		"--discovery-timeout": true,
+		"--scope-file":        true,
+		"--resume":            true,
+		"--profile":           true,
+		"--audit-log":         true,
+		"--baseline":          true,
+		"--changes":           true,
+		"--sarif":             true,
+		"--exclude":           true,
+		"-oX":                 true,
+		"-oG":                 true,
+		"-oN":                 true,
+		"-oS":                 true,
 
 		"--jitter":           true,
 		"--evasion":          true,
@@ -268,6 +270,7 @@ func ParseFlags() (*Options, error) {
 	flag.IntVar(&opts.UdpPing, "PU", 0, "UDP Ping discovery port")
 	flag.BoolVar(&opts.Traceroute, "traceroute", false, "Trace hop path to target")
 	flag.IntVar(&opts.MaxHops, "max-hops", 30, "Maximum hops for --traceroute")
+	flag.IntVar(&opts.DiscoveryTimeout, "discovery-timeout", 250, "Per-host timeout in milliseconds for ICMP/TCP host discovery (raise this for scans across high-latency/WAN links)")
 
 	flag.BoolVar(&opts.AckScan, "sA", false, "ACK Scan (Firewall mapping)")
 	flag.BoolVar(&opts.WindowScan, "sW", false, "TCP Window Scan")
@@ -368,6 +371,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--aws-tags <tags>%s   Scan EC2 instances matching tags (e.g., 'Key=App,Value=Web')\n", Yellow, Reset)
 		fmt.Printf("  %s-Pn%s             Treat all hosts as online\n", Yellow, Reset)
 		fmt.Printf("  %s-PU <port>%s      UDP Ping discovery port\n", Yellow, Reset)
+		fmt.Printf("  %s--discovery-timeout <ms>%s Per-host discovery timeout in ms (default: 250; raise for WAN/high-latency targets)\n", Yellow, Reset)
 		fmt.Println(Cyan + "\nPORT & SCAN SPECIFICATION:" + Reset)
 		fmt.Printf("  %s-p <ports>%s      Ports to scan (e.g. 80,443 | 1-1024)\n", Yellow, Reset)
 		fmt.Printf("  %s--top-ports <n>%s Scan n most common ports\n", Yellow, Reset)
@@ -452,6 +456,10 @@ func ParseFlags() (*Options, error) {
 
 	if opts.Timing < 0 || opts.Timing > 5 {
 		return nil, fmt.Errorf("timing must be between 0 and 5")
+	}
+
+	if opts.DiscoveryTimeout <= 0 {
+		opts.DiscoveryTimeout = 250
 	}
 
 	if opts.MaxWorkers <= 0 {
