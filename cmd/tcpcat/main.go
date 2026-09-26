@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"runtime"
@@ -270,9 +271,53 @@ func main() {
 		var wg sync.WaitGroup
 		var mu sync.Mutex
 
+		// Targets inside the local interface's own subnet get resolved by a
+		// native ARP sweep first: ARP never crosses a router, doesn't shell
+		// out to ping(1), and is authoritative for local-segment liveness --
+		// a host that doesn't answer ARP can't be reached by a follow-up
+		// ICMP/TCP probe either, since the kernel has no way to address a
+		// frame at it. That settles most of a LAN /24 in milliseconds
+		// instead of paying every unresponsive host's full discovery
+		// timeout. Only IPs it can't (or didn't) resolve fall through to
+		// the pre-existing ping-based pool below.
+		pendingIPs := targetIPs
+		if _, localSubnet, err := netiface.Lookup(bannerIface); err == nil && localSubnet != nil {
+			var arpEligible []string
+			var rest []string
+			for _, ip := range targetIPs {
+				if parsed := net.ParseIP(ip); parsed != nil && localSubnet.Contains(parsed) {
+					arpEligible = append(arpEligible, ip)
+				} else {
+					rest = append(rest, ip)
+				}
+			}
+
+			arpTimeout := 30 * time.Millisecond
+			if discoveryTimeout < arpTimeout {
+				arpTimeout = discoveryTimeout
+			}
+			arpResults, arpErr := discovery.ARPScan(arpEligible, bannerIface, arpTimeout)
+			if arpErr != nil {
+				// No CAP_NET_RAW, not Linux, or some other reason the raw
+				// socket couldn't be used: fall back to ping for these too
+				// rather than silently reporting them all down.
+				rest = append(rest, arpEligible...)
+			} else {
+				for _, ip := range arpEligible {
+					if arpResults[ip] {
+						activeTargets = append(activeTargets, ip)
+						fmt.Printf("    ├─ %s[UP]%s %s\n", config.Green, config.Reset, ip)
+					} else if opts.Verbose {
+						fmt.Printf("    ├─ %s[DOWN]%s %s\n", config.Red, config.Reset, ip)
+					}
+				}
+			}
+			pendingIPs = rest
+		}
+
 		if opts.UnsafeNoLimits {
 			fmt.Printf("%s[!] Running host discovery with unlimited concurrency (--unsafe-no-limits). This may crash your system.%s\n", config.Red, config.Reset)
-			for _, ip := range targetIPs {
+			for _, ip := range pendingIPs {
 				wg.Add(1)
 				go func(ip string) {
 					defer wg.Done()
@@ -295,7 +340,7 @@ func main() {
 				defer limiter.Stop()
 			}
 
-			for _, ip := range targetIPs {
+			for _, ip := range pendingIPs {
 				if limiter != nil {
 					<-limiter.C
 				}
