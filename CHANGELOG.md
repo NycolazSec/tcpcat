@@ -10,6 +10,83 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-26
+
+### Added
+- `--debug` flag: hides low-level eBPF/XDP engine diagnostics (interface
+  auto-detection, XDP hook attach/detach, ring buffer setup, NAPI tuning
+  hints, phase timings) by default; scan results and real warnings/errors
+  stay visible unconditionally.
+- ARP-based host discovery for targets on the interface's own subnet:
+  settles most of a LAN /24 in milliseconds instead of paying every
+  unresponsive host's full ICMP/TCP discovery timeout, falling back to the
+  existing ping-based discovery when ARP isn't available (no CAP_NET_RAW,
+  non-Linux, etc.).
+- `--show-closed`: CLOSED ports are now rolled into a single "Not shown: N
+  closed port(s)" line per host by default so open ports aren't buried in a
+  large scan; `--show-closed` restores the old per-port listing. JSON/SARIF
+  and other exports are unaffected -- console display only.
+- Findings summary by severity (critical/high/medium/low/info, each with
+  its count and affected hosts) printed before the final "Scan completed"
+  line.
+- Distro-aware CVE correlation: recognizes Debian's `+debNNuM` and Ubuntu's
+  `~ubuYYMM` package-version suffixes and checks them against the distro's
+  own OSV ecosystem, so an already-backported fix isn't misreported as
+  still-vulnerable from the upstream version string alone.
+- CVE applicability annotations: a CVE whose title names an OS or optional
+  component tcpcat didn't detect (e.g. Windows-only, requires wsrep/Galera)
+  is now flagged `not_applicable`/`requires_component` instead of silently
+  counting toward a host's risk severity.
+- TLS certificate reuse detection: flags a certificate fingerprint seen on
+  more than one distinct host (shared load balancer/CDN, or an unintended
+  shared private key), alongside each host's JARM fingerprint.
+- PostgreSQL missing-TLS and SMB signing/SMBv1 findings surfaced as their
+  own console/JSON entries.
+- Active scan profile announcement: `--profile safe-production` now prints
+  what it changed (rate/timing/evasion/-sV) right after the banner instead
+  of applying silently.
+
+### Changed
+- Console color palette consolidated to red/white/black: warnings, tips,
+  and `--help` section headers now use a consistent red/white/gray scheme
+  instead of a mix of yellow/cyan/green; the startup banner and OPEN
+  (green) / CLOSED (red) port results keep their original colors.
+- Rate limiter reserves 64 evenly-spaced token slots per sleep instead of
+  sleeping once per packet, fixing throughput collapsing far below the
+  requested `--rate` on large high-rate scans (measured ~2,500pps actual
+  against a requested 25,000pps on a 327k-job scan).
+- OS detection: reported once per host instead of repeated on every open
+  port, single-sample confidence capped at 90%, and "Linux 3.x-5.x"
+  relabeled "Linux 3.x-6.x" to match what the fingerprint actually covers.
+- Vulnerability-lookup outcome messages harmonized into one consistent
+  format across the "found", "zero after filtering", and "skipped" cases.
+
+### Fixed
+- **Security:** the eBPF/XDP hook redirected *all* traffic on interfaces
+  without per-queue sysfs entries (a Linux bridge, the common `--ebpf`
+  target) into tcpcat's own socket instead of just the scan's own probe
+  traffic -- confirmed as the cause of a full network freeze (SSH cut,
+  k3s pods destabilized) on a shared Docker bridge during testing. The
+  eBPF classifier now only redirects the scan's own probe/discovery
+  traffic; everything else passes through the kernel stack untouched.
+- The eBPF collection (program + map) is now explicitly released on
+  shutdown instead of relying on Go's GC finalizer or process-exit
+  cleanup, removing a multi-second hang some interfaces hit after
+  "eBPF XDP hook detached successfully".
+- A worker-goroutine panic no longer kills the whole scan; the XDP hook is
+  now also detached on an unrecovered panic in the main goroutine, so a
+  crash can no longer leave the interface's traffic silently redirected.
+- HTTP service detection now correctly identifies the server behind an
+  HTTP/2-only TLS port instead of reporting a bare `ssl/h2`.
+- MySQL/MariaDB banners no longer show raw handshake bytes
+  (length/sequence/salt) mixed into the printable version string.
+- SARIF export: empty scans no longer serialize `results`/`rules` as JSON
+  `null` (invalid per the SARIF 2.1.0 schema), and `shortDescription` is
+  now the required message object instead of a bare string. `--sarif` and
+  `--audit-log` now print the same export-confirmation line every other
+  format already did.
+- Port 139 identified as `netbios-ssn` instead of `unknown`.
+
 ## [1.3.0] - 2026-09-25
 
 ### Added
