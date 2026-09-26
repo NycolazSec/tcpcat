@@ -48,10 +48,28 @@ func PingHost(ip string, timeout time.Duration) bool {
 		tcpTimeout = 200 * time.Millisecond
 	}
 
+	// Probed concurrently rather than one at a time: a host that's actually
+	// down (or firewalled to silently drop everything) doesn't answer any of
+	// these, so a serial loop pays the full tcpTimeout once per port --
+	// up to 10x tcpTimeout for that single host -- and every other target
+	// sharing the caller's worker-pool slot waits behind it. Racing them
+	// bounds the worst case to a single tcpTimeout no matter how many ports
+	// are probed.
+	found := make(chan bool, len(probePorts))
 	for _, port := range probePorts {
-		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprintf("%d", port)), tcpTimeout)
-		if err == nil {
+		go func(port int) {
+			conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprintf("%d", port)), tcpTimeout)
+			if err != nil {
+				found <- false
+				return
+			}
 			_ = conn.Close()
+			found <- true
+		}(port)
+	}
+
+	for range probePorts {
+		if <-found {
 			return true
 		}
 	}
