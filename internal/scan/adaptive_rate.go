@@ -80,13 +80,28 @@ func (r *RTTEstimator) RTO(min time.Duration) time.Duration {
 // congestion-avoidance shape TCP uses. It is entirely lock-free: Wait and
 // Report can both be called from many goroutines at once.
 type AdaptiveRateLimiter struct {
-	ratePPS  atomic.Int64
-	minPPS   int64
-	maxPPS   int64
-	sent     atomic.Uint64
-	lost     atomic.Uint64
-	lastTick atomic.Int64 // UnixNano of the last granted send slot
+	ratePPS        atomic.Int64
+	minPPS         int64
+	maxPPS         int64
+	sent           atomic.Uint64
+	lost           atomic.Uint64
+	lastTick       atomic.Int64 // UnixNano of the last granted send slot
+	batchRemaining atomic.Int64 // pre-paid slots left in the current pacerBatchSize batch
 }
+
+// pacerBatchSize is how many send slots acquireBatched reserves in one
+// WaitN call instead of one. At tens of thousands of pps the per-packet
+// interval is tens of microseconds, and calling time.Sleep that often
+// doesn't scale: Go's runtime timer/scheduler overhead per wakeup can
+// exceed the sleep duration itself, and at high concurrency this measurably
+// caps real throughput far below the requested rate (observed: ~2500pps
+// actual against a requested 25000pps on a 327k-job scan, with sys time
+// dominating wall time -- exactly what a scheduler thrashing on ~300k
+// individual sub-100us sleeps looks like). Reserving 64 evenly-spaced slots
+// per WaitN call and handing them out one at a time amortizes that
+// scheduling cost 64x while keeping the same average pps, at the cost of a
+// small burst (up to 64 packets back-to-back) each time a batch refills.
+const pacerBatchSize = 64
 
 // NewAdaptiveRateLimiter starts pacing at initialPPS packets/sec and will
 // never adjust the rate outside [minPPS, maxPPS].
@@ -165,6 +180,30 @@ func (rl *AdaptiveRateLimiter) WaitN(n int) {
 	}
 }
 
+// acquireBatched consumes one pre-paid slot from the current pacerBatchSize
+// batch, refilling via a single WaitN(pacerBatchSize) call whenever the
+// batch is exhausted. Lock-free: many goroutines can call this concurrently,
+// and exactly one of them pays the refill's sleep while the rest either
+// consume from the batch it just paid for or race to refill it themselves.
+func (rl *AdaptiveRateLimiter) acquireBatched() {
+	for {
+		rem := rl.batchRemaining.Load()
+		if rem > 0 {
+			if rl.batchRemaining.CompareAndSwap(rem, rem-1) {
+				return // pre-paid by an earlier refill -- no sleep needed
+			}
+			continue // lost the race for this slot; retry
+		}
+		// Batch exhausted: try to become the refiller. Losers of this CAS
+		// loop back around and either see the new batch (if this goroutine
+		// won) or try to refill it themselves (if a third goroutine won).
+		if rl.batchRemaining.CompareAndSwap(rem, pacerBatchSize-1) {
+			rl.WaitN(pacerBatchSize) // one sleep for the whole batch
+			return
+		}
+	}
+}
+
 // pacedWait blocks for one packet's worth of limiter, if non-nil (a nil
 // limiter means --rate wasn't set, or --unsafe-no-limits was: see
 // NewLimiterFromOptions). Called right before each real packet transmission
@@ -176,9 +215,15 @@ func (rl *AdaptiveRateLimiter) WaitN(n int) {
 // concurrently, each against its own scan, and a shared global would let
 // one request's rate limit pace another's packets or get nulled out from
 // under it when the other finishes first.
+//
+// Goes through acquireBatched rather than WaitN(1) directly: at tens of
+// thousands of pps the per-packet interval is tens of microseconds, and a
+// scan with hundreds of thousands of jobs calling time.Sleep that often
+// individually hits Go's scheduling overhead hard enough to cap real
+// throughput at a small fraction of the requested rate (see pacerBatchSize).
 func pacedWait(limiter *AdaptiveRateLimiter) {
 	if limiter != nil {
-		limiter.WaitN(1)
+		limiter.acquireBatched()
 	}
 }
 
