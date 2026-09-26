@@ -37,25 +37,21 @@ func ICMPPing(ip string, timeout time.Duration) bool {
 }
 
 func PingHost(ip string, timeout time.Duration) bool {
-
-	if ICMPPing(ip, timeout) {
-		return true
-	}
-
 	probePorts := []int{80, 443, 22, 8080, 445, 3389, 21, 25, 3306, 8443}
 	tcpTimeout := timeout / 2
 	if tcpTimeout < 200*time.Millisecond {
 		tcpTimeout = 200 * time.Millisecond
 	}
 
-	// Probed concurrently rather than one at a time: a host that's actually
-	// down (or firewalled to silently drop everything) doesn't answer any of
-	// these, so a serial loop pays the full tcpTimeout once per port --
-	// up to 10x tcpTimeout for that single host -- and every other target
-	// sharing the caller's worker-pool slot waits behind it. Racing them
-	// bounds the worst case to a single tcpTimeout no matter how many ports
-	// are probed.
-	found := make(chan bool, len(probePorts))
+	// ICMP and the TCP probes race concurrently instead of ICMP-then-TCP:
+	// a host that's actually down answers none of them, so running ICMP
+	// first and only falling back to TCP on failure pays ICMPPing's own
+	// worst case (timeout+500ms) *plus* a TCP probe's, back to back, for
+	// every unresponsive host -- and every other target sharing the
+	// caller's worker-pool slot waits behind it. Racing all of them bounds
+	// the worst case to whichever single probe is slowest, not their sum.
+	found := make(chan bool, 1+len(probePorts))
+	go func() { found <- ICMPPing(ip, timeout) }()
 	for _, port := range probePorts {
 		go func(port int) {
 			conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprintf("%d", port)), tcpTimeout)
@@ -68,7 +64,7 @@ func PingHost(ip string, timeout time.Duration) bool {
 		}(port)
 	}
 
-	for range probePorts {
+	for i := 0; i < 1+len(probePorts); i++ {
 		if <-found {
 			return true
 		}
