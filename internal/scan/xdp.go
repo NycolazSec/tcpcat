@@ -25,6 +25,22 @@ import (
 
 var GlobalXsk any
 var xdpLink link.Link
+
+// xdpColl is the loaded eBPF collection (the tcpcat_xdp_hook program and
+// the xsks_map it redirects into) -- kept as a package-level reference
+// specifically so ShutdownXDPEngine can close it deterministically. Before
+// this, the success path in InitXDPEngine let coll fall out of scope with
+// no explicit Close() at all: the program/map were only ever released
+// implicitly, whenever Go's GC happened to run the cilium/ebpf finalizer
+// (not guaranteed to run before process exit at all) or, failing that, by
+// the kernel's own process-exit fd cleanup -- both non-deterministic, and
+// the latter is a very plausible source of a multi-second delay observed
+// after "eBPF XDP hook detached successfully" prints but before the
+// process actually exits (the xsks_map's own kernel-side teardown -- it
+// holds live references to the AF_XDP socket fds -- still has to happen
+// somewhere; better it happens explicitly, in order, right here, than as
+// an unlogged side effect of exit_group() teardown).
+var xdpColl *ebpf.Collection
 var localMAC net.HardwareAddr
 var gatewayMAC net.HardwareAddr
 var localIP net.IP
@@ -241,6 +257,7 @@ func InitXDPEngine(ifaceName string) (any, error) {
 		go xdpRxLoop(xsk, i)
 	}
 
+	xdpColl = coll
 	return xdpSockets[0], nil
 }
 
@@ -260,6 +277,20 @@ func ShutdownXDPEngine() {
 		_ = xsk.Close()
 	}
 	xdpSockets = nil
+
+	// Releases the loaded program and xsks_map deterministically, right
+	// here, instead of leaving it to whenever (if ever) the Go GC runs
+	// cilium/ebpf's finalizer, or to the kernel's own process-exit fd
+	// cleanup -- either of which can turn into an unlogged multi-second
+	// stall while the kernel synchronizes the map's teardown against the
+	// AF_XDP sockets it referenced, especially on a virtual bridge/veth
+	// interface in generic (SKB) XDP mode.
+	if xdpColl != nil {
+		log.Println("[*] Releasing eBPF program and maps (this can take a few seconds on some interfaces)...")
+		xdpColl.Close()
+		xdpColl = nil
+		log.Println("[-] eBPF program and maps released.")
+	}
 }
 
 // xdpRxLoop drains one AF_XDP socket's RX ring. On a multi-queue NIC,
