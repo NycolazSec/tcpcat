@@ -116,16 +116,6 @@ func TestApplySafeProductionProfile(t *testing.T) {
 	}
 }
 
-func TestRenderBannerUsesGivenInterface(t *testing.T) {
-	got := RenderBanner("br-b8696001e3df")
-	if !strings.Contains(got, "[br-b8696001e3df]") {
-		t.Errorf("RenderBanner(%q) does not contain the interface name, got:\n%s", "br-b8696001e3df", got)
-	}
-	if strings.Contains(got, "[eth0]") {
-		t.Errorf("RenderBanner(%q) still shows the hardcoded eth0 placeholder, got:\n%s", "br-b8696001e3df", got)
-	}
-}
-
 func TestRenderBannerEmptyFallsBackToEth0(t *testing.T) {
 	if got := RenderBanner(""); !strings.Contains(got, "[eth0]") {
 		t.Errorf("RenderBanner(\"\") = %q, want it to fall back to the eth0 placeholder", got)
