@@ -249,6 +249,7 @@ func main() {
 		os.Exit(0)
 	}
 
+	discoveryStart := time.Now()
 	var activeTargets []string
 	if opts.SkipDiscovery {
 		activeTargets = targetIPs
@@ -371,6 +372,8 @@ func main() {
 		}
 	}
 
+	fmt.Printf("%s[i] Host discovery phase: %v%s\n", config.Cyan, time.Since(discoveryStart), config.Reset)
+
 	if opts.PingScan {
 		fmt.Printf("%s[✓] Host discovery complete. %d/%d host(s) up.%s\n",
 			config.Green, len(activeTargets), len(targetIPs), config.Reset)
@@ -400,11 +403,13 @@ func main() {
 	if opts.UseXDP {
 		fmt.Printf("%s[*] Booting experimental AF_XDP Engine...%s\n", config.Yellow, config.Reset)
 
+		xdpInitStart := time.Now()
 		xsk, err := scan.InitXDPEngine(opts.Interface)
 		if err != nil {
 			fmt.Printf("%s[!] Fatal XDP Error: %v%s\n", config.Red, err, config.Reset)
 			os.Exit(1)
 		}
+		fmt.Printf("%s[i] XDP engine init phase: %v%s\n", config.Cyan, time.Since(xdpInitStart), config.Reset)
 
 		scan.GlobalXsk = xsk
 		defer scan.ShutdownXDPEngine()
