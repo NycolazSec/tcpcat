@@ -32,7 +32,6 @@ func DiscoverHostsXDP(ips []string, timeout time.Duration, limiter *AdaptiveRate
 		xdpDiscovery.Delete(ip) // drop any stale result from a previous run
 	}
 
-	const discoverySrcPort = 54322
 	icmpID := uint16(os.Getpid() & 0xffff)
 
 	for i, ipStr := range ips {
@@ -47,8 +46,8 @@ func DiscoverHostsXDP(ips []string, timeout time.Duration, limiter *AdaptiveRate
 
 		frames := [][]byte{
 			constructICMPEchoFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, icmpID, uint16(i)),
-			constructSYNFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, discoverySrcPort, 443, false),
-			constructACKFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, discoverySrcPort, 80),
+			constructSYNFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, xdpDiscoverySrcPort, 443, false),
+			constructACKFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, xdpDiscoverySrcPort, 80),
 		}
 		if localSubnet != nil && localSubnet.Contains(targetIP) {
 			frames = append(frames, constructARPRequestFrame(localMAC, localIP.To4(), targetIP))

@@ -43,6 +43,24 @@ func main() {
 	}
 	config.ApplyProfile(opts)
 
+	// A panic anywhere in main()'s own call stack must not skip the
+	// deferred scan.ShutdownXDPEngine() below: on --ebpf, that hook stays
+	// attached and keeps redirecting matching traffic on the interface
+	// until something detaches it, which an unrecovered panic (defers
+	// never run past it) would leave to happen only on next reboot or a
+	// manual `ip link set <iface> xdp off`. This only covers panics in
+	// main's own goroutine; per-job worker panics are recovered in
+	// engine.go instead, where they actually occur.
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("%s[!] Fatal error: %v%s\n", config.Red, r, config.Reset)
+			if opts.UseXDP && runtime.GOOS == "linux" {
+				scan.ShutdownXDPEngine()
+			}
+			os.Exit(1)
+		}
+	}()
+
 	if opts.ShowVersion {
 		fmt.Printf("tcpcat %s (commit %s, built %s)\n", version, commit, date)
 		return
@@ -404,7 +422,7 @@ func main() {
 		fmt.Printf("%s[*] Booting experimental AF_XDP Engine...%s\n", config.Yellow, config.Reset)
 
 		xdpInitStart := time.Now()
-		xsk, err := scan.InitXDPEngine(opts.Interface)
+		xsk, err := scan.InitXDPEngine(opts.Interface, opts)
 		if err != nil {
 			fmt.Printf("%s[!] Fatal XDP Error: %v%s\n", config.Red, err, config.Reset)
 			os.Exit(1)

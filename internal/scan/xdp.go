@@ -46,6 +46,13 @@ var gatewayMAC net.HardwareAddr
 var localIP net.IP
 var localSubnet *net.IPNet // the interface's own network, for deciding when ARP (rather than routing through the gateway) can reach a discovery target directly
 
+// xdpDiscoverySrcPort is the fixed source port DiscoverHostsXDP's own
+// SYN/443 and ACK/80 discovery probes use. Also baked into the eBPF
+// classifier (see xdp_asm.go) as one of the destination ports it will
+// redirect into the AF_XDP socket, alongside each run's actual scan source
+// port -- shared here so the two can't drift apart.
+const xdpDiscoverySrcPort = 54322
+
 var xdpTxLock sync.Mutex
 var xdpDiscovery sync.Map // IP string -> true, populated by xdpRxLoop for host discovery
 var xdpRunning bool
@@ -143,7 +150,11 @@ func getGatewayMAC(ifaceName string) (net.HardwareAddr, error) {
 // reachable through a local virtual interface -- a Docker bridge (br-*), a
 // VPN tunnel, or a secondary NIC -- since none of those are ever the
 // default route's interface that auto-detection would otherwise pick.
-func InitXDPEngine(ifaceName string) (any, error) {
+//
+// opts is only used to read this run's actual probe source port (see
+// getSrcPort), which the generated eBPF classifier needs to know which
+// TCP/UDP destination ports are ours to redirect -- see generateXDPCollection.
+func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 	if xdpRunning {
 		log.Println("[*] XDP engine already initialized.")
 		return GlobalXsk, nil
@@ -176,7 +187,7 @@ func InitXDPEngine(ifaceName string) (any, error) {
 		log.Printf("[*] Auto-detection: Interface '%s' (IP: %s) | Gateway MAC: Not found (broadcast fallback)", ifaceName, localIP.String())
 	}
 
-	spec, err := generateXDPCollection()
+	spec, err := generateXDPCollection(getSrcPort(opts))
 	if err != nil {
 		return nil, fmt.Errorf("eBPF assembly generation error: %v", err)
 	}

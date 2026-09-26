@@ -172,7 +172,22 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 				if limiter != nil {
 					limiter.WaitN(perJobPackets)
 				}
-				res := e.dispatchScan(job.IP, job.Port, e.opts)
+				// A panic in one job's scan path (e.g. a malformed reply
+				// tripping up a byte-offset parse) must not take down the
+				// whole worker -- an unrecovered panic in any goroutine
+				// kills the entire process immediately, which for --ebpf
+				// means main()'s deferred ShutdownXDPEngine never runs and
+				// the XDP hook is left attached, redirecting traffic on the
+				// interface indefinitely. Recovering here confines the
+				// damage to this one job's result.
+				res := func() (r TargetResult) {
+					defer func() {
+						if p := recover(); p != nil {
+							r = TargetResult{IP: job.IP, Port: job.Port, State: StateFiltered, Reason: fmt.Sprintf("internal error: %v", p)}
+						}
+					}()
+					return e.dispatchScan(job.IP, job.Port, e.opts)
+				}()
 				lost := res.State == StateFiltered || res.State == StateOpenFiltered
 				if !lost && res.Latency > 0 {
 					e.rtt.Sample(res.Latency)

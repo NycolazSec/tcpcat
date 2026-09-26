@@ -12,7 +12,7 @@ import (
 
 var GlobalXsk any
 
-func InitXDPEngine(ifaceName string) (any, error) {
+func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 	return nil, fmt.Errorf("the AF_XDP/eBPF engine is only supported on Linux")
 }
 
