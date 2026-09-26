@@ -48,3 +48,4 @@ dist/
 # Python cache (public/ website)
 __pycache__/
 *.pyc
+bench_lab.sh
