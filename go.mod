@@ -9,7 +9,6 @@ require (
 	github.com/cilium/ebpf v0.22.0
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/tetratelabs/wazero v1.12.0
-	golang.org/x/net v0.59.0
 	golang.org/x/sys v0.48.0
 )
 
@@ -29,5 +28,6 @@ require (
 	github.com/aws/smithy-go v1.28.1 // indirect
 	github.com/vishvananda/netlink v1.2.1-beta.2 // indirect
 	github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
 )

@@ -73,7 +73,7 @@ func generateXDPCollection(srcPort uint16) (*ebpf.CollectionSpec, error) {
 
 	const (
 		ethHdrLen  = 14
-		ipHdrLen   = 20 // no options
+		ipHdrLen   = 20                       // no options
 		l4PortsEnd = ethHdrLen + ipHdrLen + 4 // through src+dst port fields
 	)
 

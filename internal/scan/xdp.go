@@ -56,7 +56,7 @@ const xdpDiscoverySrcPort = 54322
 var xdpTxLock sync.Mutex
 var xdpDiscovery sync.Map // IP string -> true, populated by xdpRxLoop for host discovery
 var xdpRunning bool
-var xdpDebug bool // gates informational (non-error) engine/eBPF diagnostics behind --debug
+var xdpDebug bool            // gates informational (non-error) engine/eBPF diagnostics behind --debug
 var xdpSockets []*xdp.Socket // one per bound RX queue; xdpSockets[0] is also GlobalXsk, the sole TX path
 
 // getInterfaceRXQueueCount reads the number of RX queues an interface

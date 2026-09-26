@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/net/http2"
 )
 
 // HTTPPostureInfo is the result of an independent, read-only HTTP security
@@ -96,8 +94,8 @@ func probeHTTPPosture(ip string, port int, timeout time.Duration, useTLS bool, i
 	}
 	base := fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(ip, strconv.Itoa(port)))
 
-	tlsConfig := &tls.Config{ // #nosec G402 -- opt-in via caller flag, same semantics as the existing banner-grab path
-		InsecureSkipVerify: insecureSkipVerify,
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: insecureSkipVerify, // #nosec G402 -- opt-in via caller flag, same semantics as the existing banner-grab path
 		NextProtos:         []string{"h2", "http/1.1"},
 	}
 	if hostname != "" {
@@ -107,13 +105,13 @@ func probeHTTPPosture(ip string, port int, timeout time.Duration, useTLS bool, i
 	// Setting TLSClientConfig ourselves opts this Transport out of Go's
 	// usual *automatic* HTTP/2 wiring (net/http only self-configures h2
 	// when TLSClientConfig is left nil) -- offering "h2" in NextProtos
-	// above is necessary but not sufficient on its own; without this call
-	// the client negotiates the ALPN protocol but then still speaks plain
-	// HTTP/1.1 text over it, which an h2-only server rejects outright as a
-	// garbled preface.
-	if err := http2.ConfigureTransport(transport); err != nil {
-		return nil
-	}
+	// above is necessary but not sufficient on its own; without enabling
+	// HTTP2 here too, the client negotiates the ALPN protocol but then
+	// still speaks plain HTTP/1.1 text over it, which an h2-only server
+	// rejects outright as a garbled preface.
+	transport.Protocols = new(http.Protocols)
+	transport.Protocols.SetHTTP1(true)
+	transport.Protocols.SetHTTP2(true)
 	client := &http.Client{
 		Timeout:   timeout,
 		Transport: transport,

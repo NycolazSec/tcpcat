@@ -36,18 +36,10 @@ const bannerTemplate = `
                                          %s[ eBPF / AF_XDP ] %sby NycolazSec%s
 `
 
-// RenderBanner renders the startup banner with the ASCII bridge icon
-// showing iface -- the interface tcpcat is actually using (explicit
-// -i/--interface, or the auto-detected default-route interface) -- instead
-// of the hardcoded "eth0" that used to print regardless of the real
-// interface (a Docker bridge, a secondary NIC, ...). iface == "" falls
-// back to the generic "eth0" placeholder, for callers that don't know the
-// real interface yet (e.g. --help, printed before any target/interface
-// resolution).
-func RenderBanner(iface string) string {
-	if iface == "" {
-		iface = "eth0"
-	}
+// RenderBanner renders the startup banner. iface is accepted for call-site
+// compatibility (main.go passes the interface actually in play) but the
+// banner itself always shows the generic "[eth0]" placeholder.
+func RenderBanner(_ string) string {
 	return fmt.Sprintf(bannerTemplate,
 		White, Red, Reset, Red, Bold, Reset,
 		Red, Reset, Red, Bold, Reset,
