@@ -10,14 +10,16 @@ import (
 	"strings"
 )
 
+// tcpcat's palette is red/white/black by design: Red for anything that
+// needs attention (warnings, alerts, active status), White for primary and
+// positive output (results, success), and Gray (bright black) for secondary
+// or de-emphasized detail (tips, timings, background info).
 const (
-	Reset  = "\033[0m"
-	Bold   = "\033[1m"
-	Red    = "\033[91m"
-	Green  = "\033[92m" // Corrigé (était \033[97m = blanc)
-	Yellow = "\033[93m" // Corrigé (était \033[97m = blanc)
-	White  = "\033[97m"
-	Cyan   = "\033[96m" // Corrigé (était \033[97m = blanc)
+	Reset = "\033[0m"
+	Bold  = "\033[1m"
+	Red   = "\033[91m"
+	White = "\033[97m"
+	Gray  = "\033[90m"
 )
 
 const bannerTemplate = `
@@ -45,11 +47,11 @@ func RenderBanner(iface string) string {
 	return fmt.Sprintf(bannerTemplate,
 		White, Red, Reset, Red, Bold, Reset,
 		Red, Reset, Red, Bold, Reset,
-		Red, Green, Bold, Reset, Red, Reset, Red, Bold, Reset,
+		Red, White, Bold, Reset, Red, Reset, Red, Bold, Reset,
 		Red, Reset, Red, Bold, Reset,
-		Yellow, Reset, Red, Bold, Reset,
+		Red, Reset, Red, Bold, Reset,
 		White, Bold, Reset,
-		Yellow, White, Reset,
+		Red, White, Reset,
 	)
 }
 
@@ -251,7 +253,7 @@ func ParseFlags() (*Options, error) {
 					flagsArgs = append(flagsArgs, arg, rawArgs[i+1])
 					i++
 				} else {
-					fmt.Printf("%s[!] Warning: flag %s expects a value but none was provided. It will be ignored.%s\n", Yellow, arg, Reset)
+					fmt.Printf("%s[!] Warning: flag %s expects a value but none was provided. It will be ignored.%s\n", Red, arg, Reset)
 				}
 			} else {
 				flagsArgs = append(flagsArgs, arg)
@@ -360,93 +362,93 @@ func ParseFlags() (*Options, error) {
 	flag.Usage = func() {
 		fmt.Println(Banner)
 		fmt.Printf("%sUsage:%s tcpcat <target> [options]\n\n", Bold, Reset)
-		fmt.Println(Cyan + "TARGET & DISCOVERY SPECIFICATION:" + Reset)
-		fmt.Printf("  %s<target>%s         Hostnames, IP addresses, CIDRs\n", Yellow, Reset)
-		fmt.Printf("  %s-i, --interface <iface>%s : Network interface to use (bypasses auto-detection)\n", Yellow, Reset)
-		fmt.Printf("  %s-iL <file>%s       Input target list from file\n", Yellow, Reset)
-		fmt.Printf("  %s--exclude <list>%s Comma-separated hosts/CIDRs/names to skip\n", Yellow, Reset)
-		fmt.Printf("  %s--scope-file <file>%s Restrict scans to authorized CIDRs, IPs, or domains\n", Yellow, Reset)
-		fmt.Printf("  %s--resume <file>%s   Skip target/ports already in <file>; append new results (resume an interrupted scan)\n", Yellow, Reset)
-		fmt.Printf("  %s-sn%s             Ping Scan - disable port scan\n", Yellow, Reset)
-		fmt.Println(Cyan + "\nCLOUD-AWARE TARGETING:" + Reset)
-		fmt.Printf("  %s--aws-region <region>%s AWS region for tag-based discovery\n", Yellow, Reset)
-		fmt.Printf("  %s--aws-tags <tags>%s   Scan EC2 instances matching tags (e.g., 'Key=App,Value=Web')\n", Yellow, Reset)
-		fmt.Printf("  %s-Pn%s             Treat all hosts as online\n", Yellow, Reset)
-		fmt.Printf("  %s-PU <port>%s      UDP Ping discovery port\n", Yellow, Reset)
-		fmt.Printf("  %s--discovery-timeout <ms>%s Per-host discovery timeout in ms (default: 250; raise for WAN/high-latency targets)\n", Yellow, Reset)
-		fmt.Println(Cyan + "\nPORT & SCAN SPECIFICATION:" + Reset)
-		fmt.Printf("  %s-p <ports>%s      Ports to scan (e.g. 80,443 | 1-1024)\n", Yellow, Reset)
-		fmt.Printf("  %s--top-ports <n>%s Scan n most common ports\n", Yellow, Reset)
-		fmt.Printf("  %s-sS%s             TCP SYN Stealth Scan\n", Yellow, Reset)
-		fmt.Printf("  %s-sT%s             TCP Connect Scan\n", Yellow, Reset)
-		fmt.Printf("  %s-sA%s             TCP ACK Scan (Firewall rules detection)\n", Yellow, Reset)
-		fmt.Printf("  %s-sW%s             TCP Window Scan\n", Yellow, Reset)
-		fmt.Printf("  %s-sN%s             TCP NULL Stealth Scan\n", Yellow, Reset)
-		fmt.Printf("  %s-sF%s             TCP FIN Stealth Scan\n", Yellow, Reset)
-		fmt.Printf("  %s-sX%s             TCP Xmas Stealth Scan\n", Yellow, Reset)
-		fmt.Printf("  %s-sI <zombie>%s   TCP Idle Scan (fully blind)\n", Yellow, Reset)
-		fmt.Printf("  %s-sU%s             UDP Port Scan\n", Yellow, Reset)
-		fmt.Printf("  %s--open%s          Show only open ports\n", Yellow, Reset)
-		fmt.Printf("  %s--show-closed%s   Show CLOSED ports individually instead of a per-host summary count\n", Yellow, Reset)
-		fmt.Printf("  %s--ebpf%s          Enable experimental AF_XDP/eBPF engine (Extreme Performance)\n", Yellow, Reset)
-		fmt.Println(Cyan + "\nSERVICE & OS DETECTION:" + Reset)
-		fmt.Printf("  %s-sV%s             Service & Version detection\n", Yellow, Reset)
-		fmt.Printf("  %s--scripts <dir>%s Run scripts from directory for advanced detection\n", Yellow, Reset)
-		fmt.Printf("  %s--vulners-apikey <key>%s Perform CVE lookup for detected services\n", Yellow, Reset)
-		fmt.Printf("  %s-O%s              Enable OS detection\n", Yellow, Reset)
-		fmt.Printf("  %s--mptcp%s         Detect Multipath-TCP-capable hosts (MP_CAPABLE in SYN; needs -sS or --ebpf)\n", Yellow, Reset)
-		fmt.Printf("  %s--jarm%s          Compute an active JARM TLS fingerprint on TLS ports (10 extra probes/target)\n", Yellow, Reset)
-		fmt.Println(Cyan + "\nEVASION & OPTIONS:" + Reset)
-		fmt.Printf("  %s-g <port>%s       Use specified source port\n", Yellow, Reset)
-		fmt.Printf("  %s--ttl <val>%s     Set custom IP Time-To-Live\n", Yellow, Reset)
-		fmt.Printf("  %s--data-string%s   Append custom ASCII payload\n", Yellow, Reset)
-		fmt.Printf("  %s--data%s          Append custom HEX payload\n", Yellow, Reset)
-		fmt.Printf("  %s--traceroute%s    Trace hop path to target (uses the first -p port, default 80)\n", Yellow, Reset)
-		fmt.Printf("  %s--max-hops <n>%s   Maximum hops for --traceroute (default 30)\n", Yellow, Reset)
-		fmt.Printf("  %s--relay-server <ip>%s Use a relay server for IP-in-IP encapsulation\n", Yellow, Reset)
-		fmt.Printf("  %s--decoy <ips>%s   Comma-separated list of decoy IPs\n", Yellow, Reset)
-		fmt.Printf("  %s--frag%s              Fragment packets for authorized monitoring validation\n", Yellow, Reset)
-		fmt.Printf("  %s--smart-bypass%s  Enable advanced validation on filtered ports\n", Yellow, Reset)
-		fmt.Println(Cyan + "\nADVANCED IDS/IPS VISIBILITY TESTING:" + Reset)
-		fmt.Printf("  %s--evasion <mode>%s       Packet variation mode: off, light, moderate, aggressive, stealthy\n", Yellow, Reset)
-		fmt.Printf("  %s--jitter <0.0-1.0>%s    Timing jitter for authorized monitoring validation\n", Yellow, Reset)
-		fmt.Printf("  %s--ttl-mode <mode>%s     TTL mode: fixed, random, probe (default: fixed)\n", Yellow, Reset)
-		fmt.Printf("  %s--probe-ttl <val>%s     Probe TTL value (default: 64)\n", Yellow, Reset)
-		fmt.Printf("  %s--window-size <bytes>%s TCP window size manipulation (0=auto)\n", Yellow, Reset)
-		fmt.Printf("  %s--source-port-mode <mode>%s Source port: fixed, random\n", Yellow, Reset)
-		fmt.Println(Cyan + "\nDEEP PACKET INSPECTION & SURGICAL SCANNING:" + Reset)
-		fmt.Printf("  %s--deep-inspect%s         ADVANCED: Surgical packet-level analysis\n", Yellow, Reset)
+		fmt.Println(Bold + Red + "TARGET & DISCOVERY SPECIFICATION:" + Reset)
+		fmt.Printf("  %s<target>%s         Hostnames, IP addresses, CIDRs\n", White, Reset)
+		fmt.Printf("  %s-i, --interface <iface>%s : Network interface to use (bypasses auto-detection)\n", White, Reset)
+		fmt.Printf("  %s-iL <file>%s       Input target list from file\n", White, Reset)
+		fmt.Printf("  %s--exclude <list>%s Comma-separated hosts/CIDRs/names to skip\n", White, Reset)
+		fmt.Printf("  %s--scope-file <file>%s Restrict scans to authorized CIDRs, IPs, or domains\n", White, Reset)
+		fmt.Printf("  %s--resume <file>%s   Skip target/ports already in <file>; append new results (resume an interrupted scan)\n", White, Reset)
+		fmt.Printf("  %s-sn%s             Ping Scan - disable port scan\n", White, Reset)
+		fmt.Println(Bold + Red + "\nCLOUD-AWARE TARGETING:" + Reset)
+		fmt.Printf("  %s--aws-region <region>%s AWS region for tag-based discovery\n", White, Reset)
+		fmt.Printf("  %s--aws-tags <tags>%s   Scan EC2 instances matching tags (e.g., 'Key=App,Value=Web')\n", White, Reset)
+		fmt.Printf("  %s-Pn%s             Treat all hosts as online\n", White, Reset)
+		fmt.Printf("  %s-PU <port>%s      UDP Ping discovery port\n", White, Reset)
+		fmt.Printf("  %s--discovery-timeout <ms>%s Per-host discovery timeout in ms (default: 250; raise for WAN/high-latency targets)\n", White, Reset)
+		fmt.Println(Bold + Red + "\nPORT & SCAN SPECIFICATION:" + Reset)
+		fmt.Printf("  %s-p <ports>%s      Ports to scan (e.g. 80,443 | 1-1024)\n", White, Reset)
+		fmt.Printf("  %s--top-ports <n>%s Scan n most common ports\n", White, Reset)
+		fmt.Printf("  %s-sS%s             TCP SYN Stealth Scan\n", White, Reset)
+		fmt.Printf("  %s-sT%s             TCP Connect Scan\n", White, Reset)
+		fmt.Printf("  %s-sA%s             TCP ACK Scan (Firewall rules detection)\n", White, Reset)
+		fmt.Printf("  %s-sW%s             TCP Window Scan\n", White, Reset)
+		fmt.Printf("  %s-sN%s             TCP NULL Stealth Scan\n", White, Reset)
+		fmt.Printf("  %s-sF%s             TCP FIN Stealth Scan\n", White, Reset)
+		fmt.Printf("  %s-sX%s             TCP Xmas Stealth Scan\n", White, Reset)
+		fmt.Printf("  %s-sI <zombie>%s   TCP Idle Scan (fully blind)\n", White, Reset)
+		fmt.Printf("  %s-sU%s             UDP Port Scan\n", White, Reset)
+		fmt.Printf("  %s--open%s          Show only open ports\n", White, Reset)
+		fmt.Printf("  %s--show-closed%s   Show CLOSED ports individually instead of a per-host summary count\n", White, Reset)
+		fmt.Printf("  %s--ebpf%s          Enable experimental AF_XDP/eBPF engine (Extreme Performance)\n", White, Reset)
+		fmt.Println(Bold + Red + "\nSERVICE & OS DETECTION:" + Reset)
+		fmt.Printf("  %s-sV%s             Service & Version detection\n", White, Reset)
+		fmt.Printf("  %s--scripts <dir>%s Run scripts from directory for advanced detection\n", White, Reset)
+		fmt.Printf("  %s--vulners-apikey <key>%s Perform CVE lookup for detected services\n", White, Reset)
+		fmt.Printf("  %s-O%s              Enable OS detection\n", White, Reset)
+		fmt.Printf("  %s--mptcp%s         Detect Multipath-TCP-capable hosts (MP_CAPABLE in SYN; needs -sS or --ebpf)\n", White, Reset)
+		fmt.Printf("  %s--jarm%s          Compute an active JARM TLS fingerprint on TLS ports (10 extra probes/target)\n", White, Reset)
+		fmt.Println(Bold + Red + "\nEVASION & OPTIONS:" + Reset)
+		fmt.Printf("  %s-g <port>%s       Use specified source port\n", White, Reset)
+		fmt.Printf("  %s--ttl <val>%s     Set custom IP Time-To-Live\n", White, Reset)
+		fmt.Printf("  %s--data-string%s   Append custom ASCII payload\n", White, Reset)
+		fmt.Printf("  %s--data%s          Append custom HEX payload\n", White, Reset)
+		fmt.Printf("  %s--traceroute%s    Trace hop path to target (uses the first -p port, default 80)\n", White, Reset)
+		fmt.Printf("  %s--max-hops <n>%s   Maximum hops for --traceroute (default 30)\n", White, Reset)
+		fmt.Printf("  %s--relay-server <ip>%s Use a relay server for IP-in-IP encapsulation\n", White, Reset)
+		fmt.Printf("  %s--decoy <ips>%s   Comma-separated list of decoy IPs\n", White, Reset)
+		fmt.Printf("  %s--frag%s              Fragment packets for authorized monitoring validation\n", White, Reset)
+		fmt.Printf("  %s--smart-bypass%s  Enable advanced validation on filtered ports\n", White, Reset)
+		fmt.Println(Bold + Red + "\nADVANCED IDS/IPS VISIBILITY TESTING:" + Reset)
+		fmt.Printf("  %s--evasion <mode>%s       Packet variation mode: off, light, moderate, aggressive, stealthy\n", White, Reset)
+		fmt.Printf("  %s--jitter <0.0-1.0>%s    Timing jitter for authorized monitoring validation\n", White, Reset)
+		fmt.Printf("  %s--ttl-mode <mode>%s     TTL mode: fixed, random, probe (default: fixed)\n", White, Reset)
+		fmt.Printf("  %s--probe-ttl <val>%s     Probe TTL value (default: 64)\n", White, Reset)
+		fmt.Printf("  %s--window-size <bytes>%s TCP window size manipulation (0=auto)\n", White, Reset)
+		fmt.Printf("  %s--source-port-mode <mode>%s Source port: fixed, random\n", White, Reset)
+		fmt.Println(Bold + Red + "\nDEEP PACKET INSPECTION & SURGICAL SCANNING:" + Reset)
+		fmt.Printf("  %s--deep-inspect%s         ADVANCED: Surgical packet-level analysis\n", White, Reset)
 		fmt.Println("                             Shows L2-L7 OSI stack details, hex dumps, timing analysis")
-		fmt.Printf("                             %sWARNING: Significantly slower, for network professionals only%s\n", Yellow, Reset)
-		fmt.Printf("  %s--osi-verbosity <1-7>%s OSI detail level (1=L3, 4=default, 7=full protocol dissection)\n", Yellow, Reset)
-		fmt.Printf("  %s--hex-dump%s             Display raw packet hex dump + ASCII representation\n", Yellow, Reset)
-		fmt.Printf("  %s--timing-analysis%s     Show inter-packet timing and latency metrics\n", Yellow, Reset)
-		fmt.Printf("  %s--payload-analysis%s    Dissect L7 application layer data and protocols\n", Yellow, Reset)
-		fmt.Printf("  %s--protocol-trace%s      Trace full protocol negotiation (3-way handshake, etc)\n", Yellow, Reset)
-		fmt.Println(Cyan + "\nTIMING & OUTPUT:" + Reset)
-		fmt.Printf("  %s-T <0-5>%s        Set timing template\n", Yellow, Reset)
-		fmt.Printf("  %s--rate <pps>%s    Set max packets per second for discovery and scans\n", Yellow, Reset)
-		fmt.Printf("  %s-w, --workers <n>%s Number of parallel workers (default: auto CPU×32)\n", Yellow, Reset)
-		fmt.Printf("  %s--batch-size <n>%s  Jobs dispatched per batch (default: 1000)\n", Yellow, Reset)
-		fmt.Printf("  %s--conn-pool <n>%s   Max idle TCP connections per address (default: 64)\n", Yellow, Reset)
-		fmt.Printf("  %s-v%s              Enable verbose output\n", Yellow, Reset)
-		fmt.Printf("  %s--debug%s         Show low-level engine/eBPF diagnostics (interface detection, XDP hook lifecycle, timings)\n", Yellow, Reset)
-		fmt.Printf("  %s-j <file>%s       Export results to JSON file\n", Yellow, Reset)
-		fmt.Printf("  %s--sarif <file>%s  Export findings as SARIF 2.1.0\n", Yellow, Reset)
-		fmt.Printf("  %s-oX <file>%s      Export results as XML\n", Yellow, Reset)
-		fmt.Printf("  %s-oG <file>%s      Export results in grepable format\n", Yellow, Reset)
-		fmt.Printf("  %s-oN <file>%s      Export results as a plain-text report\n", Yellow, Reset)
-		fmt.Printf("  %s-oS <file>%s      Export results in leetspeak\n", Yellow, Reset)
-		fmt.Printf("  %s--audit-log <file>%s Append an audit record in JSONL\n", Yellow, Reset)
-		fmt.Printf("  %s--baseline <file>%s Compare with a prior JSON report\n", Yellow, Reset)
-		fmt.Printf("  %s--changes <file>%s Write comparison results (requires --baseline)\n", Yellow, Reset)
-		fmt.Printf("  %s--profile safe-production%s Conservative authorized-production profile\n", Yellow, Reset)
-		fmt.Printf("  %s--update%s        Check the latest GitHub release and update this binary\n", Yellow, Reset)
-		fmt.Printf("  %s-k, --insecure%s  Allow insecure SSL/TLS connections\n", Yellow, Reset)
-		fmt.Printf("  %s--unsafe-no-limits%s Disable all concurrency limits (DANGEROUS)\n", Yellow, Reset)
-		fmt.Printf("  %s--adaptive-rate%s Adjust send rate from observed RTT/loss instead of a fixed --rate\n", Yellow, Reset)
-		fmt.Printf("  %s--max-retries <n>%s Resend a probe up to <n> times before marking filtered (default 2)\n", Yellow, Reset)
-		fmt.Printf("  %s--no-randomize%s  Dispatch probes in list order instead of a randomized permutation\n", Yellow, Reset)
+		fmt.Printf("                             %sWARNING: Significantly slower, for network professionals only%s\n", White, Reset)
+		fmt.Printf("  %s--osi-verbosity <1-7>%s OSI detail level (1=L3, 4=default, 7=full protocol dissection)\n", White, Reset)
+		fmt.Printf("  %s--hex-dump%s             Display raw packet hex dump + ASCII representation\n", White, Reset)
+		fmt.Printf("  %s--timing-analysis%s     Show inter-packet timing and latency metrics\n", White, Reset)
+		fmt.Printf("  %s--payload-analysis%s    Dissect L7 application layer data and protocols\n", White, Reset)
+		fmt.Printf("  %s--protocol-trace%s      Trace full protocol negotiation (3-way handshake, etc)\n", White, Reset)
+		fmt.Println(Bold + Red + "\nTIMING & OUTPUT:" + Reset)
+		fmt.Printf("  %s-T <0-5>%s        Set timing template\n", White, Reset)
+		fmt.Printf("  %s--rate <pps>%s    Set max packets per second for discovery and scans\n", White, Reset)
+		fmt.Printf("  %s-w, --workers <n>%s Number of parallel workers (default: auto CPU×32)\n", White, Reset)
+		fmt.Printf("  %s--batch-size <n>%s  Jobs dispatched per batch (default: 1000)\n", White, Reset)
+		fmt.Printf("  %s--conn-pool <n>%s   Max idle TCP connections per address (default: 64)\n", White, Reset)
+		fmt.Printf("  %s-v%s              Enable verbose output\n", White, Reset)
+		fmt.Printf("  %s--debug%s         Show low-level engine/eBPF diagnostics (interface detection, XDP hook lifecycle, timings)\n", White, Reset)
+		fmt.Printf("  %s-j <file>%s       Export results to JSON file\n", White, Reset)
+		fmt.Printf("  %s--sarif <file>%s  Export findings as SARIF 2.1.0\n", White, Reset)
+		fmt.Printf("  %s-oX <file>%s      Export results as XML\n", White, Reset)
+		fmt.Printf("  %s-oG <file>%s      Export results in grepable format\n", White, Reset)
+		fmt.Printf("  %s-oN <file>%s      Export results as a plain-text report\n", White, Reset)
+		fmt.Printf("  %s-oS <file>%s      Export results in leetspeak\n", White, Reset)
+		fmt.Printf("  %s--audit-log <file>%s Append an audit record in JSONL\n", White, Reset)
+		fmt.Printf("  %s--baseline <file>%s Compare with a prior JSON report\n", White, Reset)
+		fmt.Printf("  %s--changes <file>%s Write comparison results (requires --baseline)\n", White, Reset)
+		fmt.Printf("  %s--profile safe-production%s Conservative authorized-production profile\n", White, Reset)
+		fmt.Printf("  %s--update%s        Check the latest GitHub release and update this binary\n", White, Reset)
+		fmt.Printf("  %s-k, --insecure%s  Allow insecure SSL/TLS connections\n", White, Reset)
+		fmt.Printf("  %s--unsafe-no-limits%s Disable all concurrency limits (DANGEROUS)\n", White, Reset)
+		fmt.Printf("  %s--adaptive-rate%s Adjust send rate from observed RTT/loss instead of a fixed --rate\n", White, Reset)
+		fmt.Printf("  %s--max-retries <n>%s Resend a probe up to <n> times before marking filtered (default 2)\n", White, Reset)
+		fmt.Printf("  %s--no-randomize%s  Dispatch probes in list order instead of a randomized permutation\n", White, Reset)
 	}
 
 	flag.Parse()
@@ -553,7 +555,7 @@ func ParseFlags() (*Options, error) {
 		opts.TimingAnalysis = true
 		opts.ProtocolTracing = true
 		if opts.Verbose {
-			fmt.Printf("%s[*] Deep Inspection Mode: Enabled surgical packet analysis%s\n", Cyan, Reset)
+			fmt.Printf("%s[*] Deep Inspection Mode: Enabled surgical packet analysis%s\n", Gray, Reset)
 			fmt.Printf("    OSI Verbosity: %d (1=minimal, 7=maximum)%s\n", opts.OSIVerbosity, Reset)
 		}
 	}
@@ -624,23 +626,23 @@ func ValidateScanCompatibility(opts *Options) error {
 
 		if len(incompatible) > 0 {
 			fmt.Printf("%s[!] WARNING: TCP Connect scan (-sT) with incompatible options: %s%s\n",
-				Yellow, strings.Join(incompatible, ", "), Reset)
-			fmt.Printf("%s    These options require raw packet scans (-sS, -sA, etc.) to have effect.%s\n", Yellow, Reset)
+				Red, strings.Join(incompatible, ", "), Reset)
+			fmt.Printf("%s    These options require raw packet scans (-sS, -sA, etc.) to have effect.%s\n", Red, Reset)
 		}
 	}
 
 	if opts.EvasionMode != "off" && opts.ConnectScan {
-		fmt.Printf("%s[!] WARNING: Evasion mode with TCP Connect (-sT) has limited effect.%s\n", Yellow, Reset)
-		fmt.Printf("%s    Consider using raw packet scans (-sS) for better evasion.%s\n", Yellow, Reset)
+		fmt.Printf("%s[!] WARNING: Evasion mode with TCP Connect (-sT) has limited effect.%s\n", Red, Reset)
+		fmt.Printf("%s    Consider using raw packet scans (-sS) for better evasion.%s\n", Red, Reset)
 	}
 
 	if opts.SmartBypass && opts.ConnectScan {
-		fmt.Printf("%s[*] INFO: Smart bypass mode is bypassed for TCP Connect scans.%s\n", Cyan, Reset)
+		fmt.Printf("%s[*] INFO: Smart bypass mode is bypassed for TCP Connect scans.%s\n", Gray, Reset)
 		opts.SmartBypass = false
 	}
 
 	if opts.Fragment && opts.UdpScan {
-		fmt.Printf("%s[*] INFO: UDP fragmentation enabled (requires UDP-capable network stack).%s\n", Cyan, Reset)
+		fmt.Printf("%s[*] INFO: UDP fragmentation enabled (requires UDP-capable network stack).%s\n", Gray, Reset)
 	}
 
 	return nil

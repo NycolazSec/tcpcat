@@ -76,7 +76,7 @@ func main() {
 
 	if opts.Profile == "safe-production" {
 		fmt.Printf("%s[*] Profile: safe-production active -- rate capped at %d pps, timing T%d, evasion/fragmentation/decoys disabled, -sV forced on.%s\n",
-			config.Cyan, opts.RateLimit, opts.Timing, config.Reset)
+			config.Gray, opts.RateLimit, opts.Timing, config.Reset)
 	}
 
 	if opts.Update {
@@ -97,14 +97,14 @@ func main() {
 
 	if opts.UseXDP && runtime.GOOS != "linux" {
 		fmt.Printf("%s[!] Error: The --ebpf option is only supported on Linux.%s\n", config.Red, config.Reset)
-		fmt.Printf("%s[*] On this OS, please use a different scan type like -sT (TCP Connect) or remove the --ebpf flag.%s\n", config.Cyan, config.Reset)
+		fmt.Printf("%s[*] On this OS, please use a different scan type like -sT (TCP Connect) or remove the --ebpf flag.%s\n", config.Gray, config.Reset)
 		os.Exit(1)
 	}
 
 	isRawScan := opts.SynScan || opts.AckScan || opts.WindowScan || opts.NullScan || opts.FinScan || opts.XmasScan
 	if isRawScan && runtime.GOOS == "linux" && !opts.UseXDP {
-		fmt.Printf("%s[!] Warning: Raw packet scans (-sS, -sA, etc.) on Linux without --ebpf can be unreliable due to kernel interference.%s\n", config.Yellow, config.Reset)
-		fmt.Printf("%s[*] Tip: For best results, add --ebpf to use the high-performance XDP engine.%s\n", config.Cyan, config.Reset)
+		fmt.Printf("%s[!] Warning: Raw packet scans (-sS, -sA, etc.) on Linux without --ebpf can be unreliable due to kernel interference.%s\n", config.Red, config.Reset)
+		fmt.Printf("%s[*] Tip: For best results, add --ebpf to use the high-performance XDP engine.%s\n", config.Gray, config.Reset)
 	}
 
 	if opts.UseXDP && runtime.GOOS == "linux" {
@@ -112,8 +112,8 @@ func main() {
 		if opts.Interface != "" {
 			ifaceDesc = fmt.Sprintf("interface '%s'", opts.Interface)
 		}
-		fmt.Printf("%s[!] Warning: --ebpf attaches an XDP hook (generic/SKB mode -- no zero-copy on most virtualized NICs) to %s. That may be the SAME interface carrying your own SSH/management connection.%s\n", config.Yellow, ifaceDesc, config.Reset)
-		fmt.Printf("%s[*] Tip: a large or fast scan can saturate that interface's own RX path -- including the session you're connected through. Test from console/out-of-band access first, or start with a conservative --rate, before scanning at scale from a remote box you administer over the same link.%s\n", config.Cyan, config.Reset)
+		fmt.Printf("%s[!] Warning: --ebpf attaches an XDP hook (generic/SKB mode -- no zero-copy on most virtualized NICs) to %s. That may be the SAME interface carrying your own SSH/management connection.%s\n", config.Red, ifaceDesc, config.Reset)
+		fmt.Printf("%s[*] Tip: a large or fast scan can saturate that interface's own RX path -- including the session you're connected through. Test from console/out-of-band access first, or start with a conservative --rate, before scanning at scale from a remote box you administer over the same link.%s\n", config.Gray, config.Reset)
 	}
 
 	// OS fingerprinting reads the target's stack characteristics off a raw
@@ -123,8 +123,8 @@ func main() {
 	// read -- say so rather than reporting no OS and letting it look like
 	// the target simply couldn't be identified.
 	if opts.OsDetect && !opts.SynScan && (!opts.UseXDP || runtime.GOOS != "linux") {
-		fmt.Printf("%s[!] Warning: -O needs a raw SYN/ACK to read; this scan type never sees one, so no OS will be reported.%s\n", config.Yellow, config.Reset)
-		fmt.Printf("%s[*] Tip: use -sS (or --ebpf on Linux), as root, for OS fingerprinting.%s\n", config.Cyan, config.Reset)
+		fmt.Printf("%s[!] Warning: -O needs a raw SYN/ACK to read; this scan type never sees one, so no OS will be reported.%s\n", config.Red, config.Reset)
+		fmt.Printf("%s[*] Tip: use -sS (or --ebpf on Linux), as root, for OS fingerprinting.%s\n", config.Gray, config.Reset)
 	}
 
 	// --mptcp puts MP_CAPABLE in the SYN, so it only does anything on a scan
@@ -132,30 +132,30 @@ func main() {
 	// through the kernel stack and can neither add the option nor read the
 	// reply's, so warn rather than silently do nothing.
 	if opts.MPTCP && !opts.SynScan && (!opts.UseXDP || runtime.GOOS != "linux") {
-		fmt.Printf("%s[!] Warning: --mptcp needs a raw SYN scan to craft the option; this scan type can't, so no MPTCP will be reported.%s\n", config.Yellow, config.Reset)
-		fmt.Printf("%s[*] Tip: use -sS (or --ebpf on Linux), as root, for MPTCP detection.%s\n", config.Cyan, config.Reset)
+		fmt.Printf("%s[!] Warning: --mptcp needs a raw SYN scan to craft the option; this scan type can't, so no MPTCP will be reported.%s\n", config.Red, config.Reset)
+		fmt.Printf("%s[*] Tip: use -sS (or --ebpf on Linux), as root, for MPTCP detection.%s\n", config.Gray, config.Reset)
 	}
 
 	if opts.VulnersAPIKey != "" && !opts.ServiceDetect {
-		fmt.Printf("%s[!] Warning: --vulners-apikey was provided without -sV. CVE lookup requires service detection.%s\n", config.Yellow, config.Reset)
-		fmt.Printf("%s[*] Tip: Add -sV to your command to enable service detection and CVE lookup.%s\n", config.Cyan, config.Reset)
+		fmt.Printf("%s[!] Warning: --vulners-apikey was provided without -sV. CVE lookup requires service detection.%s\n", config.Red, config.Reset)
+		fmt.Printf("%s[*] Tip: Add -sV to your command to enable service detection and CVE lookup.%s\n", config.Gray, config.Reset)
 	}
 
 	if opts.DecoyIPs != "" {
 
 		isSpoofableScan := opts.SynScan || opts.AckScan || opts.WindowScan || opts.NullScan || opts.FinScan || opts.XmasScan || opts.UdpScan || opts.ZombieHost != ""
 		if isSpoofableScan {
-			fmt.Printf("%s[*] Decoy scan enabled. Target will also see packets from: %s%s\n", config.Cyan, opts.DecoyIPs, config.Reset)
+			fmt.Printf("%s[*] Decoy scan enabled. Target will also see packets from: %s%s\n", config.Gray, opts.DecoyIPs, config.Reset)
 		} else {
-			fmt.Printf("%s[!] Warning: Decoy scanning is only effective with raw packet scan types (e.g., -sS, -sU, -sA) and will be ignored for TCP Connect scans (-sT).%s\n", config.Yellow, config.Reset)
+			fmt.Printf("%s[!] Warning: Decoy scanning is only effective with raw packet scan types (e.g., -sS, -sU, -sA) and will be ignored for TCP Connect scans (-sT).%s\n", config.Red, config.Reset)
 		}
 	}
 
 	if opts.RelayServer != "" {
-		fmt.Printf("%s[*] Relay server enabled: %s%s\n", config.Cyan, opts.RelayServer, config.Reset)
-		fmt.Printf("%s[!] Warning: When using --relay-server, tcpcat sends encapsulated packets to the relay.%s\n", config.Yellow, config.Reset)
-		fmt.Printf("%s[!] Warning: Direct responses from the target will not be received. Scan results may be unreliable or show as FILTERED.%s\n", config.Yellow, config.Reset)
-		fmt.Printf("%s[*] Tip: This mode is primarily for bypassing local uRPF filters on outgoing traffic.%s\n", config.Cyan, config.Reset)
+		fmt.Printf("%s[*] Relay server enabled: %s%s\n", config.Gray, opts.RelayServer, config.Reset)
+		fmt.Printf("%s[!] Warning: When using --relay-server, tcpcat sends encapsulated packets to the relay.%s\n", config.Red, config.Reset)
+		fmt.Printf("%s[!] Warning: Direct responses from the target will not be received. Scan results may be unreliable or show as FILTERED.%s\n", config.Red, config.Reset)
+		fmt.Printf("%s[*] Tip: This mode is primarily for bypassing local uRPF filters on outgoing traffic.%s\n", config.Gray, config.Reset)
 	}
 
 	var rawTargets []string
@@ -212,7 +212,7 @@ func main() {
 		// quiet about it would leave the operator believing a host is off
 		// limits while it gets scanned anyway.
 		for _, entry := range failed {
-			fmt.Printf("%s[!] Exclusion Warning: could not resolve %q -- it excludes nothing.%s\n", config.Yellow, entry, config.Reset)
+			fmt.Printf("%s[!] Exclusion Warning: could not resolve %q -- it excludes nothing.%s\n", config.Red, entry, config.Reset)
 		}
 
 		before := len(targetIPs)
@@ -250,7 +250,7 @@ func main() {
 			maxHops = 30
 		}
 
-		fmt.Printf("%s[*] Executing TCP Traceroute to %s:%d (max %d hops)...%s\n", config.Yellow, targetIPs[0], traceroutePort, maxHops, config.Reset)
+		fmt.Printf("%s[*] Executing TCP Traceroute to %s:%d (max %d hops)...%s\n", config.Red, targetIPs[0], traceroutePort, maxHops, config.Reset)
 		fmt.Printf("%s%-4s %-25s %-30s %-10s%s\n", config.Bold, "Hop", "IP Address", "Hostname", "Latency", config.Reset)
 		fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
 
@@ -261,7 +261,7 @@ func main() {
 				fmt.Printf("%s%-4d %-25s %-30s %-10s%s\n", config.Red, h.Hop, "*", "*", "Timeout", config.Reset)
 			} else {
 				fmt.Printf("%s%-4d %s%-25s%s %-30s %s%.2f ms%s\n",
-					config.Cyan, h.Hop, config.White, ipDisp, config.Reset, h.Hostname, config.Bold, h.LatencyMs, config.Reset)
+					config.Gray, h.Hop, config.White, ipDisp, config.Reset, h.Hostname, config.Bold, h.LatencyMs, config.Reset)
 			}
 		}
 		os.Exit(0)
@@ -271,16 +271,16 @@ func main() {
 	var activeTargets []string
 	if opts.SkipDiscovery {
 		activeTargets = targetIPs
-		fmt.Printf("%s[*] Host discovery skipped (-Pn). All %d target(s) will be scanned.%s\n", config.Yellow, len(targetIPs), config.Reset)
+		fmt.Printf("%s[*] Host discovery skipped (-Pn). All %d target(s) will be scanned.%s\n", config.Red, len(targetIPs), config.Reset)
 	} else if scan.GlobalXsk != nil {
 		fmt.Printf("%s[*] Running Host Discovery (AF_XDP: ICMP + SYN/443 + ACK/80)...%s\n", config.White, config.Reset)
 		discoveryTimeout := time.Duration(opts.DiscoveryTimeout) * time.Millisecond
 		activeTargets = scan.DiscoverHostsXDP(targetIPs, discoveryTimeout, scan.NewLimiterFromOptions(opts))
 		for _, ip := range activeTargets {
-			fmt.Printf("    ├─ %s[UP]%s %s\n", config.Green, config.Reset, ip)
+			fmt.Printf("    ├─ %s[UP]%s %s\n", config.White, config.Reset, ip)
 		}
 		if len(activeTargets) == 0 {
-			fmt.Printf("%s[!] No active hosts found. Use -Pn to skip host discovery.%s\n", config.Yellow, config.Reset)
+			fmt.Printf("%s[!] No active hosts found. Use -Pn to skip host discovery.%s\n", config.Red, config.Reset)
 			os.Exit(0)
 		}
 	} else {
@@ -325,7 +325,7 @@ func main() {
 				for _, ip := range arpEligible {
 					if arpResults[ip] {
 						activeTargets = append(activeTargets, ip)
-						fmt.Printf("    ├─ %s[UP]%s %s\n", config.Green, config.Reset, ip)
+						fmt.Printf("    ├─ %s[UP]%s %s\n", config.White, config.Reset, ip)
 					} else if opts.Verbose {
 						fmt.Printf("    ├─ %s[DOWN]%s %s\n", config.Red, config.Reset, ip)
 					}
@@ -344,7 +344,7 @@ func main() {
 						mu.Lock()
 						activeTargets = append(activeTargets, ip)
 						mu.Unlock()
-						fmt.Printf("    ├─ %s[UP]%s %s\n", config.Green, config.Reset, ip)
+						fmt.Printf("    ├─ %s[UP]%s %s\n", config.White, config.Reset, ip)
 					} else if opts.Verbose {
 						fmt.Printf("    ├─ %s[DOWN]%s %s\n", config.Red, config.Reset, ip)
 					}
@@ -374,7 +374,7 @@ func main() {
 						mu.Lock()
 						activeTargets = append(activeTargets, ip)
 						mu.Unlock()
-						fmt.Printf("    ├─ %s[UP]%s %s\n", config.Green, config.Reset, ip)
+						fmt.Printf("    ├─ %s[UP]%s %s\n", config.White, config.Reset, ip)
 					} else if opts.Verbose {
 						fmt.Printf("    ├─ %s[DOWN]%s %s\n", config.Red, config.Reset, ip)
 					}
@@ -385,18 +385,18 @@ func main() {
 		wg.Wait()
 
 		if len(activeTargets) == 0 {
-			fmt.Printf("%s[!] No active hosts found. Use -Pn to skip host discovery.%s\n", config.Yellow, config.Reset)
+			fmt.Printf("%s[!] No active hosts found. Use -Pn to skip host discovery.%s\n", config.Red, config.Reset)
 			os.Exit(0)
 		}
 	}
 
 	if opts.Debug {
-		fmt.Printf("%s[i] Host discovery phase: %v%s\n", config.Cyan, time.Since(discoveryStart), config.Reset)
+		fmt.Printf("%s[i] Host discovery phase: %v%s\n", config.Gray, time.Since(discoveryStart), config.Reset)
 	}
 
 	if opts.PingScan {
 		fmt.Printf("%s[✓] Host discovery complete. %d/%d host(s) up.%s\n",
-			config.Green, len(activeTargets), len(targetIPs), config.Reset)
+			config.White, len(activeTargets), len(targetIPs), config.Reset)
 		os.Exit(0)
 	}
 
@@ -413,7 +413,7 @@ func main() {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		fmt.Printf("\n%s[!] Scan interrupted by user.%s\n", config.Yellow, config.Reset)
+		fmt.Printf("\n%s[!] Scan interrupted by user.%s\n", config.Red, config.Reset)
 		if opts.UseXDP && runtime.GOOS == "linux" {
 			scan.ShutdownXDPEngine()
 		}
@@ -422,7 +422,7 @@ func main() {
 
 	if opts.UseXDP {
 		if opts.Debug {
-			fmt.Printf("%s[*] Booting experimental AF_XDP Engine...%s\n", config.Yellow, config.Reset)
+			fmt.Printf("%s[*] Booting experimental AF_XDP Engine...%s\n", config.Red, config.Reset)
 		}
 
 		xdpInitStart := time.Now()
@@ -432,7 +432,7 @@ func main() {
 			os.Exit(1)
 		}
 		if opts.Debug {
-			fmt.Printf("%s[i] XDP engine init phase: %v%s\n", config.Cyan, time.Since(xdpInitStart), config.Reset)
+			fmt.Printf("%s[i] XDP engine init phase: %v%s\n", config.Gray, time.Since(xdpInitStart), config.Reset)
 		}
 
 		scan.GlobalXsk = xsk
@@ -457,7 +457,7 @@ func main() {
 
 	if opts.DeepInspect || opts.ProtocolTracing || opts.TimingAnalysis || opts.PayloadAnalysis {
 		fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
-		fmt.Printf("%s[*] Running Deep Packet Inspection...%s\n", config.Yellow, config.Reset)
+		fmt.Printf("%s[*] Running Deep Packet Inspection...%s\n", config.Red, config.Reset)
 		osiV := opts.OSIVerbosity
 		if osiV == 0 {
 			osiV = 4
@@ -506,24 +506,24 @@ func main() {
 					config.Bold, results[i].IP, results[i].Port, config.Bold, svc.Name, svc.Version, osDisp, config.Reset, bannerDisp)
 
 				for _, finding := range svc.Findings {
-					fmt.Printf("    %s[!] %s%s\n", config.Yellow, finding, config.Reset)
+					fmt.Printf("    %s[!] %s%s\n", config.Red, finding, config.Reset)
 				}
 
 				if svc.TLS != nil {
-					fmt.Printf("    %s[tls] %s | %s%s\n", config.Cyan, svc.TLS.Version, svc.TLS.CipherSuite, config.Reset)
+					fmt.Printf("    %s[tls] %s | %s%s\n", config.Gray, svc.TLS.Version, svc.TLS.CipherSuite, config.Reset)
 					if svc.TLS.PQCGroup != "" {
 						pqcStatus := "not post-quantum"
 						if svc.TLS.PQCReady {
 							pqcStatus = "post-quantum ready"
 						}
-						fmt.Printf("    %s[tls] key exchange: %s (%s)%s\n", config.Cyan, svc.TLS.PQCGroup, pqcStatus, config.Reset)
+						fmt.Printf("    %s[tls] key exchange: %s (%s)%s\n", config.Gray, svc.TLS.PQCGroup, pqcStatus, config.Reset)
 					}
 					if svc.TLS.CertSubject != "" {
 						fmt.Printf("    %s[tls] cert: %s (issuer: %s, expires %s)%s\n",
-							config.Cyan, svc.TLS.CertSubject, svc.TLS.CertIssuer, svc.TLS.CertExpiresAt, config.Reset)
+							config.Gray, svc.TLS.CertSubject, svc.TLS.CertIssuer, svc.TLS.CertExpiresAt, config.Reset)
 					}
 					if len(svc.TLS.SupportedVersions) > 0 {
-						fmt.Printf("    %s[tls] accepted versions: %s%s\n", config.Cyan, strings.Join(svc.TLS.SupportedVersions, ", "), config.Reset)
+						fmt.Printf("    %s[tls] accepted versions: %s%s\n", config.Gray, strings.Join(svc.TLS.SupportedVersions, ", "), config.Reset)
 					}
 					for _, warning := range svc.TLS.Warnings {
 						// A severity prefix picks the color and is stripped
@@ -532,19 +532,19 @@ func main() {
 						// CRITICAL for an escalated cert-expiry finding,
 						// INFO for the "expected when scanning by IP" SAN
 						// note, plain "[!] tls:" otherwise.
-						label, color := "[!] tls:", config.Yellow
+						label, color := "[!] tls:", config.Red
 						switch {
 						case strings.HasPrefix(warning, "CRITICAL: "):
 							label, color, warning = "[!!] tls:", config.Red, strings.TrimPrefix(warning, "CRITICAL: ")
 						case strings.HasPrefix(warning, "INFO: "):
-							label, color, warning = "[i] tls:", config.Cyan, strings.TrimPrefix(warning, "INFO: ")
+							label, color, warning = "[i] tls:", config.Gray, strings.TrimPrefix(warning, "INFO: ")
 						}
 						fmt.Printf("    %s%s %s%s\n", color, label, warning, config.Reset)
 					}
 				}
 
 				if svc.JARM != nil {
-					fmt.Printf("    %s[tls] jarm: %s%s\n", config.Cyan, svc.JARM.Hash, config.Reset)
+					fmt.Printf("    %s[tls] jarm: %s%s\n", config.Gray, svc.JARM.Hash, config.Reset)
 					if svc.JARM.Label != "" {
 						fmt.Printf("    %s[!] jarm match: %s%s\n", config.Red, svc.JARM.Label, config.Reset)
 					}
@@ -552,7 +552,7 @@ func main() {
 
 				if svc.HTTPPosture != nil {
 					for _, warning := range svc.HTTPPosture.Warnings {
-						fmt.Printf("    %s[!] http: %s%s\n", config.Yellow, warning, config.Reset)
+						fmt.Printf("    %s[!] http: %s%s\n", config.Red, warning, config.Reset)
 					}
 				}
 			}
@@ -571,7 +571,7 @@ func main() {
 					}
 				}
 				fmt.Printf("%s[i] Certificate reused across %d hosts: %s%s\n",
-					config.Cyan, len(group.Hosts), strings.Join(parts, ", "), config.Reset)
+					config.Gray, len(group.Hosts), strings.Join(parts, ", "), config.Reset)
 			}
 		}
 
@@ -623,7 +623,7 @@ func main() {
 					allVulnerabilities, err := vulnScanner.GetForSoftware(r.Service, r.Version)
 
 					if err != nil && offlineScanner != nil {
-						fmt.Printf("    %s[~] %s lookup failed, falling back to offline DB for %s:%d%s\n", config.Yellow, vulnScanner.SourceName(), r.IP, r.Port, config.Reset)
+						fmt.Printf("    %s[~] %s lookup failed, falling back to offline DB for %s:%d%s\n", config.Red, vulnScanner.SourceName(), r.IP, r.Port, config.Reset)
 						allVulnerabilities, err = offlineScanner.GetForSoftware(r.Service, r.Version)
 					}
 
@@ -714,9 +714,9 @@ func main() {
 							case v.CVSS >= 9.0:
 								cvssColor = config.Red
 							case v.CVSS >= 7.0:
-								cvssColor = config.Yellow
+								cvssColor = config.Red
 							case v.CVSS >= 4.0:
-								cvssColor = config.Cyan
+								cvssColor = config.Gray
 							default:
 								cvssColor = config.White
 							}
@@ -730,13 +730,13 @@ func main() {
 							fmt.Printf("    |_ %s (%sCVSS: %.1f%s) - %s%s\n", v.ID, cvssColor, v.CVSS, config.Reset, v.Title, note)
 						}
 						if filteredCount > 0 {
-							fmt.Printf("    %s[~] %d additional vulnerabilities excluded (not applicable to %s)%s\n", config.Yellow, filteredCount, r.OS, config.Reset)
+							fmt.Printf("    %s[~] %d additional vulnerabilities excluded (not applicable to %s)%s\n", config.Red, filteredCount, r.OS, config.Reset)
 						}
 					} else if initialCount > 0 {
 						fmt.Printf("%s[+] %s:%-5d - 0 vulnerabilities found for %s %s (%d excluded, not applicable to %s)%s\n",
-							config.Green, r.IP, r.Port, r.Service, r.Version, filteredCount, r.OS, config.Reset)
+							config.White, r.IP, r.Port, r.Service, r.Version, filteredCount, r.OS, config.Reset)
 					} else {
-						fmt.Printf("%s[+] %s:%-5d - 0 vulnerabilities found for %s %s%s\n", config.Green, r.IP, r.Port, r.Service, r.Version, config.Reset)
+						fmt.Printf("%s[+] %s:%-5d - 0 vulnerabilities found for %s %s%s\n", config.White, r.IP, r.Port, r.Service, r.Version, config.Reset)
 					}
 				}
 			}
@@ -762,9 +762,9 @@ func main() {
 			case "critical":
 				color = config.Red
 			case "high":
-				color = config.Yellow
+				color = config.Red
 			case "medium":
-				color = config.Cyan
+				color = config.Gray
 			default:
 				color = config.White
 			}
@@ -774,14 +774,14 @@ func main() {
 
 	fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
 	fmt.Printf("%s[✓] Scan completed in %v. Found %d open port(s) across %d active target(s).%s\n",
-		config.Green, duration.Round(time.Millisecond), openCount, len(activeTargets), config.Reset)
+		config.White, duration.Round(time.Millisecond), openCount, len(activeTargets), config.Reset)
 
 	if opts.JsonOutput != "" {
 		err := output.ExportJSON(opts.JsonOutput, opts.Target, results, duration, reusedCerts, severitySummary)
 		if err != nil {
 			fmt.Printf("%s[!] Failed to export JSON: %v%s\n", config.Red, err, config.Reset)
 		} else {
-			fmt.Printf("%s[✓] Results exported to JSON file: %s%s\n", config.Green, opts.JsonOutput, config.Reset)
+			fmt.Printf("%s[✓] Results exported to JSON file: %s%s\n", config.White, opts.JsonOutput, config.Reset)
 		}
 	}
 	if opts.AuditLog != "" {
@@ -796,14 +796,14 @@ func main() {
 		if err := output.ExportAuditJSONL(opts.AuditLog, displayTarget, auditOptions, results, duration); err != nil {
 			fmt.Printf("%s[!] Failed to write audit log: %v%s\n", config.Red, err, config.Reset)
 		} else {
-			fmt.Printf("%s[✓] Audit record appended to: %s%s\n", config.Green, opts.AuditLog, config.Reset)
+			fmt.Printf("%s[✓] Audit record appended to: %s%s\n", config.White, opts.AuditLog, config.Reset)
 		}
 	}
 	if opts.SARIFOutput != "" {
 		if err := output.ExportSARIF(opts.SARIFOutput, results, severitySummary); err != nil {
 			fmt.Printf("%s[!] Failed to export SARIF: %v%s\n", config.Red, err, config.Reset)
 		} else {
-			fmt.Printf("%s[✓] Results exported to SARIF file: %s%s\n", config.Green, opts.SARIFOutput, config.Reset)
+			fmt.Printf("%s[✓] Results exported to SARIF file: %s%s\n", config.White, opts.SARIFOutput, config.Reset)
 		}
 	}
 	for _, export := range []struct {
@@ -822,7 +822,7 @@ func main() {
 		if err := export.write(export.path, displayTarget, results, duration); err != nil {
 			fmt.Printf("%s[!] Failed to export %s: %v%s\n", config.Red, export.format, err, config.Reset)
 		} else {
-			fmt.Printf("%s[✓] Results exported to %s file: %s%s\n", config.Green, export.format, export.path, config.Reset)
+			fmt.Printf("%s[✓] Results exported to %s file: %s%s\n", config.White, export.format, export.path, config.Reset)
 		}
 	}
 	if opts.BaselineFile != "" {
@@ -831,7 +831,7 @@ func main() {
 			fmt.Printf("%s[!] Failed to load baseline: %v%s\n", config.Red, err, config.Reset)
 		} else {
 			changes := compare.Compare(results, baseline)
-			fmt.Printf("%s[*] Comparison: %d new open port(s), %d service change(s), %d new CVE(s).%s\n", config.Cyan, len(changes.NewOpenPorts), len(changes.ServiceChanges), len(changes.NewVulnerabilities), config.Reset)
+			fmt.Printf("%s[*] Comparison: %d new open port(s), %d service change(s), %d new CVE(s).%s\n", config.Gray, len(changes.NewOpenPorts), len(changes.ServiceChanges), len(changes.NewVulnerabilities), config.Reset)
 			if opts.ChangesOutput != "" {
 				if err := compare.WriteReport(opts.ChangesOutput, changes); err != nil {
 					fmt.Printf("%s[!] Failed to write comparison report: %v%s\n", config.Red, err, config.Reset)

@@ -46,9 +46,9 @@ func FormatPortState(state string) string {
 	case scan.StateClosed:
 		return fmt.Sprintf("%s%s%s", config.White, "○ CLOSED", config.Reset)
 	case scan.StateFiltered:
-		return fmt.Sprintf("%s%s%s", config.Yellow, "◌ FILTERED", config.Reset)
+		return fmt.Sprintf("%s%s%s", config.Red, "◌ FILTERED", config.Reset)
 	case scan.StateOpenFiltered:
-		return fmt.Sprintf("%s%s%s", config.Cyan, "◐ OPEN|FILTERED", config.Reset)
+		return fmt.Sprintf("%s%s%s", config.Gray, "◐ OPEN|FILTERED", config.Reset)
 	default:
 		return state
 	}
@@ -81,7 +81,7 @@ func PrintPortResults(results []scan.TargetResult) {
 		for _, r := range openPorts {
 			reasonStr := ""
 			if r.Reason != "" {
-				reasonStr = fmt.Sprintf("  [%s%s%s]", config.Yellow, r.Reason, config.Reset)
+				reasonStr = fmt.Sprintf("  [%s%s%s]", config.Red, r.Reason, config.Reset)
 			}
 			fmt.Printf("  %s%s:%-6d%s   Latency: %s%.2f ms%s%s\n",
 				config.Bold, r.IP, r.Port, config.Reset,
@@ -90,11 +90,11 @@ func PrintPortResults(results []scan.TargetResult) {
 	}
 
 	if len(filteredPorts) > 0 {
-		fmt.Printf("\n%s▶ FILTERED PORTS (%d)%s\n", config.Yellow, len(filteredPorts), config.Reset)
+		fmt.Printf("\n%s▶ FILTERED PORTS (%d)%s\n", config.Red, len(filteredPorts), config.Reset)
 		for _, r := range filteredPorts {
 			reasonStr := ""
 			if r.Reason != "" {
-				reasonStr = fmt.Sprintf("  [%s%s%s]", config.Cyan, r.Reason, config.Reset)
+				reasonStr = fmt.Sprintf("  [%s%s%s]", config.Gray, r.Reason, config.Reset)
 			}
 			fmt.Printf("  %s%s:%-6d%s   Latency: %s%.2f ms%s%s\n",
 				config.Bold, r.IP, r.Port, config.Reset,
@@ -133,7 +133,7 @@ func PrintServiceDetection(results []scan.TargetResult, filteredCount int) {
 
 	if filteredCount > 0 {
 		fmt.Printf("%s[~] %d FILTERED port(s) skipped%s (service detection requires OPEN state)\n",
-			config.Yellow, filteredCount, config.Reset)
+			config.Red, filteredCount, config.Reset)
 	}
 
 	if len(openWithService) > 0 {
@@ -146,7 +146,7 @@ func PrintServiceDetection(results []scan.TargetResult, filteredCount int) {
 			}
 			banner := ""
 			if r.Banner != "" && len(r.Banner) > 0 {
-				banner = fmt.Sprintf(" [%s%s%s]", config.Cyan, r.Banner, config.Reset)
+				banner = fmt.Sprintf(" [%s%s%s]", config.Gray, r.Banner, config.Reset)
 			}
 			fmt.Printf("%-30s %5d    %s%s%s%s\n",
 				r.Service, r.Port, config.White, version, config.Reset, banner)
@@ -171,7 +171,7 @@ func PrintVulnerabilityResults(results []scan.TargetResult) {
 
 	PrintSectionHeader("VULNERABILITY SCAN")
 	fmt.Printf("%s[i] CVE lookup requires additional configuration (--vulners-apikey)%s\n",
-		config.Yellow, config.Reset)
+		config.Red, config.Reset)
 	PrintSectionEnd()
 }
 
@@ -194,29 +194,29 @@ func PrintSummary(results []scan.TargetResult, duration time.Duration, targets i
 	fmt.Printf("\n%s┌─ SCAN SUMMARY%s\n", config.Red, config.Reset)
 	fmt.Printf("%s│%s\n", config.Red, config.Reset)
 	fmt.Printf("%s│  %s✓ Scan completed%s in %s%v%s\n",
-		config.Red, config.Green, config.Reset, config.Bold, duration.Round(time.Millisecond), config.Reset)
+		config.Red, config.White, config.Reset, config.Bold, duration.Round(time.Millisecond), config.Reset)
 	fmt.Printf("%s│  %s● Open ports%s:     %s%d%s\n",
 		config.Red, config.Red, config.Reset, config.Bold, openCount, config.Reset)
 	fmt.Printf("%s│  %s○ Closed ports%s:   %s%d%s\n",
 		config.Red, config.White, config.Reset, config.Bold, closedCount, config.Reset)
 	fmt.Printf("%s│  %s◌ Filtered ports%s:  %s%d%s\n",
-		config.Red, config.Yellow, config.Reset, config.Bold, filteredCount, config.Reset)
+		config.Red, config.Red, config.Reset, config.Bold, filteredCount, config.Reset)
 	fmt.Printf("%s│  %sTargets scanned%s:  %s%d%s\n",
-		config.Red, config.Cyan, config.Reset, config.Bold, targets, config.Reset)
+		config.Red, config.Gray, config.Reset, config.Bold, targets, config.Reset)
 	fmt.Printf("%s│%s\n", config.Red, config.Reset)
 	fmt.Printf("%s└──────────────────────────────────────────────────────────────────────────\n%s\n", config.Red, config.Reset)
 }
 
 func PrintWarning(msg string) {
-	fmt.Printf("%s[!] %s%s\n", config.Yellow, msg, config.Reset)
+	fmt.Printf("%s[!] %s%s\n", config.Red, msg, config.Reset)
 }
 
 func PrintInfo(msg string) {
-	fmt.Printf("%s[*] %s%s\n", config.Cyan, msg, config.Reset)
+	fmt.Printf("%s[*] %s%s\n", config.Gray, msg, config.Reset)
 }
 
 func PrintSuccess(msg string) {
-	fmt.Printf("%s[✓] %s%s\n", config.Green, msg, config.Reset)
+	fmt.Printf("%s[✓] %s%s\n", config.White, msg, config.Reset)
 }
 
 func PrintError(msg string) {

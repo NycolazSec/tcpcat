@@ -101,7 +101,7 @@ func ensureRawRxLoop(ifaceName string) error {
 		// one -i value throughout.
 		if ifaceName != "" {
 			if err := netiface.BindToDevice(fd, ifaceName); err != nil {
-				fmt.Printf("%s[!] Warning: could not bind raw receive socket to interface %q: %v%s\n", config.Yellow, ifaceName, err, config.Reset)
+				fmt.Printf("%s[!] Warning: could not bind raw receive socket to interface %q: %v%s\n", config.Red, ifaceName, err, config.Reset)
 			}
 		}
 		go rawRxLoop(fd)
@@ -199,7 +199,7 @@ func newRawTCPScanner(targetIP string, port int, opts *config.Options, timeout t
 	}
 	if ifaceName != "" {
 		if err := netiface.BindToDevice(fd, ifaceName); err != nil {
-			fmt.Printf("%s[!] Warning: could not bind raw send socket to interface %q: %v%s\n", config.Yellow, ifaceName, err, config.Reset)
+			fmt.Printf("%s[!] Warning: could not bind raw send socket to interface %q: %v%s\n", config.Red, ifaceName, err, config.Reset)
 		}
 	}
 

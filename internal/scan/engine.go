@@ -285,7 +285,7 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	}
 
 	if err := cp.close(); err != nil {
-		fmt.Printf("%s[!] Warning: could not flush resume checkpoint: %v%s\n", config.Yellow, err, config.Reset)
+		fmt.Printf("%s[!] Warning: could not flush resume checkpoint: %v%s\n", config.Red, err, config.Reset)
 	}
 
 	if adaptive && limiter != nil {
@@ -348,7 +348,7 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 		// not repeated on the console.
 		if res.OS != "" && !hostOSShown {
 			fmt.Printf("%s[i] %s ─ OS: %s (%.0f%% confidence)%s\n",
-				config.Bold+config.Cyan, res.IP, res.OS, res.OSConfidence*100, config.Reset)
+				config.Bold+config.Gray, res.IP, res.OS, res.OSConfidence*100, config.Reset)
 			hostOSShown = true
 		}
 
@@ -360,9 +360,9 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 		prefix, color := "[~]", config.White
 		switch res.State {
 		case StateOpen:
-			prefix, color = "[+]", config.Green
+			prefix, color = "[+]", config.Red
 		case StateClosed:
-			prefix, color = "[-]", config.Red
+			prefix, color = "[-]", config.Gray
 		}
 		fmt.Printf("%s%s %s:%-5d ─ %-8s%s (time=%.2fms | reason=%s)\n",
 			config.Bold+color, prefix, res.IP, res.Port, res.State, config.Reset, res.LatencyMs, res.Reason)
@@ -384,7 +384,7 @@ func (e *Engine) dispatchScan(ip string, port int, opts *config.Options) TargetR
 
 	isFiltered := res.State == StateFiltered || res.State == StateOpenFiltered
 	if isFiltered && opts.SmartBypass {
-		fmt.Printf("    %s[~] Port %s:%d is %s. Attempting bypass techniques...%s\n", config.Yellow, ip, port, res.State, config.Reset)
+		fmt.Printf("    %s[~] Port %s:%d is %s. Attempting bypass techniques...%s\n", config.Red, ip, port, res.State, config.Reset)
 		return e.runBypassSequence(ip, port, res, opts)
 	}
 
