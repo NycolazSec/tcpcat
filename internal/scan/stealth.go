@@ -17,7 +17,7 @@ const (
 	ScanXmas
 )
 
-func ScanStealthPort(targetIP string, port int, scanType StealthType, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator) TargetResult {
+func ScanStealthPort(targetIP string, port int, scanType StealthType, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator, limiter *AdaptiveRateLimiter) TargetResult {
 	res := TargetResult{
 		IP:   targetIP,
 		Port: port,
@@ -60,6 +60,7 @@ func ScanStealthPort(targetIP string, port int, scanType StealthType, opts *conf
 
 	attempts := probeAttempts(opts)
 	for attempt := 0; attempt < attempts; attempt++ {
+		pacedWait(limiter)
 		err = scanner.Send(flags)
 		if err != nil {
 			res.State = StateFiltered

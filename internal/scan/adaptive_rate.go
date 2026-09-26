@@ -115,11 +115,19 @@ func NewAdaptiveRateLimiter(initialPPS, minPPS, maxPPS int) *AdaptiveRateLimiter
 func (rl *AdaptiveRateLimiter) Wait() { rl.WaitN(1) }
 
 // WaitN reserves n evenly-spaced send slots at the current rate and blocks
-// until the first is due. It is the multi-packet form of Wait, and the
-// whole point of it: a single scan job emits more than one packet on the
-// raw/AF_XDP paths (probeAttempts retransmits, plus decoys), so charging
-// one slot per job let the real TX rate run at a multiple of the requested
-// pps -- which is what turns a fast scan into an RX-side packet storm.
+// until the first is due. It is the multi-packet form of Wait, used where a
+// single scan job unconditionally emits more than one packet (decoys fire
+// once per job regardless of the reply) -- charging one slot per job for
+// those keeps the real TX rate at the requested pps instead of a multiple
+// of it, which is what turns a fast scan into an RX-side packet storm.
+//
+// Retransmits are different: whether a job needs 1 attempt or all of
+// probeAttempts isn't known upfront, so those are paced individually via
+// pacedWait() right before each actual transmit (see engine.go/xdp.go et
+// al.), not reserved in bulk here. Reserving the worst case for every job
+// regardless of whether it retransmits used to throttle real throughput to
+// a fraction of the requested rate on a healthy, low-loss network, where
+// most probes never retry at all.
 //
 // Strict even spacing is deliberate, and is why this is a pacer rather than
 // a classic token bucket: the goal is to *smooth* the returning flood, and
@@ -154,6 +162,23 @@ func (rl *AdaptiveRateLimiter) WaitN(n int) {
 			return
 		}
 		// Lost the race for this window with another goroutine; retry.
+	}
+}
+
+// pacedWait blocks for one packet's worth of limiter, if non-nil (a nil
+// limiter means --rate wasn't set, or --unsafe-no-limits was: see
+// NewLimiterFromOptions). Called right before each real packet transmission
+// in a probeAttempts retry loop -- the first attempt included -- so the
+// requested --rate governs actual packets sent, not a pre-reserved
+// worst-case budget per job (see the WaitN doc comment). Threaded through
+// as an explicit parameter from Engine.limiter rather than a package
+// global: the web server (internal/web) can run more than one Engine
+// concurrently, each against its own scan, and a shared global would let
+// one request's rate limit pace another's packets or get nulled out from
+// under it when the other finishes first.
+func pacedWait(limiter *AdaptiveRateLimiter) {
+	if limiter != nil {
+		limiter.WaitN(1)
 	}
 }
 

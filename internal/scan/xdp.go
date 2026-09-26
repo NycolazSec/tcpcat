@@ -494,7 +494,7 @@ func transmitXDPFrames(xsk *xdp.Socket, frames [][]byte) bool {
 	return true
 }
 
-func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, rtt *RTTEstimator) TargetResult {
+func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, rtt *RTTEstimator, limiter *AdaptiveRateLimiter) TargetResult {
 	xsk, ok := GlobalXsk.(*xdp.Socket)
 	if !ok || xsk == nil {
 		return TargetResult{IP: ip, Port: port, State: StateClosed, Reason: "XDP engine offline"}
@@ -571,6 +571,7 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 		default:
 		}
 
+		pacedWait(limiter)
 		t0 := time.Now()
 		if !transmitXDPFrames(xsk, framesToSend) {
 			return TargetResult{
@@ -622,7 +623,7 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 	}
 }
 
-func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, rtt *RTTEstimator) TargetResult {
+func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, rtt *RTTEstimator, limiter *AdaptiveRateLimiter) TargetResult {
 	xsk, ok := GlobalXsk.(*xdp.Socket)
 	if !ok || xsk == nil {
 		return TargetResult{IP: ip, Port: port, State: StateClosed, Reason: "XDP engine offline"}
@@ -715,6 +716,7 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 		default:
 		}
 
+		pacedWait(limiter)
 		t0 := time.Now()
 		if !transmitXDPFrames(xsk, framesToSend) {
 			return TargetResult{

@@ -10,7 +10,7 @@ import (
 	"tcpcat/config"
 )
 
-func ScanUDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator) TargetResult {
+func ScanUDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator, limiter *AdaptiveRateLimiter) TargetResult {
 	targetAddr := net.JoinHostPort(ip, strconv.Itoa(port))
 
 	conn, err := net.DialTimeout("udp", targetAddr, timeout)
@@ -56,6 +56,7 @@ func ScanUDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 	var lastErr error
 	for attempt := 0; attempt < attempts; attempt++ {
 		for _, probe := range probes {
+			pacedWait(limiter)
 			t0 := time.Now()
 			_, _ = conn.Write(probe.Payload)
 

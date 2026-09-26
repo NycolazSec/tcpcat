@@ -86,7 +86,7 @@ func TestScanUDPPortOpenOnResponse(t *testing.T) {
 	port := startUDPEcho(t, []byte("pong"))
 	opts := &config.Options{DataString: "ping"}
 
-	res := ScanUDPPort("127.0.0.1", port, opts, time.Second, nil, nil, nil)
+	res := ScanUDPPort("127.0.0.1", port, opts, time.Second, nil, nil, nil, nil)
 	if res.State != StateOpen {
 		t.Errorf("State = %q, want OPEN (server replied)", res.State)
 	}
@@ -104,7 +104,7 @@ func TestScanUDPPortIdentifiesProtocolReply(t *testing.T) {
 	udpProbesByPort[port] = []udpProbe{dnsProbe}
 	t.Cleanup(func() { delete(udpProbesByPort, port) })
 
-	res := ScanUDPPort("127.0.0.1", port, &config.Options{}, time.Second, nil, nil, nil)
+	res := ScanUDPPort("127.0.0.1", port, &config.Options{}, time.Second, nil, nil, nil, nil)
 	if res.State != StateOpen {
 		t.Fatalf("State = %q, want OPEN", res.State)
 	}

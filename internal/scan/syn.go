@@ -10,7 +10,7 @@ import (
 	"tcpcat/internal/osdetect"
 )
 
-func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator) TargetResult {
+func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator, limiter *AdaptiveRateLimiter) TargetResult {
 	res := TargetResult{
 		IP:   targetIP,
 		Port: port,
@@ -43,6 +43,7 @@ func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.D
 
 	attempts := probeAttempts(opts)
 	for attempt := 0; attempt < attempts; attempt++ {
+		pacedWait(limiter)
 		err = scanner.Send(0x02)
 		if err != nil {
 			res.State = StateFiltered

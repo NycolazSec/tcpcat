@@ -9,7 +9,7 @@ import (
 	"tcpcat/internal/evasion"
 )
 
-func ScanAckPort(targetIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator) TargetResult {
+func ScanAckPort(targetIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator, limiter *AdaptiveRateLimiter) TargetResult {
 	res := TargetResult{
 		IP:   targetIP,
 		Port: port,
@@ -42,6 +42,7 @@ func ScanAckPort(targetIP string, port int, opts *config.Options, timeout time.D
 
 	attempts := probeAttempts(opts)
 	for attempt := 0; attempt < attempts; attempt++ {
+		pacedWait(limiter)
 		err = scanner.Send(0x10)
 		if err != nil {
 			res.State = StateFiltered
@@ -71,7 +72,7 @@ func ScanAckPort(targetIP string, port int, opts *config.Options, timeout time.D
 	return res
 }
 
-func ScanWindowPort(targetIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator) TargetResult {
+func ScanWindowPort(targetIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator, limiter *AdaptiveRateLimiter) TargetResult {
 	res := TargetResult{
 		IP:   targetIP,
 		Port: port,
@@ -104,6 +105,7 @@ func ScanWindowPort(targetIP string, port int, opts *config.Options, timeout tim
 
 	attempts := probeAttempts(opts)
 	for attempt := 0; attempt < attempts; attempt++ {
+		pacedWait(limiter)
 		err = scanner.Send(0x10)
 		if err != nil {
 			res.State = StateFiltered

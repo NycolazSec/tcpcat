@@ -8,7 +8,7 @@ import (
 	"tcpcat/config"
 )
 
-func getZombieIPID(zombieIP string, zombiePort int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP) (uint16, error) {
+func getZombieIPID(zombieIP string, zombiePort int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, limiter *AdaptiveRateLimiter) (uint16, error) {
 	scanner, err := newRawTCPScanner(zombieIP, zombiePort, opts, timeout, spoofedSrcIP)
 	if err != nil {
 		return 0, err
@@ -21,6 +21,7 @@ func getZombieIPID(zombieIP string, zombiePort int, opts *config.Options, timeou
 	attempts := probeAttempts(opts)
 	var lastErr error
 	for attempt := 0; attempt < attempts; attempt++ {
+		pacedWait(limiter)
 		if err := scanner.Send(0x10); err != nil {
 			return 0, fmt.Errorf("send to zombie failed: %v", err)
 		}
@@ -39,7 +40,7 @@ func getZombieIPID(zombieIP string, zombiePort int, opts *config.Options, timeou
 	return 0, lastErr
 }
 
-func sendSpoofedSYN(targetIP string, targetPort int, zombieIP string, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP) error {
+func sendSpoofedSYN(targetIP string, targetPort int, zombieIP string, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, limiter *AdaptiveRateLimiter) error {
 	zombieNetIP := net.ParseIP(zombieIP)
 	if zombieNetIP == nil {
 		return fmt.Errorf("invalid zombie IP address")
@@ -51,10 +52,11 @@ func sendSpoofedSYN(targetIP string, targetPort int, zombieIP string, opts *conf
 	}
 	defer scanner.Close()
 
+	pacedWait(limiter)
 	return scanner.Send(0x02)
 }
 
-func ScanIdlePort(ip string, port int, zombieIP string, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP) TargetResult {
+func ScanIdlePort(ip string, port int, zombieIP string, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, limiter *AdaptiveRateLimiter) TargetResult {
 	t0 := time.Now()
 	res := TargetResult{IP: ip, Port: port}
 
@@ -71,14 +73,14 @@ func ScanIdlePort(ip string, port int, zombieIP string, opts *config.Options, ti
 
 	const zombieProbePort = 80
 
-	initialID, err := getZombieIPID(zombieIP, zombieProbePort, opts, timeout, spoofedSrcIP)
+	initialID, err := getZombieIPID(zombieIP, zombieProbePort, opts, timeout, spoofedSrcIP, limiter)
 	if err != nil {
 		res.State = StateFiltered
 		res.Reason = fmt.Sprintf("Zombie %s is not responding correctly: %v", zombieIP, err)
 		return res
 	}
 
-	if err := sendSpoofedSYN(ip, port, zombieIP, opts, timeout, spoofedSrcIP); err != nil {
+	if err := sendSpoofedSYN(ip, port, zombieIP, opts, timeout, spoofedSrcIP, limiter); err != nil {
 		res.State = StateFiltered
 		res.Reason = fmt.Sprintf("Failed to send spoofed packet: %v", err)
 		return res
@@ -86,7 +88,7 @@ func ScanIdlePort(ip string, port int, zombieIP string, opts *config.Options, ti
 
 	time.Sleep(200 * time.Millisecond)
 
-	finalID, err := getZombieIPID(zombieIP, zombieProbePort, opts, timeout, spoofedSrcIP)
+	finalID, err := getZombieIPID(zombieIP, zombieProbePort, opts, timeout, spoofedSrcIP, limiter)
 	if err != nil {
 		res.State = StateFiltered
 		res.Reason = fmt.Sprintf("Zombie %s stopped responding: %v", zombieIP, err)

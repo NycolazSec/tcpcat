@@ -62,6 +62,7 @@ type Engine struct {
 	scriptEngine *scripting.ScriptingEngine
 	connPool     *connpool.Pool
 	rtt          *RTTEstimator
+	limiter      *AdaptiveRateLimiter
 }
 
 func NewEngine(opts *config.Options) *Engine {
@@ -93,6 +94,7 @@ func NewEngine(opts *config.Options) *Engine {
 		scriptEngine: se,
 		connPool:     pool,
 		rtt:          NewRTTEstimator(),
+		limiter:      NewLimiterFromOptions(opts),
 	}
 }
 
@@ -140,19 +142,25 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	// evenly-spaced pacer for both means the per-packet accounting below
 	// applies uniformly.
 	adaptive := e.opts.AdaptiveRate
-	limiter := NewLimiterFromOptions(e.opts)
+	// e.limiter (built once in NewEngine) is also threaded explicitly into
+	// each leaf Scan*Port call below via runScanWithOptions, so
+	// probeAttempts() retries can pace themselves individually through
+	// pacedWait() instead of engine.go reserving a fixed retry budget per
+	// job upfront (see perJobPackets below).
+	limiter := e.limiter
 
-	// Packets emitted per job. On the raw-socket / AF_XDP paths a single
-	// job is not a single packet: probeAttempts() retransmits, plus one
-	// frame per decoy. Reserving that many pacer slots per job is what
-	// keeps the real TX rate at the requested pps instead of a multiple of
-	// it -- the gap that let a stress test flood the NIC's RX side. The
-	// count is conservative (a port that replies on the first try still
-	// reserves every retry's slot), which errs toward under-sending, the
-	// safe direction when the goal is not to overwhelm the path.
+	// Packets reserved per job before dispatch. On the raw-socket / AF_XDP
+	// paths, decoys are the only ones that unconditionally fire every job
+	// regardless of the reply, so they're the only ones pre-reserved here;
+	// probeAttempts() retransmits are paced individually by pacedWait() at
+	// the point each one actually sends, since whether a job needs 1
+	// attempt or all of them isn't known until the reply (or lack of one)
+	// comes back. Reserving the worst case for every job here regardless
+	// used to throttle real throughput to a fraction of the requested rate
+	// on a healthy, low-loss network where most probes never retry.
 	perJobPackets := 1
 	if usesRawTxPath(e.opts) {
-		perJobPackets = probeAttempts(e.opts) + decoyCount(e.opts)
+		perJobPackets = decoyCount(e.opts)
 	}
 
 	var wg sync.WaitGroup
@@ -370,9 +378,9 @@ func (e *Engine) dispatchScan(ip string, port int, opts *config.Options) TargetR
 
 func (e *Engine) runBypassSequence(ip string, port int, originalRes TargetResult, opts *config.Options) TargetResult {
 	if !opts.UdpScan {
-		ackRes := ScanAckPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
+		ackRes := ScanAckPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt, e.limiter)
 		if ackRes.State == StateUnfiltered {
-			finRes := ScanStealthPort(ip, port, ScanFin, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
+			finRes := ScanStealthPort(ip, port, ScanFin, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt, e.limiter)
 			if finRes.State == StateClosed {
 				finRes.Reason = "Bypass: ACK->unfiltered, FIN->closed"
 				return finRes
@@ -399,7 +407,7 @@ func (e *Engine) runBypassSequence(ip string, port int, originalRes TargetResult
 	}
 
 	if !opts.UdpScan {
-		winRes := ScanWindowPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
+		winRes := ScanWindowPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt, e.limiter)
 		if winRes.State == StateOpen {
 			winRes.Reason = "Bypass: Window scan detected open port"
 			return winRes
@@ -448,37 +456,37 @@ func xdpEligible(ip string, opts *config.Options) bool {
 func (e *Engine) runScanWithOptions(ip string, port int, opts *config.Options) TargetResult {
 	if GlobalXsk != nil && xdpEligible(ip, opts) {
 		if opts.UdpScan {
-			return ScanXDPUDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, e.rtt)
+			return ScanXDPUDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, e.rtt, e.limiter)
 		}
 		isOtherRawScan := opts.AckScan || opts.WindowScan || opts.NullScan || opts.FinScan || opts.XmasScan
 		if opts.SynScan || !isOtherRawScan {
-			return ScanXDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, e.rtt)
+			return ScanXDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, e.rtt, e.limiter)
 		}
 	}
 
 	if opts.ZombieHost != "" {
-		return ScanIdlePort(ip, port, opts.ZombieHost, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer))
+		return ScanIdlePort(ip, port, opts.ZombieHost, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.limiter)
 	}
 	if opts.AckScan {
-		return ScanAckPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
+		return ScanAckPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt, e.limiter)
 	}
 	if opts.WindowScan {
-		return ScanWindowPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
+		return ScanWindowPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt, e.limiter)
 	}
 	if opts.UdpScan {
-		return ScanUDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
+		return ScanUDPPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt, e.limiter)
 	}
 	if opts.SynScan {
-		return ScanSYNPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
+		return ScanSYNPort(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt, e.limiter)
 	}
 	if opts.NullScan {
-		return ScanStealthPort(ip, port, ScanNull, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
+		return ScanStealthPort(ip, port, ScanNull, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt, e.limiter)
 	}
 	if opts.FinScan {
-		return ScanStealthPort(ip, port, ScanFin, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
+		return ScanStealthPort(ip, port, ScanFin, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt, e.limiter)
 	}
 	if opts.XmasScan {
-		return ScanStealthPort(ip, port, ScanXmas, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt)
+		return ScanStealthPort(ip, port, ScanXmas, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.rtt, e.limiter)
 	}
 
 	return ScanConnectPooled(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.connPool)
