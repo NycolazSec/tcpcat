@@ -266,16 +266,23 @@ func ShutdownXDPEngine() {
 		return
 	}
 	xdpRunning = false
+
 	if xdpLink != nil {
-		if err := xdpLink.Close(); err != nil {
-			log.Printf("[!] Error while detaching the XDP hook: %v", err)
+		t0 := time.Now()
+		err := xdpLink.Close()
+		elapsed := time.Since(t0)
+		if err != nil {
+			log.Printf("[!] Error while detaching the XDP hook (%s): %v", elapsed, err)
 		} else {
-			log.Println("[-] eBPF XDP hook detached successfully.")
+			log.Printf("[-] eBPF XDP hook detached successfully (%s).", elapsed)
 		}
 	}
+
+	t0 := time.Now()
 	for _, xsk := range xdpSockets {
 		_ = xsk.Close()
 	}
+	log.Printf("[-] %d AF_XDP socket(s) closed (%s).", len(xdpSockets), time.Since(t0))
 	xdpSockets = nil
 
 	// Releases the loaded program and xsks_map deterministically, right
@@ -287,9 +294,10 @@ func ShutdownXDPEngine() {
 	// interface in generic (SKB) XDP mode.
 	if xdpColl != nil {
 		log.Println("[*] Releasing eBPF program and maps (this can take a few seconds on some interfaces)...")
+		t0 = time.Now()
 		xdpColl.Close()
 		xdpColl = nil
-		log.Println("[-] eBPF program and maps released.")
+		log.Printf("[-] eBPF program and maps released (%s).", time.Since(t0))
 	}
 }
 
