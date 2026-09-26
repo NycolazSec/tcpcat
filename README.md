@@ -373,6 +373,23 @@ Packet variation, fragmentation, and decoy traffic can help an authorized team a
 - Nmap (SYN): **1.9-2.3 seconds** (same workload)
 - **Speedup: 23.8×** — Even with aggressive evasion, tcpcat outpaces traditional tools
 
+**Full port range vs. Nmap and naabu:**
+
+```
+hyperfine --warmup 0 --runs 3 \
+  -n "tcpcat-ebpf" "./tcpcat -i eth0 -p 1-65535 -sS --ebpf --open -T 5 --rate 25000 <host1> <host2>" \
+  -n "naabu"       "naabu -interface eth0 -p 1-65535 -rate 25000 -host <host1>,<host2> -silent" \
+  -n "nmap"        "nmap -e eth0 -p 1-65535 -sS -n -T4 --min-rate 25000 --max-retries 1 <host1> <host2>"
+```
+
+| Tool | Mean Time | Range (min … max) |
+|------|-----------|--------------------|
+| **tcpcat (eBPF/XDP)** | **4.466 s ± 0.744 s** | 3.623 s … 5.028 s |
+| nmap | 11.723 s ± 0.503 s | 11.150 s … 12.094 s |
+| naabu | 20.945 s ± 0.181 s | 20.739 s … 21.077 s |
+
+- **2.62× faster than nmap**, **4.69× faster than naabu** — full 1-65535 SYN scan across 2 hosts, 25K pps rate limit, 3 runs each.
+
 ---
 
 ## Platform Support
