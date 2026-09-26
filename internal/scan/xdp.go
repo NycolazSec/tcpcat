@@ -56,6 +56,7 @@ const xdpDiscoverySrcPort = 54322
 var xdpTxLock sync.Mutex
 var xdpDiscovery sync.Map // IP string -> true, populated by xdpRxLoop for host discovery
 var xdpRunning bool
+var xdpDebug bool // gates informational (non-error) engine/eBPF diagnostics behind --debug
 var xdpSockets []*xdp.Socket // one per bound RX queue; xdpSockets[0] is also GlobalXsk, the sole TX path
 
 // getInterfaceRXQueueCount reads the number of RX queues an interface
@@ -155,8 +156,11 @@ func getGatewayMAC(ifaceName string) (net.HardwareAddr, error) {
 // getSrcPort), which the generated eBPF classifier needs to know which
 // TCP/UDP destination ports are ours to redirect -- see generateXDPCollection.
 func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
+	xdpDebug = opts.Debug
 	if xdpRunning {
-		log.Println("[*] XDP engine already initialized.")
+		if xdpDebug {
+			log.Println("[*] XDP engine already initialized.")
+		}
 		return GlobalXsk, nil
 	}
 
@@ -181,10 +185,14 @@ func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 	mac, err := getGatewayMAC(ifaceName)
 	if err == nil {
 		gatewayMAC = mac
-		log.Printf("[*] Auto-detection: Interface '%s' (IP: %s) | Gateway MAC: %s", ifaceName, localIP.String(), gatewayMAC.String())
+		if xdpDebug {
+			log.Printf("[*] Auto-detection: Interface '%s' (IP: %s) | Gateway MAC: %s", ifaceName, localIP.String(), gatewayMAC.String())
+		}
 	} else {
 		gatewayMAC, _ = net.ParseMAC("ff:ff:ff:ff:ff:ff")
-		log.Printf("[*] Auto-detection: Interface '%s' (IP: %s) | Gateway MAC: Not found (broadcast fallback)", ifaceName, localIP.String())
+		if xdpDebug {
+			log.Printf("[*] Auto-detection: Interface '%s' (IP: %s) | Gateway MAC: Not found (broadcast fallback)", ifaceName, localIP.String())
+		}
 	}
 
 	spec, err := generateXDPCollection(getSrcPort(opts))
@@ -216,7 +224,9 @@ func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 		return nil, fmt.Errorf("failed to attach XDP hook: %v", err)
 	}
 	xdpLink = l
-	log.Println("[+] eBPF assembly hook attached successfully at physical level.")
+	if xdpDebug {
+		log.Println("[+] eBPF assembly hook attached successfully at physical level.")
+	}
 
 	numQueues := getInterfaceRXQueueCount(ifaceName)
 
@@ -257,8 +267,10 @@ func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 		xdpSockets = append(xdpSockets, xsk)
 	}
 
-	log.Printf("[+] Zero-copy bridge (ring buffer) established on %d RX queue(s). Engine ready.", len(xdpSockets))
-	logNAPITuningHint(ifaceName)
+	if xdpDebug {
+		log.Printf("[+] Zero-copy bridge (ring buffer) established on %d RX queue(s). Engine ready.", len(xdpSockets))
+		logNAPITuningHint(ifaceName)
+	}
 
 	xdpRunning = true
 	for i, xsk := range xdpSockets {
@@ -284,7 +296,7 @@ func ShutdownXDPEngine() {
 		elapsed := time.Since(t0)
 		if err != nil {
 			log.Printf("[!] Error while detaching the XDP hook (%s): %v", elapsed, err)
-		} else {
+		} else if xdpDebug {
 			log.Printf("[-] eBPF XDP hook detached successfully (%s).", elapsed)
 		}
 	}
@@ -293,7 +305,9 @@ func ShutdownXDPEngine() {
 	for _, xsk := range xdpSockets {
 		_ = xsk.Close()
 	}
-	log.Printf("[-] %d AF_XDP socket(s) closed (%s).", len(xdpSockets), time.Since(t0))
+	if xdpDebug {
+		log.Printf("[-] %d AF_XDP socket(s) closed (%s).", len(xdpSockets), time.Since(t0))
+	}
 	xdpSockets = nil
 
 	// Releases the loaded program and xsks_map deterministically, right
@@ -304,11 +318,15 @@ func ShutdownXDPEngine() {
 	// AF_XDP sockets it referenced, especially on a virtual bridge/veth
 	// interface in generic (SKB) XDP mode.
 	if xdpColl != nil {
-		log.Println("[*] Releasing eBPF program and maps (this can take a few seconds on some interfaces)...")
+		if xdpDebug {
+			log.Println("[*] Releasing eBPF program and maps (this can take a few seconds on some interfaces)...")
+		}
 		t0 = time.Now()
 		xdpColl.Close()
 		xdpColl = nil
-		log.Printf("[-] eBPF program and maps released (%s).", time.Since(t0))
+		if xdpDebug {
+			log.Printf("[-] eBPF program and maps released (%s).", time.Since(t0))
+		}
 	}
 }
 

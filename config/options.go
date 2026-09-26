@@ -127,6 +127,7 @@ type Options struct {
 	UnsafeNoLimits bool
 	InsecureTLS    bool
 	Verbose        bool
+	Debug          bool
 	JsonOutput     string
 	ScopeFile      string
 	Resume         string
@@ -326,6 +327,7 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.NoRandomize, "no-randomize", false, "Dispatch probes in target/port list order instead of a randomized permutation")
 	flag.BoolVar(&opts.UnsafeNoLimits, "unsafe-no-limits", false, "Disable concurrency limits (DANGEROUS: may cause OOM killer)")
 	flag.BoolVar(&opts.Verbose, "v", false, "Enable verbose output")
+	flag.BoolVar(&opts.Debug, "debug", false, "Show low-level engine/eBPF diagnostics (interface auto-detection, XDP hook lifecycle, timings)")
 	flag.BoolVar(&opts.InsecureTLS, "k", false, "Allow insecure server connections (alias --insecure)")
 	flag.StringVar(&opts.JsonOutput, "j", "", "Export results to JSON file")
 	flag.StringVar(&opts.ScopeFile, "scope-file", "", "Authorized scope file (CIDRs, IPs, or domains)")
@@ -428,6 +430,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--batch-size <n>%s  Jobs dispatched per batch (default: 1000)\n", Yellow, Reset)
 		fmt.Printf("  %s--conn-pool <n>%s   Max idle TCP connections per address (default: 64)\n", Yellow, Reset)
 		fmt.Printf("  %s-v%s              Enable verbose output\n", Yellow, Reset)
+		fmt.Printf("  %s--debug%s         Show low-level engine/eBPF diagnostics (interface detection, XDP hook lifecycle, timings)\n", Yellow, Reset)
 		fmt.Printf("  %s-j <file>%s       Export results to JSON file\n", Yellow, Reset)
 		fmt.Printf("  %s--sarif <file>%s  Export findings as SARIF 2.1.0\n", Yellow, Reset)
 		fmt.Printf("  %s-oX <file>%s      Export results as XML\n", Yellow, Reset)
