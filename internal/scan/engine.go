@@ -360,9 +360,9 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 		prefix, color := "[~]", config.White
 		switch res.State {
 		case StateOpen:
-			prefix, color = "[+]", config.Red
+			prefix, color = "[+]", config.Green
 		case StateClosed:
-			prefix, color = "[-]", config.Gray
+			prefix, color = "[-]", config.Red
 		}
 		fmt.Printf("%s%s %s:%-5d ─ %-8s%s (time=%.2fms | reason=%s)\n",
 			config.Bold+color, prefix, res.IP, res.Port, res.State, config.Reset, res.LatencyMs, res.Reason)

@@ -10,16 +10,20 @@ import (
 	"strings"
 )
 
-// tcpcat's palette is red/white/black by design: Red for anything that
-// needs attention (warnings, alerts, active status), White for primary and
-// positive output (results, success), and Gray (bright black) for secondary
-// or de-emphasized detail (tips, timings, background info).
+// tcpcat's console palette is red/white/black by design: Red for anything
+// that needs attention (warnings, alerts, active status), White for primary
+// output, and Gray (bright black) for secondary/de-emphasized detail (tips,
+// timings, background info). Green and Yellow are kept only for the startup
+// banner and the OPEN/CLOSED port result, which stay their traditional
+// colors.
 const (
-	Reset = "\033[0m"
-	Bold  = "\033[1m"
-	Red   = "\033[91m"
-	White = "\033[97m"
-	Gray  = "\033[90m"
+	Reset  = "\033[0m"
+	Bold   = "\033[1m"
+	Red    = "\033[91m"
+	Green  = "\033[92m"
+	Yellow = "\033[93m"
+	White  = "\033[97m"
+	Gray   = "\033[90m"
 )
 
 const bannerTemplate = `
@@ -47,11 +51,11 @@ func RenderBanner(iface string) string {
 	return fmt.Sprintf(bannerTemplate,
 		White, Red, Reset, Red, Bold, Reset,
 		Red, Reset, Red, Bold, Reset,
-		Red, White, Bold, Reset, Red, Reset, Red, Bold, Reset,
+		Red, Green, Bold, Reset, Red, Reset, Red, Bold, Reset,
 		Red, Reset, Red, Bold, Reset,
-		Red, Reset, Red, Bold, Reset,
+		Yellow, Reset, Red, Bold, Reset,
 		White, Bold, Reset,
-		Red, White, Reset,
+		Yellow, White, Reset,
 	)
 }
 
