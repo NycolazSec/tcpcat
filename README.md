@@ -162,6 +162,29 @@ sudo tcpcat \
 
 `safe-production` sets timing `-T 2`, limits scan traffic to 300 packets per second, enables service detection, and disables evasion, fragmentation, decoys, smart bypass, and unlimited concurrency. It is intended for approved production assessments; it does not replace written authorization or a documented maintenance window.
 
+### Industrial / OT networks
+
+Programmable logic controllers, RTUs and other field devices can fault under ordinary scanning: a half-open SYN can wedge a small TCP stack, parallelism and high rates overrun tiny connection tables, and malformed or fragmented packets are exactly the kind of input that trips fragile firmware. The `ot` profile is built for these networks — deliberately gentle rather than stealthy:
+
+```bash
+sudo tcpcat --profile ot --scope-file scope.txt 10.10.0.0/24
+```
+
+`ot` uses a full TCP connect scan only (never a raw SYN, UDP, or eBPF/AF_XDP scan), one connection at a time (`-w 1`), a 5 packets-per-second rate, timing `-T 1`, and sends nothing crafted — no evasion, fragmentation, decoys, or smart bypass. Service detection stays on but only reads what a device offers; no active protocol query is sent to control-plane ports. When no ports are given, it scans a curated set of industrial control ports and names the protocol behind each open one:
+
+| Protocol | Port | Protocol | Port |
+|---|---|---|---|
+| S7comm (Siemens) | 102 | OPC UA | 4840 |
+| Modbus | 502 | OMRON FINS | 9600 |
+| Red Lion Crimson | 789 | DNP3 | 20000 |
+| Foundation Fieldbus | 1089/1091 | ProConOS | 20547 |
+| Niagara Fox (Tridium) | 1911/4911 | PROFINET | 34962/34964 |
+| PCWorx (Phoenix Contact) | 1962 | EtherNet/IP | 2222/44818 |
+| IEC 60870-5-104 | 2404 | BACnet | 47808 |
+| CODESYS | 2455 | | |
+
+Even the `ot` profile is not risk-free on the most sensitive equipment. Scan only within an authorized scope and maintenance window, and coordinate with the OT/process owner first.
+
 Use a valid earlier tcpcat JSON report as a baseline to identify newly exposed ports, service/version changes, and newly detected CVEs:
 
 ```bash
@@ -338,6 +361,7 @@ the port state.
 --resume <file>             Resume an interrupted scan: skip target/ports already recorded, append new ones
 --exclude <list>            Comma-separated hosts, CIDRs, or names to leave out of the scan
 --profile safe-production   Apply conservative rate, timing, and non-evasive scan settings
+--profile ot                Gentle profile for fragile industrial/OT networks (PLC/RTU/ICS)
 ```
 
 ### Report Semantics

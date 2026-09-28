@@ -10,6 +10,16 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Added
+- `--profile ot`: a gentle scan profile for fragile industrial/OT networks
+  (PLC, RTU, ICS). Forces a full TCP connect scan (never raw SYN, UDP or
+  eBPF), one connection at a time, 5 pps, timing `-T 1`, and disables every
+  crafted-packet feature. When no ports are given it scans a curated set of
+  industrial control ports and names the protocol behind each (Modbus,
+  S7comm, EtherNet/IP, DNP3, BACnet, OPC UA, PROFINET, IEC-104, and more).
+- Port-based naming for common OT/ICS protocols in service detection, so an
+  open control port is identified without sending it any active probe.
+
 ## [1.4.1] - 2026-09-28
 
 ### Added

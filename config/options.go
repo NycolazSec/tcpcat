@@ -331,7 +331,7 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.ScopeFile, "scope-file", "", "Authorized scope file (CIDRs, IPs, or domains)")
 	flag.StringVar(&opts.Resume, "resume", "", "Checkpoint file: skip target/ports already recorded there and append new results (re-run the same command to resume)")
 	flag.StringVar(&opts.ExcludeHost, "exclude", "", "Comma-separated hosts, CIDRs, or names to exclude from the scan")
-	flag.StringVar(&opts.Profile, "profile", "", "Scan profile: safe-production")
+	flag.StringVar(&opts.Profile, "profile", "", "Scan profile: safe-production | ot (industrial/OT)")
 	flag.StringVar(&opts.AuditLog, "audit-log", "", "Append one audit record per scan to a JSONL file")
 	flag.StringVar(&opts.BaselineFile, "baseline", "", "Prior JSON report used as a comparison baseline")
 	flag.StringVar(&opts.ChangesOutput, "changes", "", "Write scan changes to a JSON file (requires --baseline)")
@@ -439,6 +439,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--baseline <file>%s Compare with a prior JSON report\n", White, Reset)
 		fmt.Printf("  %s--changes <file>%s Write comparison results (requires --baseline)\n", White, Reset)
 		fmt.Printf("  %s--profile safe-production%s Conservative authorized-production profile\n", White, Reset)
+		fmt.Printf("  %s--profile ot%s   Gentle profile for fragile industrial/OT networks (PLC/RTU/ICS)\n", White, Reset)
 		fmt.Printf("  %s--update%s        Check the latest GitHub release and update this binary\n", White, Reset)
 		fmt.Printf("  %s-k, --insecure%s  Allow insecure SSL/TLS connections\n", White, Reset)
 		fmt.Printf("  %s--unsafe-no-limits%s Disable all concurrency limits (DANGEROUS)\n", White, Reset)
@@ -495,8 +496,8 @@ func ParseFlags() (*Options, error) {
 	if opts.ChangesOutput != "" && opts.BaselineFile == "" {
 		return nil, fmt.Errorf("changes requires a baseline file")
 	}
-	if opts.Profile != "" && opts.Profile != "safe-production" {
-		return nil, fmt.Errorf("profile must be safe-production")
+	if opts.Profile != "" && opts.Profile != "safe-production" && opts.Profile != "ot" {
+		return nil, fmt.Errorf("profile must be safe-production or ot")
 	}
 	if opts.UdpPing < 0 || opts.UdpPing > 65535 {
 		return nil, fmt.Errorf("UDP ping port must be 0 or between 1 and 65535")
@@ -585,21 +586,63 @@ func ParseFlags() (*Options, error) {
 	return opts, nil
 }
 
-func ApplyProfile(opts *Options) {
-	if opts.Profile != "safe-production" {
-		return
-	}
+// OTDefaultPorts are the well-known TCP ports of industrial / OT protocols,
+// used as the default port set for --profile ot when the operator gives no
+// -p / --top-ports. Each is a control-plane protocol whose device is often
+// a PLC or field controller that must not be stressed.
+var OTDefaultPorts = "102,502,789,1089,1091,1911,1962,2222,2404,2455,4840,4911,9600,20000,20547,34962,34964,44818,47808"
 
-	opts.Timing = 2
-	opts.RateLimit = 300
-	opts.UnsafeNoLimits = false
-	opts.EvasionMode = "off"
-	opts.Jitter = 0
-	opts.TTLJitter = false
-	opts.Fragment = false
-	opts.DecoyIPs = ""
-	opts.SmartBypass = false
-	opts.ServiceDetect = true
+func ApplyProfile(opts *Options) {
+	switch opts.Profile {
+	case "safe-production":
+		opts.Timing = 2
+		opts.RateLimit = 300
+		opts.UnsafeNoLimits = false
+		opts.EvasionMode = "off"
+		opts.Jitter = 0
+		opts.TTLJitter = false
+		opts.Fragment = false
+		opts.DecoyIPs = ""
+		opts.SmartBypass = false
+		opts.ServiceDetect = true
+
+	case "ot":
+		// Industrial control gear (PLCs, RTUs, field controllers) can fault
+		// on ordinary scanning: a half-open SYN can wedge a small TCP stack,
+		// parallelism and high rates overrun tiny connection tables, and a
+		// malformed/fragmented/decoy packet is exactly the kind of input
+		// that trips fragile firmware. This profile is deliberately gentle,
+		// not stealthy: full TCP connect() with a clean close, one target at
+		// a time, a handful of probes per second, and nothing crafted.
+		opts.ConnectScan = true
+		opts.SynScan = false
+		opts.UdpScan = false
+		opts.AckScan = false
+		opts.WindowScan = false
+		opts.NullScan = false
+		opts.FinScan = false
+		opts.XmasScan = false
+		opts.UseXDP = false
+		opts.MaxWorkers = 1
+		opts.BatchSize = 1
+		opts.Timing = 1
+		opts.RateLimit = 5
+		opts.MaxRetries = 1
+		opts.UnsafeNoLimits = false
+		opts.EvasionMode = "off"
+		opts.Jitter = 0
+		opts.TTLJitter = false
+		opts.Fragment = false
+		opts.DecoyIPs = ""
+		opts.SmartBypass = false
+		opts.DeepInspect = false
+		opts.ServiceDetect = true
+		// Only steer the port set when the operator named none, so an
+		// explicit -p / --top-ports still wins.
+		if strings.TrimSpace(opts.Ports) == "" && opts.TopPorts == 0 {
+			opts.Ports = OTDefaultPorts
+		}
+	}
 }
 
 func ValidateScanCompatibility(opts *Options) error {

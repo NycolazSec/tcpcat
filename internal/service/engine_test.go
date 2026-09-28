@@ -822,3 +822,38 @@ func BenchmarkDetectServiceParallel(b *testing.B) {
 		}
 	})
 }
+
+func TestResolveDefaultPortNameOT(t *testing.T) {
+	// OT ports must be named by port alone (no active probe is ever sent to
+	// industrial gear). One representative port per protocol family.
+	cases := map[int]string{
+		102:   "s7comm",
+		502:   "modbus",
+		789:   "crimson",
+		1089:  "foundation-fieldbus",
+		1091:  "foundation-fieldbus",
+		1911:  "niagara-fox",
+		4911:  "niagara-fox",
+		1962:  "pcworx",
+		2222:  "ethernet-ip",
+		2404:  "iec-104",
+		2455:  "codesys",
+		4840:  "opcua",
+		9600:  "omron-fins",
+		20000: "dnp3",
+		20547: "proconos",
+		34962: "profinet",
+		34964: "profinet",
+		44818: "ethernet-ip",
+		47808: "bacnet",
+	}
+	for port, want := range cases {
+		if got := resolveDefaultPortName(port); got != want {
+			t.Errorf("resolveDefaultPortName(%d) = %q, want %q", port, got, want)
+		}
+	}
+	// A non-OT, unknown port must still fall through to "unknown".
+	if got := resolveDefaultPortName(12345); got != "unknown" {
+		t.Errorf("resolveDefaultPortName(12345) = %q, want %q", got, "unknown")
+	}
+}

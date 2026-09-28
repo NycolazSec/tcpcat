@@ -448,6 +448,44 @@ func resolveDefaultPortName(port int) string {
 		return "memcached"
 	case 27017:
 		return "mongodb"
+
+	// Industrial / OT control-plane protocols. These are named by port
+	// alone (no active protocol probe is sent -- see --profile ot): the
+	// device on the other end is often a PLC or field controller, and the
+	// safe signal is "an OT service is listening here", not a crafted query.
+	case 102:
+		return "s7comm" // Siemens S7 / ISO-TSAP
+	case 502:
+		return "modbus"
+	case 789:
+		return "crimson" // Red Lion Crimson
+	case 1089, 1091:
+		return "foundation-fieldbus"
+	case 1911, 4911:
+		return "niagara-fox" // Tridium Niagara Fox
+	case 1962:
+		return "pcworx" // Phoenix Contact PCWorx
+	case 2222:
+		return "ethernet-ip" // EtherNet/IP I/O
+	case 2404:
+		return "iec-104" // IEC 60870-5-104
+	case 2455:
+		return "codesys"
+	case 4840:
+		return "opcua" // OPC UA
+	case 9600:
+		return "omron-fins" // OMRON FINS
+	case 20000:
+		return "dnp3"
+	case 20547:
+		return "proconos"
+	case 34962, 34964:
+		return "profinet"
+	case 44818:
+		return "ethernet-ip" // EtherNet/IP explicit messaging
+	case 47808:
+		return "bacnet"
+
 	default:
 		return "unknown"
 	}

@@ -79,6 +79,11 @@ func main() {
 			config.Gray, opts.RateLimit, opts.Timing, config.Reset)
 	}
 
+	if opts.Profile == "ot" {
+		fmt.Printf("%s[*] Profile: ot (industrial) active -- TCP connect only, 1 worker, %d pps, no evasion/fragmentation/decoys. Gentle on fragile PLC/RTU stacks.%s\n",
+			config.Gray, opts.RateLimit, config.Reset)
+	}
+
 	if opts.Update {
 		if err := update.Run(os.Args[0], "NycolazSec", "tcpcat"); err != nil {
 			fmt.Printf("%s[!] Update failed: %v%s\n", config.Red, err, config.Reset)
