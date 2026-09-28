@@ -1,5 +1,10 @@
 # 🏆 TCPCAT vs CONCURRENTS - COMPARISON MATRIX
 
+> **Note (September 2026):** the "23.8×" figure cited in this document comes from a 1–1024-port
+> `-sT` benchmark whose uncertainty (±68×) exceeds the result itself. It is superseded by
+> [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md): **2.62× faster than Nmap** and **4.69× faster than naabu**
+> on a full 65,535-port SYN scan of 2 hosts.
+
 ## Interactive Feature Comparison
 
 ### Performance Comparison

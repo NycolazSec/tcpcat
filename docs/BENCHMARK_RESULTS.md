@@ -1,5 +1,43 @@
 # 🏆 tcpcat Performance Benchmarks
 
+## Current: full port range vs. Nmap and naabu (September 2026)
+
+### Benchmark Configuration
+```bash
+hyperfine --warmup 0 --runs 3 --export-markdown bench_65k.md \
+  -n "tcpcat-ebpf" "./tcpcat -i $REAL_IF -p 1-65535 -sS --ebpf --open -T 5 --rate 25000 10.200.0.20 10.200.0.21" \
+  -n "naabu"       "naabu -interface $REAL_IF -p 1-65535 -rate 25000 -host 10.200.0.20,10.200.0.21 -silent" \
+  -n "nmap"        "nmap -e $REAL_IF -p 1-65535 -sS -n -T4 --min-rate 25000 --max-retries 1 10.200.0.20 10.200.0.21"
+```
+
+SYN scan of all 65,535 ports on 2 hosts, same interface and same 25,000 packets/s target rate for all three tools, 3 runs each.
+
+### Results
+
+| Tool | Mean ± σ | Range (min … max) | User CPU | System CPU |
+|------|----------|-------------------|----------|------------|
+| **tcpcat (eBPF/XDP)** | **4.466 s ± 0.744 s** | 3.623 s … 5.028 s | 2.493 s | 5.658 s |
+| nmap | 11.723 s ± 0.503 s | 11.150 s … 12.094 s | 5.928 s | 5.504 s |
+| naabu | 20.945 s ± 0.181 s | 20.739 s … 21.077 s | 21.497 s | 31.335 s |
+
+```
+tcpcat-ebpf ran
+    2.62 ± 0.45 times faster than nmap
+    4.69 ± 0.78 times faster than naabu
+```
+
+---
+
+## Historical: 1–1024 ports, TCP connect, single host (superseded)
+
+> **Superseded by the section above.** This earlier run measured a `-sT`
+> connect scan of ports 1–1024 against a single host. Its tcpcat timings had
+> a standard deviation (223.6 ms) nearly three times their mean (79.9 ms),
+> which is why hyperfine reports the ratio as **23.82 ± 68.13×**: the
+> uncertainty is larger than the result itself, so the "23.8×" figure below
+> should not be quoted as tcpcat's speedup. It is kept here for history only.
+
+
 ## Real-World Performance: tcpcat vs Nmap
 
 ### Benchmark Configuration

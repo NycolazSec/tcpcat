@@ -368,12 +368,7 @@ Packet variation, fragmentation, and decoy traffic can help an authorized team a
 | **aggressive** | Extensive variation | +30% | Lab validation with an approved test plan |
 | **stealthy** | High-variation profile | +50% | Controlled monitoring-validation scenarios |
 
-**Performance vs. Nmap:**
-- Baseline tcpcat: **80ms** for 1-1024 port enumeration
-- Nmap (SYN): **1.9-2.3 seconds** (same workload)
-- **Speedup: 23.8×** — Even with aggressive evasion, tcpcat outpaces traditional tools
-
-**Full port range vs. Nmap and naabu:**
+**Performance vs. Nmap and naabu (full port range):**
 
 ```
 hyperfine --warmup 0 --runs 3 \
