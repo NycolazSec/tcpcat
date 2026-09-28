@@ -35,7 +35,7 @@ nfpms:
   - id: packages
     package_name: tcpcat
     vendor: NycolazSec
-    homepage: https://tcpcat.nycolazsec.com
+    homepage: https://tcpcat.io
     maintainer: NycolazSec <contact@nycolazsec.com>
     description: High-Performance Network Reconnaissance & Vulnerability Intelligence Engine
     license: Apache-2.0

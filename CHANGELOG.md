@@ -10,6 +10,20 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-28
+
+### Added
+- Debian packaging (`debian/`) following Kali Linux's conventions for Go
+  tools, including a `tcpcat(1)` man page, so the tool can be packaged for
+  Debian-based distributions.
+
+### Changed
+- The Go module path is now `github.com/NycolazSec/tcpcat` (was `tcpcat`):
+  `go install github.com/NycolazSec/tcpcat/cmd/tcpcat@latest` now works, and
+  distribution packaging can rely on the standard import path.
+- Release packages (.deb/.rpm) now list https://tcpcat.io as the project
+  homepage.
+
 ## [1.4.0] - 2026-09-26
 
 ### Added
@@ -643,7 +657,9 @@ Full diffs for every release are available via GitHub's
   visibility-testing controls, and a WASM-based scripting engine for custom
   detectors and exploit modules.
 
-[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/NycolazSec/tcpcat/compare/v1.4.0...v1.4.1
+[1.4.0]: https://github.com/NycolazSec/tcpcat/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/NycolazSec/tcpcat/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/NycolazSec/tcpcat/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/NycolazSec/tcpcat/compare/v1.1.0-beta.2...v1.1.0
