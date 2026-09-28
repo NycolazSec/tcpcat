@@ -29,6 +29,8 @@ archives:
     files:
       - README.md
       - LICENSE
+      - NOTICE
+      - NOTICE.md
       - docs/*
 
 nfpms:
