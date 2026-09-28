@@ -1,0 +1,6 @@
+Version: 5
+
+Template: Github
+Owner: NycolazSec
+Project: tcpcat
+Uversionmangle: s/(\d)[_\.\-\+]?(RC|rc|pre|dev|beta|alpha)[.]?(\d*)$/$1~$2$3/

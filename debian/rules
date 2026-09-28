@@ -1,0 +1,37 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE = 1
+
+# Same approach as Kali's other Go tools (e.g. naabu): Go modules are
+# fetched at build time into a cache under debian/ rather than packaged one
+# by one. GOTOOLCHAIN=local keeps the go command from downloading a newer
+# toolchain than the golang-any it was given.
+export GOCACHE=$(CURDIR)/debian/.gocache
+export GOPATH=$(CURDIR)/debian/.gopath
+export GOTOOLCHAIN=local
+export GOFLAGS=-trimpath -buildvcs=false
+
+include /usr/share/dpkg/pkg-info.mk
+
+%:
+	dh $@ --buildsystem=golang
+
+override_dh_auto_build:
+	go build -ldflags "-X main.version=$(DEB_VERSION_UPSTREAM)" -o tcpcat ./cmd/tcpcat
+
+override_dh_auto_install:
+	dh_auto_install -- --no-source
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	go test ./...
+endif
+
+override_dh_dwz:
+	# dwz can't process the compressed DWARF sections Go emits.
+
+override_dh_auto_clean:
+	dh_auto_clean
+	# The Go module cache is written read-only; make it removable first.
+	[ ! -d debian/.gopath ] || chmod -R u+w debian/.gopath
+	rm -rf debian/.gocache debian/.gopath tcpcat

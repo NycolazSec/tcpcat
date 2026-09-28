@@ -1,0 +1,120 @@
+.TH TCPCAT 1 "September 2026" "tcpcat" "Network reconnaissance"
+.SH NAME
+tcpcat \- fast network scanner with an eBPF/AF_XDP engine and CVE correlation
+.SH SYNOPSIS
+.B tcpcat
+.RI [ options ]
+.I target
+.RI [ target ... ]
+.SH DESCRIPTION
+.B tcpcat
+is a network reconnaissance engine written in Go, intended for authorized
+security assessments and network administration. It performs TCP and UDP
+port scanning with host discovery, service and version detection, OS
+fingerprinting, and CVE correlation, and writes machine-readable reports.
+.PP
+Targets may be host names, IP addresses or CIDR ranges. Raw-socket scans
+require root privileges or the
+.B CAP_NET_RAW
+capability.
+.PP
+On Linux, the optional
+.B \-\-ebpf
+engine attaches an XDP program at run time and redirects only the replies to
+tcpcat's own probes into AF_XDP sockets; all other traffic on the interface
+continues through the normal kernel network stack.
+.SH OPTIONS
+Only the most common options are listed here. Run
+.B tcpcat \-\-help
+for the complete, authoritative list.
+.SS Target and discovery
+.TP
+.BI \-i " interface"
+Network interface to use, bypassing auto-detection.
+.TP
+.BI \-\-scope\-file " file"
+Restrict scanning to the authorized CIDRs, IPs or domains listed in
+.IR file .
+.TP
+.B \-Pn
+Skip host discovery and treat every target as online.
+.SS Port and scan type
+.TP
+.BI \-p " ports"
+Ports to scan, for example
+.B 80,443
+or
+.BR 1\-1024 .
+.TP
+.BI \-\-top\-ports " n"
+Scan the
+.I n
+most common ports.
+.TP
+.B \-sS
+TCP SYN scan.
+.TP
+.B \-sT
+TCP connect scan.
+.TP
+.B \-sU
+UDP scan.
+.TP
+.B \-\-ebpf
+Enable the experimental AF_XDP/eBPF engine (Linux only).
+.SS Detection
+.TP
+.B \-sV
+Service and version detection.
+.TP
+.B \-O
+Operating-system detection.
+.SS Timing and output
+.TP
+.BI \-T " 0\-5"
+Timing template, from slowest and stealthiest to fastest.
+.TP
+.BI \-\-rate " pps"
+Cap on packets per second.
+.TP
+.BI \-j " file"
+Write results to
+.I file
+as JSON.
+.TP
+.BI \-\-sarif " file"
+Write findings to
+.I file
+as SARIF 2.1.0.
+.TP
+.BI \-\-audit\-log " file"
+Append an audit record, one JSON object per line, to
+.IR file .
+.TP
+.BI \-\-baseline " file"
+Compare the current scan against a prior JSON report.
+.TP
+.B \-\-version
+Print version information and exit.
+.SH EXAMPLES
+.TP
+Scan the 1000 most common ports across a subnet:
+.B sudo tcpcat \-sS \-\-top\-ports 1000 192.168.1.0/24
+.TP
+Detect services and export JSON and SARIF for a single host:
+.B sudo tcpcat \-sS \-sV \-O \-p 22,80,443 10.0.0.5 \-j report.json \-\-sarif report.sarif
+.TP
+Run a conservative, scope-limited assessment with an audit log:
+.B sudo tcpcat \-\-profile safe\-production \-\-scope\-file scope.txt \-Pn \-sT \-sV \-p 443 \-\-audit\-log audit.jsonl 10.0.0.5
+.SH SECURITY
+tcpcat is intended solely for systems you own or are explicitly authorized to
+test. Unauthorized scanning may be illegal. See
+.B /usr/share/doc/tcpcat/SECURITY.md
+for the vulnerability-disclosure process.
+.SH SEE ALSO
+.BR nmap (1),
+.BR masscan (1)
+.PP
+Full documentation and source: https://tcpcat.io
+.SH AUTHOR
+Nicolas Blondelle (NycolazSec) <contact@nycolazsec.com>

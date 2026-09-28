@@ -1,0 +1,5 @@
+tcpcat (1.4.1-0kali1) kali-dev; urgency=medium
+
+  * Initial release.
+
+ -- Nicolas Blondelle <contact@nycolazsec.com>  Mon, 28 Sep 2026 00:33:06 +0200

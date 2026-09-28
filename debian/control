@@ -1,0 +1,35 @@
+Source: tcpcat
+Section: net
+Maintainer: Nicolas Blondelle <contact@nycolazsec.com>
+Build-Depends: debhelper-compat (= 14),
+               ca-certificates,
+               dh-golang,
+               golang-any (>= 2:1.26~),
+Standards-Version: 4.7.4
+Homepage: https://tcpcat.io
+Vcs-Browser: https://github.com/NycolazSec/tcpcat
+Vcs-Git: https://github.com/NycolazSec/tcpcat.git
+XS-Go-Import-Path: github.com/NycolazSec/tcpcat
+
+Package: tcpcat
+Architecture: amd64 arm64
+Depends: iputils-ping,
+         ${misc:Depends},
+         ${shlibs:Depends},
+Static-Built-Using: ${misc:Static-Built-Using}
+Description: fast network scanner with an eBPF/AF_XDP engine and CVE correlation
+ tcpcat is a network reconnaissance engine written in Go, intended for
+ authorized security assessments and network administration.
+ .
+ Main features are:
+   * TCP SYN/connect and UDP port scanning, with ARP or ping-based host
+     discovery
+   * service and version detection, including TLS details, and OS
+     fingerprinting
+   * CVE correlation against an embedded offline database, Google OSV or
+     the Vulners API
+   * JSON, SARIF, JSONL audit log and baseline-comparison reports
+   * scope file and a conservative "safe-production" profile for approved
+     engagements
+   * optional eBPF/AF_XDP engine on Linux (--ebpf) that only redirects the
+     replies to its own probes, leaving all other traffic to the kernel
