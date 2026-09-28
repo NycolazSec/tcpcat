@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"tcpcat/config"
+	"github.com/NycolazSec/tcpcat/config"
 )
 
 func TestProbesForPortKnownAndUnknown(t *testing.T) {

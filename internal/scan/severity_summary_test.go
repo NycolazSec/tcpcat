@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"tcpcat/internal/vuln"
+	"github.com/NycolazSec/tcpcat/internal/vuln"
 )
 
 func TestSummarizeSeverity(t *testing.T) {

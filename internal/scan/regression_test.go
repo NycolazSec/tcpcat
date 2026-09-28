@@ -1,7 +1,7 @@
 package scan
 
 import (
-	"tcpcat/config"
+	"github.com/NycolazSec/tcpcat/config"
 	"testing"
 )
 

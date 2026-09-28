@@ -1,4 +1,4 @@
-module tcpcat
+module github.com/NycolazSec/tcpcat
 
 go 1.26.0
 

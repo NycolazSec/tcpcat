@@ -3,7 +3,7 @@ package scan
 import (
 	"time"
 
-	"tcpcat/config"
+	"github.com/NycolazSec/tcpcat/config"
 )
 
 // probeAttempts returns how many times a stateless probe (SYN/ACK/Window/

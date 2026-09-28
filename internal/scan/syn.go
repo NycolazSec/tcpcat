@@ -5,9 +5,9 @@ import (
 	"net"
 	"time"
 
-	"tcpcat/config"
-	"tcpcat/internal/evasion"
-	"tcpcat/internal/osdetect"
+	"github.com/NycolazSec/tcpcat/config"
+	"github.com/NycolazSec/tcpcat/internal/evasion"
+	"github.com/NycolazSec/tcpcat/internal/osdetect"
 )
 
 func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator, limiter *AdaptiveRateLimiter) TargetResult {

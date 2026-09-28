@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"tcpcat/internal/scan"
+	"github.com/NycolazSec/tcpcat/internal/scan"
 )
 
 func ExportGrepable(filePath string, target string, results []scan.TargetResult, duration time.Duration) error {

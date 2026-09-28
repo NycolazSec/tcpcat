@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"tcpcat/config"
+	"github.com/NycolazSec/tcpcat/config"
 )
 
 func getZombieIPID(zombieIP string, zombiePort int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, limiter *AdaptiveRateLimiter) (uint16, error) {

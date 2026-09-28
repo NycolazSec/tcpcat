@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"tcpcat/config"
+	"github.com/NycolazSec/tcpcat/config"
 )
 
 func TestBatchProcessing(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"tcpcat/config"
+	"github.com/NycolazSec/tcpcat/config"
 )
 
 func ScanUDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator, limiter *AdaptiveRateLimiter) TargetResult {

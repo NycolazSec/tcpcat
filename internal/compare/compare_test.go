@@ -3,8 +3,8 @@ package compare
 import (
 	"testing"
 
-	"tcpcat/internal/scan"
-	"tcpcat/internal/vuln"
+	"github.com/NycolazSec/tcpcat/internal/scan"
+	"github.com/NycolazSec/tcpcat/internal/vuln"
 )
 
 func TestCompareReportsNewExposureChanges(t *testing.T) {

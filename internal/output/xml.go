@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"tcpcat/internal/scan"
+	"github.com/NycolazSec/tcpcat/internal/scan"
 )
 
 type XMLReport struct {

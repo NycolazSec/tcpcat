@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"tcpcat/config"
+	"github.com/NycolazSec/tcpcat/config"
 )
 
 func TestTargetResultSerializesVulnerabilityAssessment(t *testing.T) {

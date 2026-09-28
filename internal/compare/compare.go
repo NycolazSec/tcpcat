@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"tcpcat/internal/scan"
+	"github.com/NycolazSec/tcpcat/internal/scan"
 )
 
 type baselineReport struct {

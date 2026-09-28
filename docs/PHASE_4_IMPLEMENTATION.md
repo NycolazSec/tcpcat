@@ -233,9 +233,9 @@ package main
 
 import (
     "net"
-    "tcpcat/internal/scan"
-    "tcpcat/internal/evasion"
-    "tcpcat/config"
+    "github.com/NycolazSec/tcpcat/internal/scan"
+    "github.com/NycolazSec/tcpcat/internal/evasion"
+    "github.com/NycolazSec/tcpcat/config"
 )
 
 func main() {

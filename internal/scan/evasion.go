@@ -4,7 +4,7 @@ import (
 	"net"
 	"time"
 
-	"tcpcat/internal/evasion"
+	"github.com/NycolazSec/tcpcat/internal/evasion"
 )
 
 type EvasionOptions struct {

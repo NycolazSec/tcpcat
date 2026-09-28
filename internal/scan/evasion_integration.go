@@ -4,8 +4,8 @@ import (
 	"net"
 	"strings"
 
-	"tcpcat/config"
-	"tcpcat/internal/evasion"
+	"github.com/NycolazSec/tcpcat/config"
+	"github.com/NycolazSec/tcpcat/internal/evasion"
 )
 
 func BuildEvasionOptions(opts *config.Options) EvasionOptions {

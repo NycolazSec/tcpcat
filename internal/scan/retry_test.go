@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"tcpcat/config"
+	"github.com/NycolazSec/tcpcat/config"
 )
 
 func TestProbeAttempts(t *testing.T) {

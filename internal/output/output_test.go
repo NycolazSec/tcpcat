@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"tcpcat/internal/scan"
-	"tcpcat/internal/service"
-	"tcpcat/internal/vuln"
+	"github.com/NycolazSec/tcpcat/internal/scan"
+	"github.com/NycolazSec/tcpcat/internal/service"
+	"github.com/NycolazSec/tcpcat/internal/vuln"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )

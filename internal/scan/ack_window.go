@@ -5,8 +5,8 @@ import (
 	"net"
 	"time"
 
-	"tcpcat/config"
-	"tcpcat/internal/evasion"
+	"github.com/NycolazSec/tcpcat/config"
+	"github.com/NycolazSec/tcpcat/internal/evasion"
 )
 
 func ScanAckPort(targetIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP, rtt *RTTEstimator, limiter *AdaptiveRateLimiter) TargetResult {

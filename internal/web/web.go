@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"tcpcat/config"
-	"tcpcat/internal/ports"
-	"tcpcat/internal/scan"
-	"tcpcat/internal/service"
-	"tcpcat/internal/target"
-	"tcpcat/internal/vuln"
+	"github.com/NycolazSec/tcpcat/config"
+	"github.com/NycolazSec/tcpcat/internal/ports"
+	"github.com/NycolazSec/tcpcat/internal/scan"
+	"github.com/NycolazSec/tcpcat/internal/service"
+	"github.com/NycolazSec/tcpcat/internal/target"
+	"github.com/NycolazSec/tcpcat/internal/vuln"
 )
 
 //go:embed index.html

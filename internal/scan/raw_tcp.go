@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"tcpcat/config"
-	"tcpcat/internal/netiface"
+	"github.com/NycolazSec/tcpcat/config"
+	"github.com/NycolazSec/tcpcat/internal/netiface"
 )
 
 type rawTCPPacket struct {

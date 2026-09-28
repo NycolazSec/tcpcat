@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"tcpcat/config"
+	"github.com/NycolazSec/tcpcat/config"
 )
 
 // RTTEstimator maintains a smoothed round-trip time and its variance using

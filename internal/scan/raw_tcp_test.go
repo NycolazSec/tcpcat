@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"tcpcat/config"
+	"github.com/NycolazSec/tcpcat/config"
 )
 
 // TestRawRxKeyMatchesSentAndReceivedView checks that the key a scanner

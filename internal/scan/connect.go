@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"tcpcat/config"
-	"tcpcat/internal/connpool"
-	"tcpcat/internal/evasion"
+	"github.com/NycolazSec/tcpcat/config"
+	"github.com/NycolazSec/tcpcat/internal/connpool"
+	"github.com/NycolazSec/tcpcat/internal/evasion"
 )
 
 func ScanConnectPort(hostIP string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, relayIP net.IP) TargetResult {

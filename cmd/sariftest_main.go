@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"tcpcat/internal/output"
-	"tcpcat/internal/scan"
+	"github.com/NycolazSec/tcpcat/internal/output"
+	"github.com/NycolazSec/tcpcat/internal/scan"
 )
 
 func main() {

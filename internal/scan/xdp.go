@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"tcpcat/config"
-	"tcpcat/internal/evasion"
-	"tcpcat/internal/netiface"
-	"tcpcat/internal/osdetect"
+	"github.com/NycolazSec/tcpcat/config"
+	"github.com/NycolazSec/tcpcat/internal/evasion"
+	"github.com/NycolazSec/tcpcat/internal/netiface"
+	"github.com/NycolazSec/tcpcat/internal/osdetect"
 
 	"github.com/asavie/xdp"
 	"github.com/cilium/ebpf"

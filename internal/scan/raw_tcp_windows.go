@@ -8,7 +8,7 @@ import (
 	"net"
 	"time"
 
-	"tcpcat/config"
+	"github.com/NycolazSec/tcpcat/config"
 )
 
 type rawTCPPacket struct {

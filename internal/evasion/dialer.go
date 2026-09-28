@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"tcpcat/internal/netiface"
+	"github.com/NycolazSec/tcpcat/internal/netiface"
 )
 
 type CustomDialer struct {

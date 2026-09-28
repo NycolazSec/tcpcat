@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"tcpcat/config"
-	"tcpcat/internal/connpool"
-	"tcpcat/internal/evasion"
-	"tcpcat/internal/scripting"
+	"github.com/NycolazSec/tcpcat/config"
+	"github.com/NycolazSec/tcpcat/internal/connpool"
+	"github.com/NycolazSec/tcpcat/internal/evasion"
+	"github.com/NycolazSec/tcpcat/internal/scripting"
 )
 
 // usesRawTxPath reports whether this scan emits its probes as raw frames

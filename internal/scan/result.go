@@ -3,8 +3,8 @@ package scan
 import (
 	"time"
 
-	"tcpcat/internal/service"
-	"tcpcat/internal/vuln"
+	"github.com/NycolazSec/tcpcat/internal/service"
+	"github.com/NycolazSec/tcpcat/internal/vuln"
 )
 
 const (

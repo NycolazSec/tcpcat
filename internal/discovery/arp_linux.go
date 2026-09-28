@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"tcpcat/internal/netiface"
+	"github.com/NycolazSec/tcpcat/internal/netiface"
 )
 
 var broadcastMAC = [6]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}

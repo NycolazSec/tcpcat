@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NycolazSec/tcpcat/config"
 	"net"
-	"tcpcat/config"
 )
 
 var GlobalXsk any

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"tcpcat/config"
-	"tcpcat/internal/scan"
+	"github.com/NycolazSec/tcpcat/config"
+	"github.com/NycolazSec/tcpcat/internal/scan"
 )
 
 func PrintProfessionalHeader() {

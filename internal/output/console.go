@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"tcpcat/internal/scan"
-	"tcpcat/internal/service"
+	"github.com/NycolazSec/tcpcat/internal/scan"
+	"github.com/NycolazSec/tcpcat/internal/service"
 )
 
 type JSONReport struct {

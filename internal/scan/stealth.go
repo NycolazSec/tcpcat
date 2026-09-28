@@ -5,8 +5,8 @@ import (
 	"net"
 	"time"
 
-	"tcpcat/config"
-	"tcpcat/internal/evasion"
+	"github.com/NycolazSec/tcpcat/config"
+	"github.com/NycolazSec/tcpcat/internal/evasion"
 )
 
 type StealthType int

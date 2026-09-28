@@ -1,6 +1,6 @@
 package output
 
-import "tcpcat/internal/scan"
+import "github.com/NycolazSec/tcpcat/internal/scan"
 
 // hostResults is one scanned host and everything found on it.
 type hostResults struct {

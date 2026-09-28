@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"tcpcat/internal/scan"
+	"github.com/NycolazSec/tcpcat/internal/scan"
 )
 
 type sarifReport struct {
