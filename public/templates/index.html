@@ -1,16 +1,9 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>tcpcat Technical Note 1337 — Network Assessment</title>
-<meta name="description" content="tcpcat — open-source network assessment with eBPF/AF_XDP acceleration and IDS/IPS visibility testing.">
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='nav.css') }}">
+{% extends "base.html" %}
+{% set page_lang = 'fr' %}
+{% block title %}tcpcat Technical Note 1337 — Network Assessment{% endblock %}
+{% block description %}tcpcat — open-source network assessment with eBPF/AF_XDP acceleration and IDS/IPS visibility testing.{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='figures.css') }}">
 <style>
   .doc-rule{border-top:1px solid var(--rule);}
   .doc-rule-strong{border-top:1.5px solid var(--ink);}
@@ -28,35 +21,26 @@
   table.doctable th, table.doctable td{border-bottom:1px solid var(--rule);}
   table.doctable thead th{border-bottom:1.5px solid var(--ink);}
   .field-tag{border:1px solid var(--rule-strong); color:var(--ink-soft);}
-  .bar-track{background:var(--paper-flat); border:1px solid var(--rule);}
-  .no-scrollbar::-webkit-scrollbar{display:none;}
-  .no-scrollbar{-ms-overflow-style:none; scrollbar-width:none;}
   .colophon-box{max-width:100%; min-width:0;}
 </style>
-</head>
-<body class="paper-grid antialiased leading-relaxed">
+{% endblock %}
+{% block body_class %}paper-grid antialiased leading-relaxed{% endblock %}
+{% block before_header %}
 
   <!-- running status line -->
   <div class="hidden sm:flex items-center justify-center gap-6 text-[10px] tracking-widest uppercase text-[var(--ink-faint)] border-b border-[var(--rule)] py-1 bg-[var(--paper-flat)] whitespace-nowrap">
-    <span data-i18n="status-1">Moteur eBPF AF_XDP : actif</span>
+    <span data-i18n="status-1">Moteur eBPF/AF_XDP : expérimental (Linux)</span>
     <span>·</span>
-    <span data-i18n="status-2">Débit crête ≈ 1 000 000 pps/cœur</span>
+    <span data-i18n="status-2">65&nbsp;535 ports × 2 hôtes : 4,5 s (§5)</span>
     <span>·</span>
     <span data-i18n="status-3">Conformité RFC 793 — usage autorisé uniquement</span>
   </div>
 
   <!-- doc nav -->
-  <header class="sticky top-0 z-40 bg-[var(--paper)] border-b border-[var(--rule-strong)]">
-    <div class="max-w-5xl mx-auto px-5 sm:px-8 py-2 sm:h-14 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
-      <a href="#top" class="font-display font-bold text-lg tracking-tight flex items-baseline gap-2 shrink-0">
-        tcpcat<span class="text-[var(--stamp)]">.</span>
-        <span class="hidden sm:inline text-[10px] font-mono font-normal tracking-widest text-[var(--ink-faint)] uppercase">Technical&nbsp;Note&nbsp;1337</span>
-      </a>
-      <div class="lang-switch flex shrink-0 order-2 sm:order-3" role="group" aria-label="Langue / Language">
-        <button type="button" id="btn-fr" aria-pressed="true">FR</button>
-        <button type="button" id="btn-en" aria-pressed="false">EN</button>
-      </div>
-      <nav class="order-3 sm:order-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 flex flex-wrap sm:flex-nowrap gap-3 text-[11px] uppercase tracking-wide sm:overflow-x-auto no-scrollbar">
+{% endblock %}
+{% block brand_href %}#top{% endblock %}
+{% block brand_tag %}<span class="hidden sm:inline text-[10px] font-mono font-normal tracking-widest text-[var(--ink-faint)] uppercase">Technical&nbsp;Note&nbsp;1337</span>{% endblock %}
+{% block nav_sections %}
         <a href="#resume" data-i18n="nav-1" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Résumé</a>
         <a href="#capacites" data-i18n="nav-2" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Capacités</a>
         <a href="#evasion" data-i18n="nav-3" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Visibilité</a>
@@ -64,15 +48,8 @@
         <a href="#audit" data-i18n="nav-audit" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Audit</a>
         <a href="#cli" data-i18n="nav-6" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">CLI</a>
         <span class="hidden sm:inline text-[var(--rule-strong)]">|</span>
-        <a href="{{ url_for('internals.internals') }}" data-i18n="nav-internals" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Internals</a>
-        <a href="{{ url_for('release.release') }}" data-i18n="nav-release" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Releases</a>
-        <a href="{{ url_for('notice.notice') }}" data-i18n="nav-notice" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Notice</a>
-        <a href="https://github.com/NycolazSec/tcpcat" target="_blank" class="nav-external hidden sm:inline text-[var(--wire)] transition-colors duration-200 whitespace-nowrap">GitHub ↗</a>
-        <a href="https://discord.gg/7entMMCuX7" target="_blank" class="nav-external hidden sm:inline text-[var(--wire)] transition-colors duration-200 whitespace-nowrap">Discord ↗</a>
-      </nav>
-    </div>
-  </header>
-
+{% endblock %}
+{% block body %}
   <main id="top" class="max-w-3xl mx-auto px-5 sm:px-8 py-12">
 
     <!-- document header block -->
@@ -88,7 +65,7 @@
     <h1 data-i18n="title" class="font-display font-bold text-[26px] sm:text-[34px] leading-tight text-center mb-3">
       tcpcat — reconnaissance réseau hautes performances<br class="hidden sm:block"> et test de visibilité IDS/IPS
     </h1>
-    <p data-i18n="subtitle" class="text-center text-[var(--ink-faint)] text-xs uppercase tracking-widest mb-8">Note technique communautaire — v1.0</p>
+    <p data-i18n="subtitle" class="text-center text-[var(--ink-faint)] text-xs uppercase tracking-widest mb-8">Note technique communautaire — v1.4</p>
     <div class="flex flex-wrap justify-center gap-2 mb-4 text-[10px] uppercase tracking-wide">
       <a class="field-tag px-2 py-1 hover:text-[var(--stamp)]" href="https://github.com/NycolazSec/tcpcat/actions" target="_blank" rel="noreferrer">CI: Go test -race</a>
       <span class="field-tag px-2 py-1">Go 1.26</span>
@@ -167,13 +144,13 @@
       </div>
 
       <p data-i18n="sec1-body" class="text-sm text-[var(--ink-soft)] mb-6">
-        tcpcat expose l'intégralité de la pile TCP/IP au niveau du pilote réseau. Plutôt que de passer par les sockets BSD, chaque paquet est construit, envoyé et lu directement en espace noyau. Le tableau ci-dessous résume les valeurs mesurées en environnement de test.
+        tcpcat construit lui-même chaque paquet de sonde en espace utilisateur. En mode <code>--ebpf</code>, il les envoie et lit les réponses via des sockets AF_XDP plutôt que par les sockets BSD classiques, sans passer par la pile TCP/IP du noyau. Les valeurs ci-dessous viennent du benchmark du §5.
       </p>
 
       <dl class="grid grid-cols-1 sm:grid-cols-3 gap-px bg-[var(--rule)] border border-[var(--rule)] mb-10 text-xs">
-        <div class="bg-[var(--card)] p-4"><dt data-i18n="stat-1-label" class="text-[var(--ink-faint)] uppercase tracking-wide mb-1">Débit vs. outils classiques</dt><dd class="font-display font-bold text-lg text-[var(--stamp)]">23,8×</dd></div>
+        <div class="bg-[var(--card)] p-4"><dt data-i18n="stat-1-label" class="text-[var(--ink-faint)] uppercase tracking-wide mb-1">Plus rapide que Nmap · 65&nbsp;535 ports</dt><dd data-i18n="stat-1-val" class="font-display font-bold text-lg text-[var(--stamp)]">2,6×</dd></div>
         <div class="bg-[var(--card)] p-4"><dt data-i18n="stat-2-label" class="text-[var(--ink-faint)] uppercase tracking-wide mb-1">Contrôles de variation (phase 4)</dt><dd data-i18n="stat-2-val" class="font-display font-bold text-lg">29 techniques</dd></div>
-        <div class="bg-[var(--card)] p-4"><dt data-i18n="stat-3-label" class="text-[var(--ink-faint)] uppercase tracking-wide mb-1">Débit crête / cœur</dt><dd class="font-display font-bold text-lg">≈ 1 000 000 pps</dd></div>
+        <div class="bg-[var(--card)] p-4"><dt data-i18n="stat-3-label" class="text-[var(--ink-faint)] uppercase tracking-wide mb-1">Scan complet · 65&nbsp;535 ports × 2 hôtes</dt><dd data-i18n="stat-3-val" class="font-display font-bold text-lg">4,5 s</dd></div>
       </dl>
 
       <!-- signature element: TCP header diagram -->
@@ -221,8 +198,8 @@
         </div>
         <div>
           <h3 data-i18n="sec2-2-h" class="font-semibold text-sm mb-1.5">2.2 Noyau Linux eBPF / AF_XDP</h3>
-          <p data-i18n="sec2-2-p" class="text-sm text-[var(--ink-soft)] mb-2">Accès direct aux paquets au niveau du pilote réseau — contournement complet de la couche socket. Débit filaire sans surcharge CPU notable.</p>
-          <code class="text-xs bg-[var(--card)] border border-[var(--rule)] px-2 py-1 inline-block">≈1M pps/cœur · Zero-Copy Driver Mode</code>
+          <p data-i18n="sec2-2-p" class="text-sm text-[var(--ink-soft)] mb-2">Un hook XDP (mode generic) redirige les réponses aux sondes de tcpcat vers des sockets AF_XDP, en contournant la pile TCP/IP du noyau ; tout le reste du trafic la suit normalement. Sur le benchmark du §5 : 8,2 s de CPU au total, contre 11,4 s pour Nmap et 52,8 s pour naabu.</p>
+          <code class="text-xs bg-[var(--card)] border border-[var(--rule)] px-2 py-1 inline-block">XDP generic (SKB) · AF_XDP · busy-poll</code>
         </div>
         <div>
           <h3 data-i18n="sec2-3-h" class="font-semibold text-sm mb-1.5">2.3 Intelligence programmable (WASM)</h3>
@@ -252,11 +229,11 @@
             </tr>
           </thead>
           <tbody>
-            <tr><td class="py-2 pr-4 font-semibold">off</td><td class="py-2 pr-4 text-[var(--stamp)]">Trafic de référence</td><td data-i18n="td-off-3" class="py-2 pr-4">Inventaire autorisé</td><td class="py-2 pr-4">0 %</td><td data-i18n="td-off-5" class="py-2 text-[var(--ink-soft)]">Cartographie rapide</td></tr>
-            <tr><td class="py-2 pr-4 font-semibold">light</td><td class="py-2 pr-4 text-[var(--amber)]">Variation limitée</td><td data-i18n="td-light-3" class="py-2 pr-4">Audit de production</td><td class="py-2 pr-4">+5 %</td><td data-i18n="td-light-5" class="py-2 text-[var(--ink-soft)]">Impact réduit</td></tr>
-            <tr><td class="py-2 pr-4 font-semibold">moderate</td><td class="py-2 pr-4 text-[var(--amber)]">Variation standard</td><td data-i18n="td-mod-3" class="py-2 pr-4">Validation contrôlée</td><td class="py-2 pr-4">+15 %</td><td data-i18n="td-mod-5" class="py-2 text-[var(--ink-soft)]">Environnements surveillés</td></tr>
-            <tr><td class="py-2 pr-4 font-semibold">aggressive</td><td class="py-2 pr-4 text-[var(--wire)]">Variation étendue</td><td data-i18n="td-agg-3" class="py-2 pr-4">Plan de test approuvé</td><td class="py-2 pr-4">+30 %</td><td data-i18n="td-agg-5" class="py-2 text-[var(--ink-soft)]">Laboratoire ou environnement contrôlé</td></tr>
-            <tr class="bg-[var(--card)]"><td class="py-2 pr-4 font-semibold">stealthy</td><td class="py-2 pr-4 text-[var(--wire)] font-semibold">Variation élevée</td><td data-i18n="td-st-3" class="py-2 pr-4 font-semibold">Scénario de visibilité</td><td class="py-2 pr-4">+50 %</td><td data-i18n="td-st-5" class="py-2 text-[var(--ink-soft)]">Validation encadrée</td></tr>
+            <tr><td class="py-2 pr-4 font-semibold">off</td><td data-i18n="td-off-2" class="py-2 pr-4 text-[var(--stamp)]">Trafic de référence</td><td data-i18n="td-off-3" class="py-2 pr-4">Inventaire autorisé</td><td class="py-2 pr-4">0 %</td><td data-i18n="td-off-5" class="py-2 text-[var(--ink-soft)]">Cartographie rapide</td></tr>
+            <tr><td class="py-2 pr-4 font-semibold">light</td><td data-i18n="td-light-2" class="py-2 pr-4 text-[var(--amber)]">Variation limitée</td><td data-i18n="td-light-3" class="py-2 pr-4">Audit de production</td><td class="py-2 pr-4">+5 %</td><td data-i18n="td-light-5" class="py-2 text-[var(--ink-soft)]">Impact réduit</td></tr>
+            <tr><td class="py-2 pr-4 font-semibold">moderate</td><td data-i18n="td-mod-2" class="py-2 pr-4 text-[var(--amber)]">Variation standard</td><td data-i18n="td-mod-3" class="py-2 pr-4">Validation contrôlée</td><td class="py-2 pr-4">+15 %</td><td data-i18n="td-mod-5" class="py-2 text-[var(--ink-soft)]">Environnements surveillés</td></tr>
+            <tr><td class="py-2 pr-4 font-semibold">aggressive</td><td data-i18n="td-agg-2" class="py-2 pr-4 text-[var(--wire)]">Variation étendue</td><td data-i18n="td-agg-3" class="py-2 pr-4">Plan de test approuvé</td><td class="py-2 pr-4">+30 %</td><td data-i18n="td-agg-5" class="py-2 text-[var(--ink-soft)]">Laboratoire ou environnement contrôlé</td></tr>
+            <tr class="bg-[var(--card)]"><td class="py-2 pr-4 font-semibold">stealthy</td><td data-i18n="td-st-2" class="py-2 pr-4 text-[var(--wire)] font-semibold">Variation élevée</td><td data-i18n="td-st-3" class="py-2 pr-4 font-semibold">Scénario de visibilité</td><td class="py-2 pr-4">+50 %</td><td data-i18n="td-st-5" class="py-2 text-[var(--ink-soft)]">Validation encadrée</td></tr>
           </tbody>
         </table>
       </div>
@@ -275,18 +252,216 @@
       <h2 data-i18n="architecture-title" class="font-display font-bold text-xl">4. Chaîne d'évaluation</h2>
       <span data-i18n="architecture-tag" class="text-[10px] text-[var(--ink-faint)]">Flux</span>
       </div>
-      <p data-i18n="architecture-body" class="text-sm text-[var(--ink-soft)] mb-5">Les cibles, services et résultats traversent les contrôles suivants avant de produire des rapports exploitables.</p>
-      <pre class="text-[11px] sm:text-xs leading-7 bg-[var(--card)] border border-[var(--rule-strong)] p-4 overflow-x-auto">Target input
-    |
-  Scope validation (--scope-file)
-    |
-  Host discovery and scan engine
-    |
-  Service and version detection (-sV)
-    |
-  Offline/API CVE correlation
-    |
-  JSON / SARIF / JSONL / baseline comparison</pre>
+      <p data-i18n="architecture-body" class="text-sm text-[var(--ink-soft)] mb-5">Chaque étape de l'évaluation tourne dans le processus tcpcat ; seul le scan SYN/UDP en mode <code>--ebpf</code> emprunte le chemin noyau ci-dessous. Au lancement, tcpcat assemble son programme XDP directement en Go — sans C ni clang — et le charge via cilium/ebpf. Le noyau le vérifie, le compile, puis ne redirige vers tcpcat que les réponses à ses propres sondes : tout le reste du trafic (SSH, autres services) suit la pile TCP/IP normale.</p>
+      <!-- Mirrors internal/scan/xdp_asm.go + xdp.go: generateXDPCollection ->
+           ebpf.NewCollection (verifier + JIT) -> link.AttachXDP (generic
+           mode) -> one AF_XDP socket per RX queue, its FD Put() into
+           xsks_map. The hook redirects only replies to tcpcat's own probe
+           port (and ICMP 3/3); everything else is XDP_PASS. -->
+      <figure class="bg-[var(--card)] border border-[var(--rule-strong)] p-3 sm:p-4">
+        <div class="fig-scroll">
+        <svg class="fig" viewBox="0 0 640 446" role="img" aria-labelledby="arch-fig-title">
+          <title id="arch-fig-title" data-i18n="arch-fig-title">Architecture eBPF de tcpcat : programme XDP assemblé en Go, chargé via cilium/ebpf, vérifié et compilé par le noyau, puis redirection des réponses vers un socket AF_XDP lu par le processus tcpcat</title>
+          <defs>
+            <marker id="arch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" class="fill-ink-soft"/>
+            </marker>
+          </defs>
+
+          <!-- ── Build band ─────────────────────────────────────────── -->
+          <rect x="0" y="0" width="424" height="150" class="band"/>
+          <text x="10" y="142" font-size="12" class="t-display" data-i18n="arch-build">Construction — au lancement du scan</text>
+
+          <rect x="26" y="7" width="26" height="14" rx="3" class="fill-wire"/>
+          <text x="39" y="17.5" font-size="9" text-anchor="middle" class="t-white t-bold">Go</text>
+          <path d="M30 24 h11 l5 5 v16 h-16 z" class="card"/>
+          <g class="rule"><line x1="33" y1="32" x2="42" y2="32"/><line x1="33" y1="36" x2="43" y2="36"/><line x1="33" y1="40" x2="43" y2="40"/></g>
+          <text x="54" y="35" font-size="11" class="t-bold">xdp_asm.go</text>
+          <text x="54" y="47" font-size="9" class="t-soft" data-i18n="arch-src-sub">instructions en Go</text>
+
+          <line x1="38" y1="46" x2="38" y2="78" class="arrow" marker-end="url(#arch-arrow)"/>
+          <rect x="20" y="80" width="150" height="26" rx="4" class="card-strong"/>
+          <text x="95" y="97" font-size="11" text-anchor="middle">cilium/ebpf/asm</text>
+          <path d="M170 93 H196 V34 H222" class="arrow" marker-end="url(#arch-arrow)"/>
+
+          <rect x="226" y="7" width="52" height="14" rx="3" class="fill-stamp"/>
+          <text x="252" y="17.5" font-size="9" text-anchor="middle" class="t-white t-bold">bytecode</text>
+          <path d="M230 24 h11 l5 5 v16 h-16 z" class="card"/>
+          <g class="rule"><line x1="233" y1="32" x2="242" y2="32"/><line x1="233" y1="36" x2="243" y2="36"/><line x1="233" y1="40" x2="243" y2="40"/></g>
+          <text x="254" y="35" font-size="11" class="t-bold">CollectionSpec</text>
+          <text x="254" y="47" font-size="9" class="t-soft" data-i18n="arch-spec-sub">en mémoire, port source inclus</text>
+
+          <line x1="238" y1="46" x2="238" y2="98" class="arrow" marker-end="url(#arch-arrow)"/>
+          <path d="M238 72 H364 V98" class="arrow" marker-end="url(#arch-arrow)"/>
+          <rect x="200" y="100" width="118" height="26" rx="4" class="prog"/>
+          <text x="259" y="117" font-size="10.5" text-anchor="middle">tcpcat_xdp_hook</text>
+          <rect x="328" y="100" width="72" height="26" rx="4" class="prog"/>
+          <text x="364" y="117" font-size="10.5" text-anchor="middle">xsks_map</text>
+
+          <!-- ── tcpcat process ─────────────────────────────────────── -->
+          <rect x="430" y="16" width="200" height="120" rx="6" class="card-strong"/>
+          <text x="530" y="38" font-size="13" text-anchor="middle" class="t-display" data-i18n="arch-proc">Processus tcpcat</text>
+          <g font-size="10">
+            <text x="444" y="60"><tspan class="t-faint">1</tspan> <tspan data-i18n="arch-st1">périmètre</tspan> <tspan class="t-wire">--scope-file</tspan></text>
+            <text x="444" y="76"><tspan class="t-faint">2</tspan> <tspan data-i18n="arch-st2">découverte d'hôtes</tspan></text>
+            <text x="444" y="92" class="t-stamp t-bold">3 <tspan data-i18n="arch-st3">scan SYN / UDP</tspan> ⇅</text>
+            <text x="444" y="108"><tspan class="t-faint">4</tspan> <tspan data-i18n="arch-st4">services</tspan> <tspan class="t-wire">-sV</tspan> + CVE</text>
+            <text x="444" y="124"><tspan class="t-faint">5</tspan> <tspan data-i18n="arch-st5">rapports JSON / SARIF</tspan></text>
+          </g>
+
+          <!-- ── Runtime band ───────────────────────────────────────── -->
+          <rect x="0" y="160" width="640" height="286" class="band"/>
+          <text x="10" y="438" font-size="12" class="t-display" data-i18n="arch-runtime">Exécution</text>
+
+          <line x1="259" y1="126" x2="259" y2="172" class="soft-line"/>
+          <line x1="364" y1="126" x2="364" y2="172" class="soft-line"/>
+          <rect x="130" y="172" width="270" height="30" rx="5" class="lib"/>
+          <text x="265" y="191" font-size="11.5" text-anchor="middle" class="t-bold">cilium/ebpf · <tspan data-i18n="arch-lib">bibliothèque Go</tspan></text>
+
+          <line x1="215" y1="202" x2="215" y2="214" class="soft-line"/>
+          <rect x="160" y="214" width="110" height="24" rx="4" class="sys"/>
+          <text x="215" y="230" font-size="10.5" text-anchor="middle">bpf() syscall</text>
+
+          <!-- ── Linux kernel ───────────────────────────────────────── -->
+          <rect x="60" y="248" width="570" height="172" rx="4" class="kernel-band"/>
+          <text transform="translate(90 334) rotate(-90)" font-size="17" text-anchor="middle" class="t-display t-kernel" data-i18n="arch-kernel">Noyau Linux</text>
+
+          <line x1="215" y1="238" x2="215" y2="260" class="arrow" marker-end="url(#arch-arrow)"/>
+          <rect x="110" y="262" width="160" height="26" rx="4" class="kbox"/>
+          <text x="190" y="279" font-size="11" text-anchor="middle" data-i18n="arch-verifier">Vérificateur eBPF</text>
+          <line x1="190" y1="288" x2="190" y2="298" class="arrow" marker-end="url(#arch-arrow)"/>
+          <rect x="110" y="300" width="160" height="26" rx="4" class="kbox"/>
+          <text x="190" y="317" font-size="11" text-anchor="middle" data-i18n="arch-jit">Compilateur JIT</text>
+
+          <line x1="335" y1="202" x2="335" y2="253" class="arrow" marker-start="url(#arch-arrow)" marker-end="url(#arch-arrow)"/>
+          <text x="341" y="232" font-size="9" class="t-faint">Put(queue → fd)</text>
+          <path d="M301 262 v52 a34 7 0 0 0 68 0 v-52" class="kbox"/>
+          <ellipse cx="335" cy="262" rx="34" ry="7" class="kbox"/>
+          <text x="335" y="293" font-size="10.5" text-anchor="middle" class="t-bold">xsks_map</text>
+          <text x="335" y="306" font-size="9" text-anchor="middle" class="t-soft">eBPF map</text>
+
+          <line x1="490" y1="136" x2="490" y2="260" class="arrow" marker-end="url(#arch-arrow)"/>
+          <text x="496" y="204" font-size="10" class="t-wire">TX ring</text>
+          <line x1="600" y1="262" x2="600" y2="138" class="arrow" marker-end="url(#arch-arrow)"/>
+          <text x="594" y="224" font-size="10" text-anchor="end" class="t-wire">RX ring</text>
+          <rect x="450" y="262" width="180" height="26" rx="4" class="kbox-wire"/>
+          <text x="540" y="279" font-size="11" text-anchor="middle" class="t-bold"><tspan data-i18n="arch-socket">Socket AF_XDP</tspan> · UMEM</text>
+
+          <line x1="560" y1="318" x2="560" y2="290" class="arrow" marker-end="url(#arch-arrow)"/>
+          <text x="566" y="308" font-size="9" class="t-stamp">redirect</text>
+          <rect x="450" y="318" width="180" height="32" rx="4" class="kbox-stamp"/>
+          <text x="540" y="331" font-size="11" text-anchor="middle" class="t-bold">Hook XDP</text>
+          <text x="540" y="344" font-size="9" text-anchor="middle" class="t-soft" data-i18n="arch-hook-sub">mode generic (SKB)</text>
+
+          <path d="M450 326 H400 V292 H371" class="arrow" marker-end="url(#arch-arrow)"/>
+          <text x="404" y="310" font-size="9" class="t-faint">lookup</text>
+          <path d="M270 313 H286 V342 H448" class="arrow" marker-end="url(#arch-arrow)"/>
+          <text x="380" y="338" font-size="9" class="t-faint" data-i18n="arch-attach">attache</text>
+
+          <rect x="300" y="372" width="120" height="26" rx="4" class="kbox"/>
+          <text x="360" y="389" font-size="11" text-anchor="middle" data-i18n="arch-stack">Pile TCP/IP</text>
+          <path d="M470 350 V385 H422" class="arrow" marker-end="url(#arch-arrow)"/>
+          <text x="476" y="368" font-size="9" class="t-faint">XDP_PASS</text>
+
+          <rect x="500" y="380" width="130" height="26" rx="4" class="kbox"/>
+          <text x="565" y="397" font-size="10.5" text-anchor="middle" data-i18n="arch-nic">Pilote NIC · eth0</text>
+          <line x1="600" y1="380" x2="600" y2="352" class="arrow" marker-end="url(#arch-arrow)"/>
+        </svg>
+        </div>
+        <p data-i18n="arch-scroll" class="sm:hidden text-[10px] text-[var(--ink-faint)] text-center mt-2">← faire défiler le schéma →</p>
+        <figcaption class="text-xs text-[var(--ink-faint)] mt-3"><span data-i18n="arch-caption">Chemin d'un paquet en mode <code>--ebpf</code>. Le détail de chaque bloc est sur la page</span> <a class="doclink" href="{{ url_for('internals.internals') }}">Internals</a>.</figcaption>
+      </figure>
+
+      <h3 data-i18n="seq-h" class="font-semibold text-sm mt-10 mb-1.5">4.1 Échange client → serveur</h3>
+      <p data-i18n="seq-p" class="text-sm text-[var(--ink-soft)] mb-5">Ce qui passe sur le fil pour chaque port sondé, et l'état que tcpcat en déduit. Chaque réponse est captée par le hook XDP puis lue via AF_XDP (schéma ci-dessus).</p>
+      <!-- Mirrors internal/scan/xdp.go's RX classification: SYN/ACK -> open
+           (tcpcat then sends its own RST), RST -> closed, no reply after every
+           retry -> filtered; UDP reply -> open, ICMP 3/3 -> closed, no reply
+           -> open|filtered. Lifelines at x=70 (tcpcat) and x=330 (target). -->
+      <figure class="bg-[var(--card)] border border-[var(--rule-strong)] p-3 sm:p-5">
+        <svg class="fig fig-seq" viewBox="0 0 480 458" role="img" aria-labelledby="seq-fig-title">
+          <title id="seq-fig-title" data-i18n="seq-fig-title">Échanges entre tcpcat et la cible : port TCP ouvert, fermé, filtré, et port UDP fermé</title>
+          <defs>
+            <marker id="seq-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0 L10 5 L0 10 z" class="fill-ink-soft"/>
+            </marker>
+            <marker id="seq-arrow-wire" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0 L10 5 L0 10 z" class="fill-wire-arrow"/>
+            </marker>
+          </defs>
+
+          <rect x="10" y="4" width="120" height="38" rx="4" class="card-strong"/>
+          <text x="70" y="21" font-size="12.5" text-anchor="middle" class="t-display">tcpcat</text>
+          <text x="70" y="35" font-size="9.5" text-anchor="middle" class="t-faint t-small">client · --ebpf</text>
+          <rect x="270" y="4" width="120" height="38" rx="4" class="card-strong"/>
+          <text x="330" y="21" font-size="12.5" text-anchor="middle" class="t-display" data-i18n="seq-target">cible</text>
+          <text x="330" y="35" font-size="9.5" text-anchor="middle" class="t-faint t-small" data-i18n="seq-server">serveur</text>
+          <text x="436" y="27" font-size="9.5" text-anchor="middle" class="t-faint t-small" data-i18n="seq-state">ÉTAT</text>
+
+          <line x1="70" y1="42" x2="70" y2="410" class="soft-line dashed"/>
+          <line x1="330" y1="42" x2="330" y2="410" class="soft-line dashed"/>
+
+          <!-- A: open TCP port -->
+          <line x1="0" y1="56" x2="480" y2="56" class="rule"/>
+          <text x="78" y="72" font-size="10.5" class="t-bold" data-i18n="seq-a">A · port TCP ouvert</text>
+          <line x1="70" y1="90" x2="328" y2="90" class="ink-line" marker-end="url(#seq-arrow)"/>
+          <text x="200" y="85" font-size="10.5" text-anchor="middle">SYN</text>
+          <line x1="330" y1="112" x2="72" y2="112" class="reply" marker-end="url(#seq-arrow-wire)"/>
+          <text x="200" y="107" font-size="10.5" text-anchor="middle" class="t-wire">SYN/ACK</text>
+          <line x1="70" y1="134" x2="328" y2="134" class="ink-line" marker-end="url(#seq-arrow)"/>
+          <text x="200" y="129" font-size="10.5" text-anchor="middle" class="t-bold">RST</text>
+          <text x="200" y="147" font-size="9.5" text-anchor="middle" class="t-faint t-small" data-i18n="seq-rst-note">tcpcat ferme la demi-connexion</text>
+          <g transform="rotate(-3 436 112)">
+            <rect x="394" y="101" width="84" height="22" rx="2" fill="none" class="stroke-open" stroke-width="1.5"/>
+            <text x="436" y="116" font-size="10.5" text-anchor="middle" class="t-open t-bold" data-i18n="seq-open">OUVERT</text>
+          </g>
+
+          <!-- B: closed TCP port -->
+          <line x1="0" y1="152" x2="480" y2="152" class="rule"/>
+          <text x="78" y="168" font-size="10.5" class="t-bold" data-i18n="seq-b">B · port TCP fermé</text>
+          <line x1="70" y1="186" x2="328" y2="186" class="ink-line" marker-end="url(#seq-arrow)"/>
+          <text x="200" y="181" font-size="10.5" text-anchor="middle">SYN</text>
+          <line x1="330" y1="208" x2="72" y2="208" class="reply" marker-end="url(#seq-arrow-wire)"/>
+          <text x="200" y="203" font-size="10.5" text-anchor="middle" class="t-wire">RST</text>
+          <g transform="rotate(-3 436 197)">
+            <rect x="394" y="186" width="84" height="22" rx="2" fill="none" class="stroke-stamp" stroke-width="1.5"/>
+            <text x="436" y="201" font-size="10.5" text-anchor="middle" class="t-stamp t-bold" data-i18n="seq-closed">FERMÉ</text>
+          </g>
+
+          <!-- C: filtered port (dropped on the way, retried, then timeout) -->
+          <line x1="0" y1="226" x2="480" y2="226" class="rule"/>
+          <text x="78" y="242" font-size="10.5" class="t-bold" data-i18n="seq-c">C · port filtré</text>
+          <line x1="70" y1="262" x2="246" y2="262" class="ink-line"/>
+          <text x="160" y="257" font-size="10.5" text-anchor="middle">SYN</text>
+          <line x1="70" y1="284" x2="246" y2="284" class="ink-line dashed"/>
+          <text x="160" y="279" font-size="10.5" text-anchor="middle">SYN <tspan class="t-faint t-small" data-i18n="seq-retry">(nouvel essai)</tspan></text>
+          <g class="stroke-stamp" stroke-width="2" stroke-linecap="round">
+            <line x1="250" y1="257" x2="260" y2="267"/><line x1="260" y1="257" x2="250" y2="267"/>
+            <line x1="250" y1="279" x2="260" y2="289"/><line x1="260" y1="279" x2="250" y2="289"/>
+          </g>
+          <text x="78" y="308" font-size="9.5" class="t-faint t-small" data-i18n="seq-timeout">délai dépassé, aucune réponse</text>
+          <g transform="rotate(-3 436 273)">
+            <rect x="394" y="262" width="84" height="22" rx="2" fill="none" class="stroke-amber" stroke-width="1.5"/>
+            <text x="436" y="277" font-size="10.5" text-anchor="middle" class="t-amber t-bold" data-i18n="seq-filtered">FILTRÉ</text>
+          </g>
+
+          <!-- D: closed UDP port -->
+          <line x1="0" y1="324" x2="480" y2="324" class="rule"/>
+          <text x="78" y="340" font-size="10.5" class="t-bold" data-i18n="seq-d">D · port UDP fermé</text>
+          <line x1="70" y1="358" x2="328" y2="358" class="ink-line" marker-end="url(#seq-arrow)"/>
+          <text x="200" y="353" font-size="10.5" text-anchor="middle">UDP</text>
+          <line x1="330" y1="380" x2="72" y2="380" class="reply" marker-end="url(#seq-arrow-wire)"/>
+          <text x="200" y="375" font-size="10.5" text-anchor="middle" class="t-wire">ICMP 3/3 <tspan class="t-faint t-small" data-i18n="seq-icmp-note">· port injoignable</tspan></text>
+          <g transform="rotate(-3 436 369)">
+            <rect x="394" y="358" width="84" height="22" rx="2" fill="none" class="stroke-stamp" stroke-width="1.5"/>
+            <text x="436" y="373" font-size="10.5" text-anchor="middle" class="t-stamp t-bold" data-i18n="seq-closed-2">FERMÉ</text>
+          </g>
+
+          <line x1="0" y1="410" x2="480" y2="410" class="rule"/>
+          <text x="0" y="430" font-size="9.5" class="t-soft t-small" data-i18n="seq-udp-note">UDP : toute réponse UDP → ouvert · aucune réponse → ouvert|filtré</text>
+          <text x="0" y="448" font-size="9.5" class="t-soft t-small" data-i18n="seq-retry-note">Nouveaux essais : 2 par défaut (--max-retries) · délai adapté au RTT</text>
+        </svg>
+      </figure>
     </section>
 
     <!-- 5. BENCHMARK -->
@@ -295,18 +470,81 @@
         <h2 data-i18n="sec4-title" class="font-display font-bold text-xl">5. Benchmark comparatif</h2>
         <span class="text-[10px] text-[var(--ink-faint)]">§5</span>
       </div>
-      <p data-i18n="sec4-intro" class="text-sm text-[var(--ink-soft)] mb-6">Énumération des ports 1–1024, même charge réseau et même infrastructure cible.</p>
+      <p data-i18n="sec4-intro" class="text-sm text-[var(--ink-soft)] mb-6">Scan SYN des 65&nbsp;535 ports sur 2 hôtes, même interface et même débit cible (25&nbsp;000 paquets/s) pour les trois outils. Mesuré avec <a class="doclink" href="https://github.com/sharkdp/hyperfine" target="_blank" rel="noreferrer">hyperfine</a>, 3 exécutions chacun.</p>
 
-      <div class="space-y-5 font-mono text-xs">
-        <div>
-          <div class="flex justify-between mb-1"><span class="font-semibold">tcpcat (eBPF <span data-i18n="native">natif</span>)</span><span data-i18n="bench-1" class="font-semibold">80 ms — 23,8× plus rapide</span></div>
-          <div class="bar-track h-4 w-full"><div class="h-full bg-[var(--stamp)]" style="width:4%"></div></div>
-        </div>
-        <div>
-          <div class="flex justify-between mb-1"><span data-i18n="bench-2-label" class="text-[var(--ink-soft)]">Nmap (SYN scan standard)</span><span class="text-[var(--ink-soft)]">1 900–2 300 ms</span></div>
-          <div class="bar-track h-4 w-full"><div class="h-full bg-[var(--ink-faint)]" style="width:100%"></div></div>
-        </div>
+      <dl class="grid grid-cols-1 sm:grid-cols-2 gap-px bg-[var(--rule)] border border-[var(--rule)] mb-8 text-xs">
+        <div class="bg-[var(--card)] p-4"><dt data-i18n="bench-vs-nmap" class="text-[var(--ink-faint)] uppercase tracking-wide mb-1">Plus rapide que Nmap</dt><dd data-i18n="bench-ratio-nmap" class="font-display font-bold text-2xl text-[var(--stamp)]">2,62× <span class="font-mono font-normal text-xs text-[var(--ink-faint)]">± 0,45</span></dd></div>
+        <div class="bg-[var(--card)] p-4"><dt data-i18n="bench-vs-naabu" class="text-[var(--ink-faint)] uppercase tracking-wide mb-1">Plus rapide que naabu</dt><dd data-i18n="bench-ratio-naabu" class="font-display font-bold text-2xl text-[var(--stamp)]">4,69× <span class="font-mono font-normal text-xs text-[var(--ink-faint)]">± 0,78</span></dd></div>
+      </dl>
+
+      <!-- Scale: 480 units = 25 s, so x = seconds * 19.2. Bars are the
+           hyperfine mean; whiskers are its min … max over the 3 runs. -->
+      <figure class="mb-1">
+        <svg class="fig fig-bench" viewBox="0 0 480 198" role="img" aria-labelledby="bench-fig-title">
+          <title id="bench-fig-title" data-i18n="bench-fig-title">Durée d'un scan SYN des 65 535 ports sur 2 hôtes : tcpcat 4,47 s, Nmap 11,72 s, naabu 20,95 s en moyenne</title>
+
+          <text x="0" y="14" font-size="12" class="t-bold">tcpcat <tspan class="t-wire">--ebpf</tspan></text>
+          <text x="480" y="14" font-size="12" text-anchor="end" class="t-stamp t-bold" data-i18n="bench-val-tcpcat">4,47 s ± 0,74</text>
+          <rect x="0" y="22" width="480" height="16" class="track"/>
+          <rect x="0" y="22" width="85.75" height="16" class="fill-stamp bench-bar"/>
+          <g class="bench-whisker"><line x1="69.56" y1="30" x2="96.54" y2="30"/><line x1="69.56" y1="26" x2="69.56" y2="34"/><line x1="96.54" y1="26" x2="96.54" y2="34"/></g>
+
+          <text x="0" y="64" font-size="12" class="t-soft">Nmap <tspan class="t-faint">-sS -T4</tspan></text>
+          <text x="480" y="64" font-size="12" text-anchor="end" class="t-soft" data-i18n="bench-val-nmap">11,72 s ± 0,50</text>
+          <rect x="0" y="72" width="480" height="16" class="track"/>
+          <rect x="0" y="72" width="225.08" height="16" class="fill-faint bench-bar late"/>
+          <g class="bench-whisker"><line x1="214.08" y1="80" x2="232.2" y2="80"/><line x1="214.08" y1="76" x2="214.08" y2="84"/><line x1="232.2" y1="76" x2="232.2" y2="84"/></g>
+
+          <text x="0" y="114" font-size="12" class="t-soft">naabu</text>
+          <text x="480" y="114" font-size="12" text-anchor="end" class="t-soft" data-i18n="bench-val-naabu">20,95 s ± 0,18</text>
+          <rect x="0" y="122" width="480" height="16" class="track"/>
+          <rect x="0" y="122" width="402.14" height="16" class="fill-faint bench-bar later"/>
+          <g class="bench-whisker"><line x1="398.19" y1="130" x2="404.68" y2="130"/><line x1="398.19" y1="126" x2="398.19" y2="134"/><line x1="404.68" y1="126" x2="404.68" y2="134"/></g>
+
+          <line x1="0" y1="154" x2="480" y2="154" class="rule"/>
+          <g class="rule">
+            <line x1="0.5" y1="154" x2="0.5" y2="159"/><line x1="96" y1="154" x2="96" y2="159"/>
+            <line x1="192" y1="154" x2="192" y2="159"/><line x1="288" y1="154" x2="288" y2="159"/>
+            <line x1="384" y1="154" x2="384" y2="159"/><line x1="479.5" y1="154" x2="479.5" y2="159"/>
+          </g>
+          <g font-size="10" class="t-faint t-tick">
+            <text x="0" y="172">0</text>
+            <text x="96" y="172" text-anchor="middle">5</text>
+            <text x="192" y="172" text-anchor="middle">10</text>
+            <text x="288" y="172" text-anchor="middle">15</text>
+            <text x="384" y="172" text-anchor="middle">20</text>
+            <text x="480" y="172" text-anchor="end">25 s</text>
+          </g>
+          <text x="0" y="194" font-size="9.5" class="t-faint t-legend" data-i18n="bench-legend">Barre : durée moyenne · trait : min … max sur 3 exécutions</text>
+        </svg>
+      </figure>
+
+      <div class="overflow-x-auto mt-8">
+        <table class="doctable w-full text-left text-xs">
+          <thead>
+            <tr class="text-[var(--ink-faint)] uppercase tracking-wide text-[10px]">
+              <th data-i18n="bench-th-tool" class="py-2 pr-4">Outil</th>
+              <th data-i18n="bench-th-mean" class="py-2 pr-4">Moyenne ± <span class="normal-case">σ</span></th>
+              <th class="py-2 pr-4">Min … max</th>
+              <th data-i18n="bench-th-user" class="py-2 pr-4">CPU utilisateur</th>
+              <th data-i18n="bench-th-sys" class="py-2">CPU système</th>
+            </tr>
+          </thead>
+          <tbody class="whitespace-nowrap">
+            <tr class="bg-[var(--card)]"><td class="py-2 pr-4 font-semibold">tcpcat --ebpf</td><td class="py-2 pr-4 text-[var(--stamp)] font-semibold">4.466 s ± 0.744</td><td class="py-2 pr-4">3.623 … 5.028 s</td><td class="py-2 pr-4">2.493 s</td><td class="py-2">5.658 s</td></tr>
+            <tr><td class="py-2 pr-4 font-semibold">nmap</td><td class="py-2 pr-4">11.723 s ± 0.503</td><td class="py-2 pr-4">11.150 … 12.094 s</td><td class="py-2 pr-4">5.928 s</td><td class="py-2">5.504 s</td></tr>
+            <tr><td class="py-2 pr-4 font-semibold">naabu</td><td class="py-2 pr-4">20.945 s ± 0.181</td><td class="py-2 pr-4">20.739 … 21.077 s</td><td class="py-2 pr-4">21.497 s</td><td class="py-2">31.335 s</td></tr>
+          </tbody>
+        </table>
       </div>
+
+      <details class="mt-6 text-xs">
+        <summary data-i18n="bench-cmd" class="cursor-pointer text-[var(--ink-soft)] hover:text-[var(--stamp)]">Commande de mesure exacte</summary>
+        <pre class="mt-3 bg-[var(--card)] border border-[var(--rule)] p-3 overflow-x-auto">hyperfine --warmup 0 --runs 3 --export-markdown bench_65k.md \
+  -n "tcpcat-ebpf" "./tcpcat -i $REAL_IF -p 1-65535 -sS --ebpf --open -T 5 --rate 25000 10.200.0.20 10.200.0.21" \
+  -n "naabu"       "naabu -interface $REAL_IF -p 1-65535 -rate 25000 -host 10.200.0.20,10.200.0.21 -silent" \
+  -n "nmap"        "nmap -e $REAL_IF -p 1-65535 -sS -n -T4 --min-rate 25000 --max-retries 1 10.200.0.20 10.200.0.21"</pre>
+      </details>
       <p data-i18n="benchmark-note" class="text-[10px] text-[var(--ink-faint)] mt-4">Résultats de laboratoire indicatifs. Consultez le dépôt pour la méthode, le matériel et les limites de reproductibilité.</p>
     </section>
 
@@ -381,6 +619,35 @@
         <h2 data-i18n="sec5-title" class="font-display font-bold text-xl">6. Référence en ligne de commande</h2>
         <span class="text-[10px] text-[var(--ink-faint)]">§6</span>
       </div>
+
+      <figure class="mb-8">
+        <div class="fig-scroll">
+        <svg class="fig term" id="term-demo" viewBox="0 0 600 270" role="img" aria-labelledby="term-fig-title" xml:space="preserve">
+          <title id="term-fig-title" data-i18n="term-fig-title">Exemple de sortie de tcpcat : scan SYN avec détection d'OS, 3 ports ouverts sur 1 000</title>
+          <rect x="0" y="0" width="600" height="270" rx="8" fill="#171a17"/>
+          <rect x="0" y="0" width="600" height="26" rx="8" fill="#262a25"/><rect x="0" y="18" width="600" height="8" fill="#262a25"/>
+          <circle cx="16" cy="13" r="4.5" fill="#e8857a"/><circle cx="31" cy="13" r="4.5" fill="#d8b876"/><circle cx="46" cy="13" r="4.5" fill="#8cc59a"/>
+          <text x="300" y="17" text-anchor="middle" class="t-dim" style="font-size:10.5px">tcpcat — zsh</text>
+          <text x="18" y="52"><tspan class="t-prompt t-b">$ </tspan><tspan class="term-cmd">sudo tcpcat -sS -O -p 1-1000 192.0.2.10</tspan></text>
+          <text x="18" y="69" class="term-line" style="--d:1.7s">[*] Running Host Discovery...</text>
+          <text x="18" y="86" class="term-line" style="--d:2.2s">    ├─ <tspan class="t-b">[UP]</tspan> 192.0.2.10</text>
+          <text x="18" y="103" class="term-line" style="--d:2.45s">[*] Ports loaded: 1000 port(s) targeted</text>
+          <text x="18" y="120" class="term-line" style="--d:2.6s"><tspan class="t-dim t-b">────────────────────────────────────────────────────────────────────────────────</tspan></text>
+          <text x="18" y="137" class="term-line" style="--d:3.6s"><tspan class="t-dim t-b">[i] 192.0.2.10 ─ OS: Linux 3.x-6.x (90% confidence)</tspan></text>
+          <text x="18" y="154" class="term-line" style="--d:3.75s"><tspan class="t-ok t-b">[+] 192.0.2.10:22    ─ OPEN    </tspan> (time=0.41ms | reason=SYN-ACK Received)</text>
+          <text x="18" y="171" class="term-line" style="--d:3.9s"><tspan class="t-ok t-b">[+] 192.0.2.10:80    ─ OPEN    </tspan> (time=0.38ms | reason=SYN-ACK Received)</text>
+          <text x="18" y="188" class="term-line" style="--d:4.05s"><tspan class="t-ok t-b">[+] 192.0.2.10:443   ─ OPEN    </tspan> (time=0.44ms | reason=SYN-ACK Received)</text>
+          <text x="18" y="205" class="term-line" style="--d:4.25s"><tspan class="t-b">[~] 192.0.2.10 ─ Not shown: 997 closed port(s)</tspan></text>
+          <text x="18" y="222" class="term-line" style="--d:4.45s"><tspan class="t-dim t-b">────────────────────────────────────────────────────────────────────────────────</tspan></text>
+          <text x="18" y="239" class="term-line" style="--d:4.6s">[✓] Scan completed in 2.103s. Found 3 open port(s) across 1 active target(s).</text>
+          <text x="18" y="256" class="term-line" style="--d:4.8s"><tspan class="t-prompt t-b">$ </tspan><tspan class="cursor">▌</tspan></text>
+        </svg>
+        </div>
+        <figcaption class="flex flex-wrap items-baseline justify-between gap-2 text-xs text-[var(--ink-faint)] mt-2">
+          <span data-i18n="term-caption">Exemple de sortie abrégée (bannière omise) — adresse de documentation RFC 5737, durées indicatives.</span>
+          <button type="button" class="term-replay" id="term-replay" data-i18n="term-replay">↻ Rejouer</button>
+        </figcaption>
+      </figure>
 
       <div class="space-y-6 text-xs">
         <figure>
@@ -482,6 +749,7 @@ go build ./cmd/tcpcat</pre>
     </div>
   </footer>
 
+  <script src="{{ url_for('static', filename='lang-toggle.js') }}"></script>
   <script>
     // --- scroll reveal ---
     const io = new IntersectionObserver((entries) => {
@@ -489,10 +757,20 @@ go build ./cmd/tcpcat</pre>
     }, { threshold: 0.1 });
     document.querySelectorAll('.fade-in').forEach(el => io.observe(el));
 
+    // --- terminal demo: play once visible, replay on demand ---
+    const term = document.getElementById('term-demo');
+    if (term) {
+      const play = () => { term.classList.remove('is-playing'); void term.getBoundingClientRect(); term.classList.add('is-playing'); };
+      new IntersectionObserver((entries, obs) => {
+        if (entries.some(e => e.isIntersecting)) { play(); obs.disconnect(); }
+      }, { threshold: 0.4 }).observe(term);
+      document.getElementById('term-replay').addEventListener('click', play);
+    }
+
     // --- language toggle (FR default / EN) ---
     const translations = {
-      "status-1": "eBPF AF_XDP engine: active",
-      "status-2": "Peak throughput ≈ 1,000,000 pps/core",
+      "status-1": "eBPF/AF_XDP engine: experimental (Linux)",
+      "status-2": "65,535 ports × 2 hosts: 4.5 s (§5)",
       "status-3": "RFC 793 compliant — authorized use only",
       "nav-1": "Abstract",
       "nav-2": "Capabilities",
@@ -501,7 +779,7 @@ go build ./cmd/tcpcat</pre>
       "nav-audit": "Audit",
       "nav-6": "CLI",
       "nav-internals": "Internals",
-      "nav-release": "Releases",
+      "nav-releases": "Releases",
       "nav-notice": "Notice",
       "meta-wg": "Open-source community project",
       "meta-rfc": "Technical Note: 1337",
@@ -510,7 +788,7 @@ go build ./cmd/tcpcat</pre>
       "meta-cat": "Category: Informational — authorized network assessment",
       "meta-issn": "Community documentation — non-commercial",
       "title": "tcpcat — high-performance network reconnaissance<br class=\"hidden sm:block\"> and IDS/IPS visibility testing",
-      "subtitle": "Community technical note — v1.0",
+      "subtitle": "Community technical note — v1.4",
       "badge-platforms": "Linux · macOS · Windows",
       "badge-community": "Community project",
       "memo-label": "Status of This Memo",
@@ -533,18 +811,19 @@ go build ./cmd/tcpcat</pre>
       "toc-appendix": "Appendix A. Network folklore (informational)",
       "toc-8": "Author's address",
       "sec1-title": "1. Introduction and specifications",
-      "sec1-body": "tcpcat exposes the entire TCP/IP stack at the network driver level. Rather than going through BSD sockets, every packet is built, sent, and read directly in kernel space. The table below summarizes values measured in a test environment.",
-      "stat-1-label": "Throughput vs. legacy tools",
+      "sec1-body": "tcpcat builds every probe packet itself, in user space. In <code>--ebpf</code> mode it sends them and reads the replies through AF_XDP sockets instead of regular BSD sockets, bypassing the kernel's TCP/IP stack. The figures below come from the benchmark in §5.",
+      "stat-1-label": "Faster than Nmap · 65,535 ports",
       "stat-2-label": "Variation controls (phase 4)",
       "stat-2-val": "29 techniques",
-      "stat-3-label": "Peak throughput / core",
+      "stat-3-label": "Full scan · 65,535 ports × 2 hosts",
+      "stat-3-val": "4.5 s",
       "fig1-caption": "Figure 1 — TCP header (RFC 793 §3.1). Fields configurable during a tcpcat assessment:",
       "fig1-tag4": "Sequence Number (jitter)",
       "sec2-title": "2. System capabilities",
       "sec2-1-h": "2.1 L2–L7 reconnaissance",
       "sec2-1-p": "Multi-protocol enumeration (TCP, UDP, ICMP), L3/L4 topology mapping with software fingerprinting, and asynchronous DNS / mDNS / NetBIOS discovery.",
       "sec2-2-h": "2.2 Linux kernel eBPF / AF_XDP",
-      "sec2-2-p": "Direct packet access at the driver level — full bypass of the socket layer. Wire-speed throughput without meaningful CPU overhead.",
+      "sec2-2-p": "An XDP hook (generic mode) redirects the replies to tcpcat's probes into AF_XDP sockets, bypassing the kernel's TCP/IP stack; all other traffic follows it as usual. In the §5 benchmark: 8.2 s of total CPU time, versus 11.4 s for Nmap and 52.8 s for naabu.",
       "sec2-3-h": "2.3 Programmable intelligence (WASM)",
       "sec2-3-p": "Sandboxed detection engine in WebAssembly. Protocol dissectors can be written in Rust, C, Go, or AssemblyScript.",
       "sec3-title": "3. IDS/IPS visibility testing",
@@ -564,6 +843,57 @@ go build ./cmd/tcpcat</pre>
       "td-agg-5": "Lab or controlled environment",
       "td-st-3": "Visibility scenario",
       "td-st-5": "Governed validation",
+      "td-off-2": "Baseline traffic",
+      "td-light-2": "Limited variation",
+      "td-mod-2": "Standard variation",
+      "td-agg-2": "Extended variation",
+      "td-st-2": "High variation",
+      "arch-fig-title": "tcpcat's eBPF architecture: XDP program assembled in Go, loaded through cilium/ebpf, verified and compiled by the kernel, with replies redirected to an AF_XDP socket read by the tcpcat process",
+      "arch-build": "Build — at scan start",
+      "arch-src-sub": "Go instructions",
+      "arch-spec-sub": "in memory, source port included",
+      "arch-proc": "tcpcat process",
+      "arch-st1": "scope",
+      "arch-st2": "host discovery",
+      "arch-st3": "SYN / UDP scan",
+      "arch-st4": "services",
+      "arch-st5": "JSON / SARIF reports",
+      "arch-runtime": "Runtime",
+      "arch-lib": "Go library",
+      "arch-kernel": "Linux kernel",
+      "arch-verifier": "eBPF verifier",
+      "arch-jit": "JIT compiler",
+      "arch-socket": "AF_XDP socket",
+      "arch-hook-sub": "generic (SKB) mode",
+      "arch-attach": "attach",
+      "arch-stack": "TCP/IP stack",
+      "arch-nic": "NIC driver · eth0",
+      "arch-caption": "Packet path in <code>--ebpf</code> mode. Each block is covered in detail on the",
+      "arch-scroll": "← scroll the diagram →",
+      "seq-h": "4.1 Client → server exchange",
+      "seq-p": "What goes over the wire for each probed port, and the state tcpcat infers from it. Every reply is captured by the XDP hook, then read through AF_XDP (diagram above).",
+      "seq-fig-title": "Exchanges between tcpcat and the target: open, closed and filtered TCP port, and closed UDP port",
+      "seq-target": "target",
+      "seq-server": "server",
+      "seq-state": "STATE",
+      "seq-a": "A · open TCP port",
+      "seq-rst-note": "tcpcat closes the half-open connection",
+      "seq-open": "OPEN",
+      "seq-b": "B · closed TCP port",
+      "seq-closed": "CLOSED",
+      "seq-c": "C · filtered port",
+      "seq-retry": "(retry)",
+      "seq-timeout": "timeout, no reply",
+      "seq-filtered": "FILTERED",
+      "seq-d": "D · closed UDP port",
+      "seq-icmp-note": "· port unreachable",
+      "seq-closed-2": "CLOSED",
+      "seq-udp-note": "UDP: any UDP reply → open · no reply → open|filtered",
+      "seq-retry-note": "Retries: 2 by default (--max-retries) · timeout follows the RTT",
+      "term-fig-title": "Sample tcpcat output: SYN scan with OS detection, 3 open ports out of 1,000",
+      "term-caption": "Abridged sample output (banner omitted) — RFC 5737 documentation address, indicative timings.",
+      "term-replay": "↻ Replay",
+      "bench-fig-title": "Duration of a SYN scan of all 65,535 ports on 2 hosts: tcpcat 4.47 s, Nmap 11.72 s, naabu 20.95 s on average",
       "l3-h": "Network layer (L3)",
       "l3-p": "IPv4 fragmentation and adaptive TTL strategy mutation.",
       "l4-h": "Transport layer (L4)",
@@ -573,14 +903,25 @@ go build ./cmd/tcpcat</pre>
       "l7-h": "Application layer (L7)",
       "l7-p": "Distributed decoy-swarm orchestration over raw sockets.",
       "sec4-title": "5. Comparative benchmark",
-      "sec4-intro": "Enumeration of ports 1–1024, same network load and same target infrastructure.",
+      "sec4-intro": "SYN scan of all 65,535 ports on 2 hosts, same interface and same target rate (25,000 packets/s) for all three tools. Measured with <a class=\"doclink\" href=\"https://github.com/sharkdp/hyperfine\" target=\"_blank\" rel=\"noreferrer\">hyperfine</a>, 3 runs each.",
       "architecture-title": "4. Assessment Pipeline",
       "architecture-tag": "Flow",
-      "architecture-body": "Targets, services, and findings move through these controls before usable reports are produced.",
+      "architecture-body": "Every assessment stage runs inside the tcpcat process; only the SYN/UDP scan in <code>--ebpf</code> mode takes the kernel path below. At startup, tcpcat assembles its XDP program directly in Go — no C, no clang — and loads it through cilium/ebpf. The kernel verifies and compiles it, then redirects only the replies to tcpcat's own probes: all other traffic (SSH, other services) follows the normal TCP/IP stack.",
       "benchmark-note": "Indicative lab results. Consult the repository for methodology, hardware, and reproducibility limits.",
-      "native": "native",
-      "bench-1": "80 ms — 23.8× faster",
-      "bench-2-label": "Nmap (standard SYN scan)",
+      "bench-cmd": "Exact benchmark command",
+      "bench-th-sys": "System CPU",
+      "bench-th-user": "User CPU",
+      "bench-th-mean": "Mean ± <span class=\"normal-case\">σ</span>",
+      "bench-th-tool": "Tool",
+      "bench-legend": "Bar: mean duration · whisker: min … max over 3 runs",
+      "bench-val-naabu": "20.95 s ± 0.18",
+      "bench-val-nmap": "11.72 s ± 0.50",
+      "bench-val-tcpcat": "4.47 s ± 0.74",
+      "bench-ratio-naabu": "4.69× <span class=\"font-mono font-normal text-xs text-[var(--ink-faint)]\">± 0.78</span>",
+      "bench-vs-naabu": "Faster than naabu",
+      "bench-ratio-nmap": "2.62× <span class=\"font-mono font-normal text-xs text-[var(--ink-faint)]\">± 0.45</span>",
+      "bench-vs-nmap": "Faster than Nmap",
+      "stat-1-val": "2.6×",
       "audit-title": "Authorized Audit",
       "audit-tag": "Guide",
       "audit-body": "The <code>safe-production</code> profile provides a conservative starting point for an explicitly approved scope. JSON, SARIF, and JSONL reports support follow-up and integration with security tooling.",
@@ -633,33 +974,11 @@ go build ./cmd/tcpcat</pre>
       "sec6-title": "7. Security considerations",
       "stamp-badge": "Authorized<br>use<br>only",
       "sec6-body": "<strong class=\"text-[var(--ink)]\">tcpcat</strong> is strictly reserved for defensive security audits, authorized penetration tests, and infrastructure administration under an explicit mandate. Any unauthorized access to or persistence within an automated data processing system is subject to criminal penalties (French Penal Code art. 323-1 et seq., CFAA, GDPR). The authors accept no liability for unlawful use.",
-      "legal-notice": "The project is non-commercial and provides no hosted scanning service. Users must comply with applicable sanctions, export controls, and laws. This document is not legal advice or a compliance certification. See <a class=\"doclink\" href=\"NOTICE.md\">NOTICE.md</a>.",
+      "legal-notice": "The project is non-commercial and provides no hosted scanning service. Users must comply with applicable sanctions, export controls, and laws. This document is not legal advice or a compliance certification. See <a class=\"doclink\" href=\"{{ url_for('notice.notice') }}\">NOTICE.md</a>.",
       "footer-label": "Author's Address",
       "footer-copyright": "Apache-2.0 license — open-source reconnaissance engine. This document is provided \u201cas is,\u201d without warranty of any kind."
     };
 
-    const frOriginal = {};
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-      frOriginal[el.getAttribute('data-i18n')] = el.innerHTML;
-    });
-
-    function setLang(lang){
-      document.documentElement.lang = lang;
-      document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        if (lang === 'en' && translations[key] !== undefined) {
-          el.innerHTML = translations[key];
-        } else {
-          el.innerHTML = frOriginal[key];
-        }
-      });
-      document.getElementById('btn-fr').setAttribute('aria-pressed', String(lang === 'fr'));
-      document.getElementById('btn-en').setAttribute('aria-pressed', String(lang === 'en'));
-    }
-
-    document.getElementById('btn-fr').addEventListener('click', () => setLang('fr'));
-    document.getElementById('btn-en').addEventListener('click', () => setLang('en'));
+    TcpcatI18n.init(translations, { defaultLang: 'fr', otherLang: 'en' });
   </script>
-
-</body>
-</html>
+{% endblock %}

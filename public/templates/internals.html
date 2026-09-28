@@ -1,16 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>tcpcat — Internals</title>
-<meta name="description" content="tcpcat — how a scan gets from a Go struct to a live packet on the wire and back, kernel-bypass path included.">
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='nav.css') }}">
+{% extends "base.html" %}
+{% set page_lang = 'en' %}
+{% block title %}tcpcat — Internals{% endblock %}
+{% block description %}tcpcat — how a scan gets from a Go struct to a live packet on the wire and back, kernel-bypass path included.{% endblock %}
+{% block head %}
 <style>
   :root{
     --kernel-ink: #7a4e0c;
@@ -246,30 +238,9 @@
     .meta div:nth-child(even){text-align:left;}
   }
 </style>
-</head>
-<body class="paper-grid">
-
-  <header class="sticky top-0 z-40 bg-[var(--paper)] border-b border-[var(--rule-strong)]">
-    <div class="max-w-5xl mx-auto px-5 sm:px-8 py-2 sm:h-14 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
-      <a href="{{ url_for('undex') }}" class="font-display font-bold text-lg tracking-tight flex items-baseline gap-2 shrink-0">
-        tcpcat<span class="text-[var(--stamp)]">.</span>
-        <span class="hidden sm:inline text-[10px] font-mono font-normal tracking-widest text-[var(--ink-faint)] uppercase" data-i18n="brand-tag">Internals</span>
-      </a>
-      <div class="lang-switch flex shrink-0 order-2 sm:order-3" role="group" aria-label="Language / Langue">
-        <button type="button" id="btn-en" aria-pressed="true">EN</button>
-        <button type="button" id="btn-fr" aria-pressed="false">FR</button>
-      </div>
-      <nav class="order-3 sm:order-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 flex flex-wrap sm:flex-nowrap gap-3 text-[11px] uppercase tracking-wide sm:overflow-x-auto no-scrollbar">
-        <a href="{{ url_for('undex') }}" data-i18n="nav-home" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Home</a>
-        <a href="{{ url_for('internals.internals') }}" data-i18n="nav-internals" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Internals</a>
-        <a href="{{ url_for('release.release') }}" data-i18n="nav-releases" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Releases</a>
-        <a href="{{ url_for('notice.notice') }}" data-i18n="nav-notice" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Notice</a>
-        <a href="https://github.com/NycolazSec/tcpcat" target="_blank" class="nav-external hidden sm:inline text-[var(--wire)] transition-colors duration-200 whitespace-nowrap">GitHub ↗</a>
-        <a href="https://discord.gg/7entMMCuX7" target="_blank" class="nav-external hidden sm:inline text-[var(--wire)] transition-colors duration-200 whitespace-nowrap">Discord ↗</a>
-      </nav>
-    </div>
-  </header>
-
+{% endblock %}
+{% block brand_tag %}<span class="hidden sm:inline text-[10px] font-mono font-normal tracking-widest text-[var(--ink-faint)] uppercase" data-i18n="brand-tag">Internals</span>{% endblock %}
+{% block body %}
   <main class="wrap">
 
     <div class="meta">
@@ -353,13 +324,13 @@
             <div class="arrow-h"><div class="stem"></div><div class="head"></div><div class="cap" data-i18n="cap-passes">passes</div></div>
             <div class="box">
               <h3 data-i18n="box-jit-h">JIT compiler</h3>
-              <p data-i18n="box-jit-p">Turns the verified bytecode into native machine code for the NIC's core.</p>
+              <p data-i18n="box-jit-p">Turns the verified bytecode into native machine code for the host CPU.</p>
             </div>
             <div class="arrow-h"><div class="stem"></div><div class="head"></div><div class="cap" data-i18n="cap-attaches">attaches</div></div>
             <div class="box">
               <h3 data-i18n="box-xdp-h">XDP hook</h3>
-              <p data-i18n="box-xdp-p">Runs on every inbound frame, at the driver — before the kernel's own TCP/IP stack
-                ever sees it.</p>
+              <p data-i18n="box-xdp-p">Runs on every inbound frame on the interface, before the kernel's own TCP/IP stack
+                sees it. Attached in generic (SKB) mode, which works on any NIC.</p>
             </div>
           </div>
 
@@ -384,7 +355,7 @@
 
           <div class="zerocopy">
             <div class="head-up"></div><div class="stem"></div>
-            <div class="cap" data-i18n="cap-zerocopy">frames move through shared UMEM rings — zero copy, no per-packet syscall</div>
+            <div class="cap" data-i18n="cap-zerocopy">frames move through UMEM rings shared with the kernel (copy mode, since the hook runs in generic mode)</div>
             <div class="stem"></div><div class="head-down"></div>
           </div>
 
@@ -410,7 +381,7 @@
           <div class="pstep">
             <span class="n">01</span>
             <h4 data-i18n="p1-h">Host discovery</h4>
-            <p data-i18n="p1-p">ICMP echo + SYN/443 + ACK/80 fired together over the same ring.</p>
+            <p data-i18n="p1-p">ARP sweep on the local subnet, ping-style probes for everything else — over regular sockets, before the XDP engine starts.</p>
           </div>
           <div class="pconnect"><div class="head"></div></div>
           <div class="pstep">
@@ -504,22 +475,22 @@
       "box-verifier-p": "Prouve statiquement que le programme ne peut ni planter le noyau, ni boucler indéfiniment.",
       "cap-passes": "validé",
       "box-jit-h": "Compilateur JIT",
-      "box-jit-p": "Transforme le bytecode vérifié en code machine natif pour le cœur de la carte réseau.",
+      "box-jit-p": "Transforme le bytecode vérifié en code machine natif pour le processeur de la machine.",
       "cap-attaches": "s'attache",
       "box-xdp-h": "Hook XDP",
-      "box-xdp-p": "S'exécute sur chaque trame entrante, au niveau du pilote — avant même que la pile TCP/IP du noyau ne la voie.",
+      "box-xdp-p": "S'exécute sur chaque trame entrante de l'interface, avant que la pile TCP/IP du noyau ne la voie. Attaché en mode generic (SKB), qui fonctionne avec toutes les cartes réseau.",
       "cap-mapio": "lit / écrit la correspondance file → socket",
       "box-maps-h": "Maps eBPF",
       "box-maps-p": "<code>xsks_map</code> — une petite table que le hook consulte pour savoir quelle socket possède une file de réception donnée.",
       "cap-redirect": "redirige",
       "box-socket-h": "Socket AF_XDP",
       "box-socket-p": "Une région UMEM partagée avec le processus : anneaux fill, RX, TX et completion, mappés une seule fois et jamais copiés paquet par paquet.",
-      "cap-zerocopy": "les trames circulent via les anneaux UMEM partagés — zéro copie, aucun appel système par paquet",
+      "cap-zerocopy": "les trames circulent via des anneaux UMEM partagés avec le noyau (mode copie, le hook tournant en mode generic)",
       "passthrough-p": "<b style=\"color:var(--ink);\">Tout ce que le hook ne réclame pas</b> — le trafic de tous les autres processus — retombe, intact, sur la pile socket / TCP-IP classique.",
       "pipeline-h": "Ce que tcpcat fait de ces trames",
       "pipeline-p": "Tout ce qui suit tourne dans le processus en espace utilisateur, sur les résultats que le chemin noyau ci-dessus lui transmet.",
       "p1-h": "Découverte d'hôtes",
-      "p1-p": "ICMP echo + SYN/443 + ACK/80 envoyés ensemble sur le même anneau.",
+      "p1-p": "Balayage ARP sur le sous-réseau local, sondes de type ping pour le reste — via des sockets classiques, avant le démarrage du moteur XDP.",
       "p2-h": "Scan SYN semi-ouvert",
       "p2-p": "Lit le SYN/ACK, puis envoie son propre RST fabriqué — jamais de connexion complète.",
       "p3-h": "Empreinte OS",
@@ -536,6 +507,4 @@
       "footer-license": "tcpcat — licence Apache-2.0"
     }, { defaultLang: 'en', otherLang: 'fr' });
   </script>
-
-</body>
-</html>
+{% endblock %}

@@ -25,7 +25,12 @@
 .lang-switch button[aria-pressed="false"]:hover{background:var(--paper-flat); color:var(--ink);}
 .lang-switch button:focus-visible{outline:2px solid var(--wire); outline-offset:-2px;}
 
+/* The nav scrolls sideways on mid-width screens; hide its scrollbar. */
+.no-scrollbar::-webkit-scrollbar{display:none;}
+.no-scrollbar{-ms-overflow-style:none; scrollbar-width:none;}
+
 header nav a{position:relative;}
+header nav a[aria-current="page"]{color:var(--stamp);}
 header nav a:not(.nav-external)::after{
   content:'';
   position:absolute; left:0; right:0; bottom:-3px; height:1.5px;

@@ -1,16 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>tcpcat — Legal and Authorized Use Notice</title>
-<meta name="description" content="tcpcat — legal and authorized use notice.">
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='nav.css') }}">
+{% extends "base.html" %}
+{% set page_lang = 'en' %}
+{% block title %}tcpcat — Legal and Authorized Use Notice{% endblock %}
+{% block description %}tcpcat — legal and authorized use notice.{% endblock %}
+{% block head %}
 <style>
   body{
     font-size:14px;
@@ -69,30 +61,9 @@
     .wrap h1{font-size:22px;}
   }
 </style>
-</head>
-<body class="paper-grid">
-
-  <header class="sticky top-0 z-40 bg-[var(--paper)] border-b border-[var(--rule-strong)]">
-    <div class="max-w-5xl mx-auto px-5 sm:px-8 py-2 sm:h-14 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
-      <a href="{{ url_for('undex') }}" class="font-display font-bold text-lg tracking-tight flex items-baseline gap-2 shrink-0">
-        tcpcat<span class="text-[var(--stamp)]">.</span>
-        <span class="hidden sm:inline text-[10px] font-mono font-normal tracking-widest text-[var(--ink-faint)] uppercase" data-i18n="brand-tag">Notice</span>
-      </a>
-      <div class="lang-switch flex shrink-0 order-2 sm:order-3" role="group" aria-label="Language / Langue">
-        <button type="button" id="btn-en" aria-pressed="true">EN</button>
-        <button type="button" id="btn-fr" aria-pressed="false">FR</button>
-      </div>
-      <nav class="order-3 sm:order-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 flex flex-wrap sm:flex-nowrap gap-3 text-[11px] uppercase tracking-wide sm:overflow-x-auto no-scrollbar">
-        <a href="{{ url_for('undex') }}" data-i18n="nav-home" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Home</a>
-        <a href="{{ url_for('internals.internals') }}" data-i18n="nav-internals" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Internals</a>
-        <a href="{{ url_for('release.release') }}" data-i18n="nav-releases" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Releases</a>
-        <a href="{{ url_for('notice.notice') }}" data-i18n="nav-notice" class="hover:text-[var(--stamp)] transition-colors duration-200 whitespace-nowrap">Notice</a>
-        <a href="https://github.com/NycolazSec/tcpcat" target="_blank" class="nav-external hidden sm:inline text-[var(--wire)] transition-colors duration-200 whitespace-nowrap">GitHub ↗</a>
-        <a href="https://discord.gg/7entMMCuX7" target="_blank" class="nav-external hidden sm:inline text-[var(--wire)] transition-colors duration-200 whitespace-nowrap">Discord ↗</a>
-      </nav>
-    </div>
-  </header>
-
+{% endblock %}
+{% block brand_tag %}<span class="hidden sm:inline text-[10px] font-mono font-normal tracking-widest text-[var(--ink-faint)] uppercase" data-i18n="brand-tag">Notice</span>{% endblock %}
+{% block body %}
   <main class="wrap">
 
     <div class="meta">
@@ -190,6 +161,4 @@
       "footer-warranty": "Fourni « tel quel », sans garantie d'aucune sorte"
     }, { defaultLang: 'en', otherLang: 'fr' });
   </script>
-
-</body>
-</html>
+{% endblock %}

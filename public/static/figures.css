@@ -1,0 +1,134 @@
+/* Inline SVG figures (benchmark chart, eBPF architecture diagram, 404
+   illustration). Colors come from base.css's tokens so the figures follow
+   the page palette; text uses the page fonts. Every animation is opt-out
+   via prefers-reduced-motion. */
+
+.fig{display:block; width:100%; height:auto; overflow:visible;}
+.fig text{font-family:'IBM Plex Mono', ui-monospace, monospace; fill:var(--ink);}
+.fig .t-display{font-family:'Space Grotesk', 'IBM Plex Mono', monospace; font-weight:700;}
+.fig .t-soft{fill:var(--ink-soft);}
+.fig .t-faint{fill:var(--ink-faint);}
+.fig .t-stamp{fill:var(--stamp);}
+.fig .t-wire{fill:var(--wire);}
+.fig .t-bold{font-weight:600;}
+
+.fig .card{fill:var(--card); stroke:var(--rule-strong); stroke-width:1.2;}
+.fig .card-strong{fill:var(--card); stroke:var(--ink); stroke-width:1.5;}
+.fig .track{fill:var(--paper-flat); stroke:var(--rule); stroke-width:1;}
+.fig .rule{stroke:var(--rule-strong); stroke-width:1;}
+.fig .ink-line{stroke:var(--ink); stroke-width:1.5; fill:none;}
+.fig .soft-line{stroke:var(--rule-strong); stroke-width:1.5; fill:none;}
+.fig .fill-stamp{fill:var(--stamp);}
+.fig .fill-faint{fill:var(--ink-faint);}
+.fig .fill-wire{fill:var(--wire);}
+.fig .fill-paper{fill:var(--paper);}
+.fig .stroke-stamp{stroke:var(--stamp);}
+.fig .stroke-ink{stroke:var(--ink);}
+.fig .stroke-wire{stroke:var(--wire);}
+.fig .dashed{stroke-dasharray:4 4;}
+.fig .fill-ink-soft{fill:var(--ink-soft);}
+.fig .t-white{fill:#fff;}
+.fig .arrow{stroke:var(--ink-soft); stroke-width:1.3; fill:none;}
+
+/* Architecture diagram (index §4). The kernel tones match /internals'
+   own --kernel-* tokens so both pages draw the kernel the same way. */
+.fig .band{fill:var(--paper-flat);}
+.fig .kernel-band{fill:#f3e6c8; stroke:#d8b876; stroke-width:1.2;}
+.fig .kbox{fill:var(--paper); stroke:#d8b876; stroke-width:1.2;}
+.fig .kbox-wire{fill:var(--paper); stroke:var(--wire); stroke-width:1.5;}
+.fig .kbox-stamp{fill:var(--paper); stroke:var(--stamp); stroke-width:1.5;}
+.fig .lib{fill:#faf3e1; stroke:#d8b876; stroke-width:1.2;}
+.fig .prog{fill:#faf3e1; stroke:#b89a55; stroke-width:1.2; stroke-dasharray:3 3;}
+.fig .sys{fill:var(--paper-flat); stroke:var(--rule-strong); stroke-width:1.2;}
+.fig .t-kernel{fill:#7a4e0c;}
+
+/* Wide diagrams keep a readable text size on phones by scrolling
+   sideways, same as the site's other wide figures. */
+.fig-scroll{overflow-x:auto;}
+.fig-scroll > .fig{min-width:620px;}
+
+/* Client → server exchange (index §4.1): port-state stamps. */
+.fig .t-open{fill:#2f6b3a;}
+.fig .stroke-open{stroke:#2f6b3a;}
+.fig .t-amber{fill:var(--amber);}
+.fig .stroke-amber{stroke:var(--amber);}
+.fig .reply{stroke:var(--wire); stroke-width:1.5; fill:none;}
+.fig .fill-wire-arrow{fill:var(--wire);}
+
+@media (max-width:640px){
+  .fig-seq text{font-size:12px;}
+  .fig-seq .t-small{font-size:10.5px;}
+}
+
+/* Terminal demo (index §6). Colors are lightened versions of the site
+   palette so they stay readable (≥ 4.5:1) on the dark terminal. */
+.term text{font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11.5px; fill:#e6e9e3; white-space:pre;}
+.term .t-dim{fill:#8c9389;}
+.term .t-ok{fill:#8cc59a;}
+.term .t-prompt{fill:#e8857a;}
+.term .t-b{font-weight:600;}
+.term .term-line{opacity:0;}
+.term.is-playing .term-line{animation:term-in .12s ease-out forwards; animation-delay:var(--d, 0s);}
+.term .term-cmd{clip-path:inset(0 100% 0 0);}
+.term.is-playing .term-cmd{animation:term-type 1.1s steps(38, end) .25s forwards;}
+.term .cursor{animation:term-blink 1s steps(1) infinite;}
+@keyframes term-in{to{opacity:1;}}
+@keyframes term-type{to{clip-path:inset(0 0 0 0);}}
+@keyframes term-blink{50%{opacity:0;}}
+.term-replay{
+  font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px;
+  color:var(--wire); background:none; border:none; padding:2px 0; cursor:pointer;
+}
+.term-replay:hover{color:var(--stamp);}
+@media (prefers-reduced-motion: reduce){
+  .term .term-line, .term.is-playing .term-line{opacity:1; animation:none;}
+  .term .term-cmd, .term.is-playing .term-cmd{clip-path:none; animation:none;}
+  .term .cursor{animation:none;}
+  .term-replay{display:none;}
+}
+
+/* The benchmark chart scales with the column, so on a phone its text
+   would shrink to ~7px. CSS font-size (in SVG user units) overrides the
+   font-size attributes there; the layout has room for the larger text. */
+@media (max-width:640px){
+  .fig-bench text{font-size:15px;}
+  .fig-bench .t-tick text{font-size:13px;}
+  .fig-bench .t-legend{font-size:12.5px;}
+}
+
+/* Benchmark: bars grow once the section scrolls into view (.fade-in gets
+   .is-visible from index.html's IntersectionObserver). */
+.fig .bench-bar{
+  transform-box:fill-box;
+  transform-origin:left center;
+  transform:scaleX(0);
+  transition:transform 1.1s cubic-bezier(.2,.7,.2,1) .15s;
+}
+.is-visible .fig .bench-bar{transform:scaleX(1);}
+.is-visible .fig .bench-bar.late{transition-delay:.45s;}
+.is-visible .fig .bench-bar.later{transition-delay:.75s;}
+/* min … max whiskers appear once the bars have finished growing. */
+.fig .bench-whisker{stroke:var(--ink); stroke-width:1.4; opacity:0; transition:opacity .4s ease 1.6s;}
+.is-visible .fig .bench-whisker{opacity:1;}
+
+/* 404: request goes out, comes back refused. */
+.fig .probe{animation:fig-probe 3.6s ease-in-out infinite;}
+@keyframes fig-probe{
+  0%   {transform:translateX(0);}
+  45%  {transform:translateX(var(--reach, 200px));}
+  55%  {transform:translateX(var(--reach, 200px));}
+  100% {transform:translateX(0);}
+}
+.fig .refused{animation:fig-refused 3.6s ease-in-out infinite;}
+@keyframes fig-refused{
+  0%, 40% {opacity:0;}
+  48%, 70% {opacity:1;}
+  85%, 100% {opacity:0;}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .fig .bench-bar{transform:none; transition:none;}
+  .fig .bench-whisker{opacity:1; transition:none;}
+  .fig .probe{animation:none;}
+  .fig .refused{animation:none; opacity:1;}
+}

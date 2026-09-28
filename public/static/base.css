@@ -9,8 +9,11 @@
   --paper-flat: #e6e9e3;
   --card:       #f6f7f3;
   --ink:        #171a17;
-  --ink-soft:   #545b52;
-  --ink-faint:  #8b9188;
+  /* Both meet WCAG AA (4.5:1) for small text on every background the site
+     uses (paper, paper-flat, card, the /internals kernel band); ink-faint
+     is used for 10–11px labels, so it can't be any lighter. */
+  --ink-soft:   #484e46;
+  --ink-faint:  #626860;
   --rule:       #c6ccc1;
   --rule-strong:#9aa294;
   --stamp:      #9c2b21;
