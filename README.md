@@ -18,7 +18,7 @@
 [![CI](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml/badge.svg)](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14561/badge)](https://www.bestpractices.dev/projects/14561)
 [![Go Report Card](https://goreportcard.com/badge/github.com/NycolazSec/tcpcat)](https://goreportcard.com/report/github.com/NycolazSec/tcpcat)
-[![License: Source-Available](https://img.shields.io/badge/License-Source--Available-orange.svg)](LICENSE)
+[![License: AGPL-3.0 or Commercial](https://img.shields.io/badge/License-AGPL--3.0%20or%20Commercial-blue.svg)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/releases)
 [![Discord](https://img.shields.io/badge/Discord-Rejoindre-5865F2?logo=discord&logoColor=white)](https://discord.gg/syn)
 </div>
@@ -31,7 +31,7 @@
 
 ### Project Status
 
-tcpcat is a source-available project maintained by Nicolas Blondelle (NycolazSec). It is **free for personal and internal use** — including a company assessing its own or its clients' authorized networks — and does not provide a hosted scanning service, paid support, managed assessments, or customer accounts. Building it into a commercial product or redistributing it in a paid product or service requires a commercial (OEM) license (see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). The project is intended for learning, network administration, and authorized security testing.
+tcpcat is a dual-licensed project (AGPL-3.0 or commercial) maintained by Nicolas Blondelle (NycolazSec). It is **free and open source under the AGPL-3.0**, and does not provide a hosted scanning service, paid support, managed assessments, or customer accounts. Embedding it in a proprietary product or hosted service without the AGPL's copyleft obligations requires a commercial (OEM) license (see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). The project is intended for learning, network administration, and authorized security testing.
 
 ### Core Capabilities
 
@@ -483,10 +483,15 @@ not as public issues. See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 
-tcpcat is **source-available**, not open-source. It is free for personal and
-internal use; commercial integration or redistribution in a paid product or
-service requires a commercial (OEM) license. See [LICENSE](LICENSE),
-[COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md), and [NOTICE.md](NOTICE.md).
+tcpcat is **dual-licensed**:
+
+- **GNU Affero General Public License v3.0 (AGPL-3.0)** — free and open source;
+  see [LICENSE](LICENSE). You may use, modify, and self-host tcpcat, but if you
+  distribute it or offer it to others over a network, you must release your
+  product's complete source under the AGPL.
+- **Commercial (OEM) license** — for embedding tcpcat in a proprietary product
+  or hosted service without the AGPL's copyleft obligations. See
+  [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
 
 Versions up to and including **v1.4.1** were released under the Apache License
 2.0 ([LICENSE-Apache-2.0.txt](LICENSE-Apache-2.0.txt)) and remain available

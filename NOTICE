@@ -4,8 +4,8 @@ Copyright 2026 Nicolas Blondelle (NycolazSec)
 This product is developed by Nicolas Blondelle (NycolazSec),
 https://github.com/NycolazSec/tcpcat
 
-Versions after v1.4.1 are distributed under the tcpcat Source-Available
-License (see LICENSE): free for personal and internal use, with commercial
-integration and redistribution requiring a separate paid license (see
-COMMERCIAL-LICENSE.md). Versions up to and including v1.4.1 were released
-under the Apache License 2.0 (see LICENSE-Apache-2.0.txt).
+Versions after v1.4.1 are dual-licensed: under the GNU Affero General Public
+License v3.0 (see LICENSE), or under a separate commercial (OEM) license for
+proprietary integration and redistribution (see COMMERCIAL-LICENSE.md).
+Versions up to and including v1.4.1 were released under the Apache License 2.0
+(see LICENSE-Apache-2.0.txt).

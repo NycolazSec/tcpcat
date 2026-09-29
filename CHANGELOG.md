@@ -11,12 +11,13 @@ Full diffs for every release are available via GitHub's
 ## [Unreleased]
 
 ### Changed
-- **License: tcpcat is now source-available, not Apache-2.0.** Free for
-  personal and internal use; commercial integration or redistribution in a
-  paid product/service requires a commercial (OEM) license (see
-  COMMERCIAL-LICENSE.md), the same model Nmap uses. Versions up to and
-  including v1.4.1 remain under the Apache License 2.0
-  (LICENSE-Apache-2.0.txt). This applies to later versions only.
+- **License: tcpcat is now dual-licensed (AGPL-3.0 or commercial), not
+  Apache-2.0.** The public version is free and open source under the GNU
+  Affero GPL v3.0; embedding it in a proprietary product or hosted service
+  without the AGPL's copyleft obligations requires a commercial (OEM) license
+  (see COMMERCIAL-LICENSE.md) -- the dual-license model used by MySQL and
+  others. Versions up to and including v1.4.1 remain under the Apache License
+  2.0 (LICENSE-Apache-2.0.txt). This applies to later versions only.
 
 ### Added
 - `--profile ot`: a gentle scan profile for fragile industrial/OT networks

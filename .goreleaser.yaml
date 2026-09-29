@@ -42,7 +42,7 @@ nfpms:
     homepage: https://tcpcat.io
     maintainer: NycolazSec <contact@nycolazsec.com>
     description: High-Performance Network Reconnaissance & Vulnerability Intelligence Engine
-    license: LicenseRef-tcpcat-Source-Available
+    license: AGPL-3.0-only
     formats:
       - deb
       - rpm
