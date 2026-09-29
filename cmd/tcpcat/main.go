@@ -277,18 +277,13 @@ func main() {
 	if opts.SkipDiscovery {
 		activeTargets = targetIPs
 		fmt.Printf("%s[*] Host discovery skipped (-Pn). All %d target(s) will be scanned.%s\n", config.Red, len(targetIPs), config.Reset)
-	} else if scan.GlobalXsk != nil {
-		fmt.Printf("%s[*] Running Host Discovery (AF_XDP: ICMP + SYN/443 + ACK/80)...%s\n", config.White, config.Reset)
-		discoveryTimeout := time.Duration(opts.DiscoveryTimeout) * time.Millisecond
-		activeTargets = scan.DiscoverHostsXDP(targetIPs, discoveryTimeout, scan.NewLimiterFromOptions(opts))
-		for _, ip := range activeTargets {
-			fmt.Printf("    ├─ %s[UP]%s %s\n", config.White, config.Reset, ip)
-		}
-		if len(activeTargets) == 0 {
-			fmt.Printf("%s[!] No active hosts found. Use -Pn to skip host discovery.%s\n", config.Red, config.Reset)
-			os.Exit(0)
-		}
 	} else {
+		// Host discovery always uses the ARP + ping path below, including
+		// under --ebpf: the AF_XDP engine is only brought up later (just
+		// before the port scan, see InitXDPEngine), so it isn't available
+		// here. The eBPF speedup is in the port scan, not discovery, which
+		// is a quick one-time step. scan.DiscoverHostsXDP remains a library
+		// function for a future wiring (see internal/scan/xdp_asm.go).
 		fmt.Printf("%s[*] Running Host Discovery...%s\n", config.White, config.Reset)
 
 		discoveryTimeout := time.Duration(opts.DiscoveryTimeout) * time.Millisecond
