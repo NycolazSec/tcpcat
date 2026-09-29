@@ -88,6 +88,7 @@ type Options struct {
 	OsDetect      bool
 	MPTCP         bool
 	JARM          bool
+	OTProbe       bool
 
 	SourcePort   int
 	TTL          int
@@ -289,6 +290,7 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.OsDetect, "O", false, "Enable OS detection")
 	flag.BoolVar(&opts.MPTCP, "mptcp", false, "Advertise MP_CAPABLE in SYN probes and flag Multipath-TCP-capable hosts (needs -sS or --ebpf)")
 	flag.BoolVar(&opts.JARM, "jarm", false, "Compute an active JARM TLS fingerprint on TLS ports (10 extra non-standard ClientHellos per target)")
+	flag.BoolVar(&opts.OTProbe, "ot-probe", false, "Send one well-formed, read-only protocol query to identified OT ports (e.g. Modbus) to read exact vendor/version. Opt-in; use only within an authorized maintenance window")
 
 	flag.IntVar(&opts.SourcePort, "g", 0, "Use given source port number")
 	flag.IntVar(&opts.TTL, "ttl", 0, "Set IP time-to-live field")
@@ -394,6 +396,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s-O%s              Enable OS detection\n", White, Reset)
 		fmt.Printf("  %s--mptcp%s         Detect Multipath-TCP-capable hosts (MP_CAPABLE in SYN; needs -sS or --ebpf)\n", White, Reset)
 		fmt.Printf("  %s--jarm%s          Compute an active JARM TLS fingerprint on TLS ports (10 extra probes/target)\n", White, Reset)
+		fmt.Printf("  %s--ot-probe%s      Read exact vendor/version from OT ports (Modbus...) via one well-formed read-only query\n", White, Reset)
 		fmt.Println(Bold + Red + "\nEVASION & OPTIONS:" + Reset)
 		fmt.Printf("  %s-g <port>%s       Use specified source port\n", White, Reset)
 		fmt.Printf("  %s--ttl <val>%s     Set custom IP Time-To-Live\n", White, Reset)

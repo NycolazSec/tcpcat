@@ -480,7 +480,7 @@ func main() {
 		fmt.Printf("%s[*] Running Service & Version Detection...%s\n", config.Red, config.Reset)
 		for i := range results {
 			if results[i].State == scan.StateOpen {
-				svc := service.DetectService(results[i].IP, results[i].Port, 2*time.Second, opts.InsecureTLS, targetNames[results[i].IP], opts.JARM)
+				svc := service.DetectService(results[i].IP, results[i].Port, 2*time.Second, opts.InsecureTLS, targetNames[results[i].IP], opts.JARM, opts.OTProbe)
 				results[i].Service = svc.Name
 				results[i].Banner = svc.Banner
 				results[i].Version = svc.Version

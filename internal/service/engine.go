@@ -43,9 +43,23 @@ var osRegexps = map[string]*regexp.Regexp{
 // is only used to address name-based virtual hosts correctly (TLS SNI and
 // the HTTP Host header), never to choose what to connect to -- every
 // probe below dials ip itself.
-func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerify bool, hostname string, jarmEnabled bool) ServiceInfo {
+func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerify bool, hostname string, jarmEnabled bool, otProbe bool) ServiceInfo {
 	info := ServiceInfo{
 		Name: "unknown",
+	}
+
+	// Opt-in OT identification (--ot-probe): a single well-formed, read-only
+	// protocol query that pulls an exact vendor/product/version from an
+	// industrial device. Runs its own dial to completion, like every other
+	// probe here. On success it is authoritative; on failure we fall through
+	// to the normal passive flow, which still names the port by number.
+	if otProbe {
+		if name, version, banner, ok := probeOTService(ip, port, timeout); ok {
+			info.Name = name
+			info.Version = version
+			info.Banner = banner
+			return info
+		}
 	}
 
 	// Run the dedicated TLS probe -- its own independent dial, handshake,

@@ -19,6 +19,11 @@ Full diffs for every release are available via GitHub's
   S7comm, EtherNet/IP, DNP3, BACnet, OPC UA, PROFINET, IEC-104, and more).
 - Port-based naming for common OT/ICS protocols in service detection, so an
   open control port is identified without sending it any active probe.
+- `--ot-probe`: opt-in, read-only OT identification. Sends one well-formed
+  protocol query per supported port to read the exact vendor/product/version
+  (Modbus function 43 / MEI 14 "Read Device Identification" to start), which
+  feeds CVE correlation. Never sends malformed frames, never writes to the
+  device, and is never enabled automatically by the `ot` profile.
 
 ## [1.4.1] - 2026-09-28
 

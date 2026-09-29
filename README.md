@@ -183,6 +183,14 @@ sudo tcpcat --profile ot --scope-file scope.txt 10.10.0.0/24
 | IEC 60870-5-104 | 2404 | BACnet | 47808 |
 | CODESYS | 2455 | | |
 
+By default, OT ports are named passively — no query is sent to a control port. To read an exact vendor and version (which enables CVE correlation), add `--ot-probe`:
+
+```bash
+sudo tcpcat --profile ot --ot-probe -p 502 10.10.0.5
+```
+
+`--ot-probe` sends **one well-formed, read-only** protocol query per supported port and parses the reply. Currently supported: Modbus (function 43 / MEI 14, "Read Device Identification" → vendor, product, revision). It never sends a malformed frame and never writes to or commands the device. It only fires on ports with a registered probe; any other port is still named passively. Because even a legitimate query can disturb the most fragile equipment, `--ot-probe` is strictly opt-in and is never enabled by the `ot` profile on its own.
+
 Even the `ot` profile is not risk-free on the most sensitive equipment. Scan only within an authorized scope and maintenance window, and coordinate with the OT/process owner first.
 
 Use a valid earlier tcpcat JSON report as a baseline to identify newly exposed ports, service/version changes, and newly detected CVEs:
@@ -249,6 +257,7 @@ pointed at an IPv6 target instead of silently misbehaving.
                       (needs -sS or --ebpf on Linux, as root, to read a raw SYN/ACK)
 --scripts <dir>       Load WASM detection modules
 --jarm                Active JARM TLS fingerprint on TLS ports (opt-in: 10 extra probes/target)
+--ot-probe            Read exact vendor/version from OT ports (Modbus...) via one read-only query (opt-in)
 ```
 On a `443`/`8443` port, `-sV` also runs an independent TLS/certificate
 probe and attaches the result as `tls` in JSON output: negotiated
