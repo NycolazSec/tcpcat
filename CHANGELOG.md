@@ -10,14 +10,7 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
-### Changed
-- **License: tcpcat is now dual-licensed (AGPL-3.0 or commercial), not
-  Apache-2.0.** The public version is free and open source under the GNU
-  Affero GPL v3.0; embedding it in a proprietary product or hosted service
-  without the AGPL's copyleft obligations requires a commercial (OEM) license
-  (see COMMERCIAL-LICENSE.md) -- the dual-license model used by MySQL and
-  others. Versions up to and including v1.4.1 remain under the Apache License
-  2.0 (LICENSE-Apache-2.0.txt). This applies to later versions only.
+## [1.4.2] - 2026-09-30
 
 ### Added
 - `--profile ot`: a gentle scan profile for fragile industrial/OT networks
@@ -31,10 +24,18 @@ Full diffs for every release are available via GitHub's
 - `--ot-probe`: opt-in, read-only OT identification. Sends one well-formed
   protocol query per supported port to read the exact vendor/product/version
   (Modbus function 43 / MEI 14 "Read Device Identification", and EtherNet/IP
-  "List Identity"), which feeds CVE correlation. Never sends malformed frames, never writes to the
-  device, and is never enabled automatically by the `ot` profile.
+  "List Identity"), which feeds CVE correlation. Never sends malformed frames,
+  never writes to the device, and is never enabled automatically by the `ot`
+  profile.
 
 ### Changed
+- **License: tcpcat is now dual-licensed (AGPL-3.0 or commercial), not
+  Apache-2.0.** The public version is free and open source under the GNU
+  Affero GPL v3.0; embedding it in a proprietary product or hosted service
+  without the AGPL's copyleft obligations requires a commercial (OEM) license
+  (see COMMERCIAL-LICENSE.md) -- the dual-license model used by MySQL and
+  others. Versions up to and including v1.4.1 remain under the Apache License
+  2.0 (LICENSE-Apache-2.0.txt). This applies to later versions only.
 - TLS inspection and JARM fingerprinting now cover any open port, not just
   443/8443: a broader set of implicit-TLS ports is always inspected, and with
   `--jarm` a TLS handshake is attempted on every open port so JARM covers a
@@ -43,6 +44,10 @@ Full diffs for every release are available via GitHub's
 ### Fixed
 - TLS and JARM results were only attached to the output for web ports; a TLS
   service on a non-web port had its fingerprint computed but dropped.
+
+### Removed
+- Dropped the unused `pkg/rawnet` package (dead code that also broke the
+  Windows build) and an unreachable AF_XDP host-discovery branch.
 
 ## [1.4.1] - 2026-09-28
 
@@ -691,7 +696,8 @@ Full diffs for every release are available via GitHub's
   visibility-testing controls, and a WASM-based scripting engine for custom
   detectors and exploit modules.
 
-[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/NycolazSec/tcpcat/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/NycolazSec/tcpcat/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/NycolazSec/tcpcat/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/NycolazSec/tcpcat/compare/v1.2.0...v1.3.0
