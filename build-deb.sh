@@ -18,7 +18,7 @@ Version: ${VERSION}
 Section: net
 Priority: optional
 Architecture: amd64
-Maintainer: NycolazSec <contact@nycolazsec.com>
+Maintainer: NycolazSec <support@tcpcat.io>
 Description: High-Performance Network Reconnaissance & Vulnerability Intelligence Platform
 CONTROL
 

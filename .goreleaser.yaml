@@ -40,7 +40,7 @@ nfpms:
     package_name: tcpcat
     vendor: NycolazSec
     homepage: https://tcpcat.io
-    maintainer: NycolazSec <contact@nycolazsec.com>
+    maintainer: NycolazSec <support@tcpcat.io>
     description: High-Performance Network Reconnaissance & Vulnerability Intelligence Engine
     license: AGPL-3.0-only
     formats:

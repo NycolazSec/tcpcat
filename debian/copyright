@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Source: https://github.com/NycolazSec/tcpcat
 Upstream-Name: tcpcat
-Upstream-Contact: Nicolas Blondelle <contact@nycolazsec.com>
+Upstream-Contact: Nicolas Blondelle <support@tcpcat.io>
 Comment: tcpcat (after v1.4.1) is dual-licensed. The public version is under
  the GNU AGPL-3.0 (packaged here). A separate commercial license is also
  offered by the copyright holder for proprietary integration; that commercial
@@ -13,7 +13,7 @@ Copyright: 2026 Nicolas Blondelle (NycolazSec)
 License: AGPL-3.0-only
 
 Files: debian/*
-Copyright: 2026 Nicolas Blondelle <contact@nycolazsec.com>
+Copyright: 2026 Nicolas Blondelle <support@tcpcat.io>
 License: AGPL-3.0-only
 
 License: AGPL-3.0-only

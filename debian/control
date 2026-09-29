@@ -1,6 +1,6 @@
 Source: tcpcat
 Section: net
-Maintainer: Nicolas Blondelle <contact@nycolazsec.com>
+Maintainer: Nicolas Blondelle <support@tcpcat.io>
 Build-Depends: debhelper-compat (= 14),
                ca-certificates,
                dh-golang,

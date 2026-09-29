@@ -30,7 +30,7 @@ authorized networks, or to build on it under the AGPL's terms.
 
 ## Contact
 
-Nicolas Blondelle (NycolazSec) — **contact@nycolazsec.com**
+Nicolas Blondelle (NycolazSec) — **support@tcpcat.io**
 
 ---
 
