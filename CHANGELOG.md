@@ -10,6 +10,14 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Changed
+- **License: tcpcat is now source-available, not Apache-2.0.** Free for
+  personal and internal use; commercial integration or redistribution in a
+  paid product/service requires a commercial (OEM) license (see
+  COMMERCIAL-LICENSE.md), the same model Nmap uses. Versions up to and
+  including v1.4.1 remain under the Apache License 2.0
+  (LICENSE-Apache-2.0.txt). This applies to later versions only.
+
 ### Added
 - `--profile ot`: a gentle scan profile for fragile industrial/OT networks
   (PLC, RTU, ICS). Forces a full TCP connect scan (never raw SYN, UDP or

@@ -13,8 +13,10 @@ statement made here.
 ## 1. Software Status and Defensive Purpose
 
 tcpcat is a **dual-use** network reconnaissance and security-assessment
-engine, released under the Apache License 2.0 as a non-commercial,
-community-maintained open-source project.
+engine, released under the tcpcat Source-Available License: free for personal
+and internal use, with commercial integration and redistribution requiring a
+separate paid license (see COMMERCIAL-LICENSE.md). Versions up to and
+including v1.4.1 were released under the Apache License 2.0.
 
 tcpcat is designed and distributed exclusively for:
 
@@ -100,9 +102,9 @@ and their target's location.
 
 TCPCAT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
 INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE, ACCURACY, AND NON-INFRINGEMENT, AS SET OUT IN SECTION 7
-OF THE APACHE LICENSE, VERSION 2.0. TO THE MAXIMUM EXTENT PERMITTED BY
-APPLICABLE LAW, AND AS SET OUT IN SECTION 8 OF THAT LICENSE, IN NO EVENT
+PARTICULAR PURPOSE, ACCURACY, AND NON-INFRINGEMENT, AS SET OUT IN SECTION 8
+OF THE LICENSE. TO THE MAXIMUM EXTENT PERMITTED BY
+APPLICABLE LAW, AND AS SET OUT IN SECTION 9 OF THE LICENSE, IN NO EVENT
 SHALL THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
 LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS
 USE.
@@ -169,7 +171,7 @@ export controls.
 
 ## 6. No Compliance Guarantee
 
-tcpcat is provided under the Apache License 2.0. The authors do not
+tcpcat is provided under the tcpcat Source-Available License. The authors do not
 guarantee compliance with OFAC, EAR, GDPR, computer-misuse laws, or any
 other regulation. Users remain responsible for their own legal and
 operational decisions.

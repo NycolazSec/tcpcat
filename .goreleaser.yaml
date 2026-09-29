@@ -29,6 +29,8 @@ archives:
     files:
       - README.md
       - LICENSE
+      - LICENSE-Apache-2.0.txt
+      - COMMERCIAL-LICENSE.md
       - NOTICE
       - NOTICE.md
       - docs/*
@@ -40,7 +42,7 @@ nfpms:
     homepage: https://tcpcat.io
     maintainer: NycolazSec <contact@nycolazsec.com>
     description: High-Performance Network Reconnaissance & Vulnerability Intelligence Engine
-    license: Apache-2.0
+    license: LicenseRef-tcpcat-Source-Available
     formats:
       - deb
       - rpm

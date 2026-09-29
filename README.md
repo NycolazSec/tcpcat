@@ -18,7 +18,7 @@
 [![CI](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml/badge.svg)](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14561/badge)](https://www.bestpractices.dev/projects/14561)
 [![Go Report Card](https://goreportcard.com/badge/github.com/NycolazSec/tcpcat)](https://goreportcard.com/report/github.com/NycolazSec/tcpcat)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![License: Source-Available](https://img.shields.io/badge/License-Source--Available-orange.svg)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/releases)
 [![Discord](https://img.shields.io/badge/Discord-Rejoindre-5865F2?logo=discord&logoColor=white)](https://discord.gg/syn)
 </div>
@@ -31,7 +31,7 @@
 
 ### Project Status
 
-tcpcat is an open-source community project maintained as a personal passion project. It is not sold as a commercial product and does not provide a hosted scanning service, paid support, managed assessments, or customer accounts. The project is intended for learning, network administration, and authorized security testing.
+tcpcat is a source-available project maintained by Nicolas Blondelle (NycolazSec). It is **free for personal and internal use** — including a company assessing its own or its clients' authorized networks — and does not provide a hosted scanning service, paid support, managed assessments, or customer accounts. Building it into a commercial product or redistributing it in a paid product or service requires a commercial (OEM) license (see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). The project is intended for learning, network administration, and authorized security testing.
 
 ### Core Capabilities
 
@@ -461,8 +461,8 @@ version/banner-based CVE match is a lead requiring validation, not
 confirmation of exploitability.
 
 tcpcat is provided **"AS IS", with zero warranty and zero liability** for
-the authors and contributors, to the maximum extent permitted by law (Apache
-License 2.0, §§7–8). See [NOTICE.md](NOTICE.md) for the full legal notice —
+the authors and contributors, to the maximum extent permitted by law (see
+LICENSE §§8–9). See [NOTICE.md](NOTICE.md) for the full legal notice —
 software status, operator responsibility, disclaimer of warranty, dual-use
 capabilities, sanctions/export-control guidance, and the contribution policy
 — and [SECURITY.md](SECURITY.md) to report a vulnerability in tcpcat itself
@@ -483,4 +483,11 @@ not as public issues. See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 
-Apache License 2.0 — See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
+tcpcat is **source-available**, not open-source. It is free for personal and
+internal use; commercial integration or redistribution in a paid product or
+service requires a commercial (OEM) license. See [LICENSE](LICENSE),
+[COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md), and [NOTICE.md](NOTICE.md).
+
+Versions up to and including **v1.4.1** were released under the Apache License
+2.0 ([LICENSE-Apache-2.0.txt](LICENSE-Apache-2.0.txt)) and remain available
+under those terms.
