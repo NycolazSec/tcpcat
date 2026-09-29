@@ -487,70 +487,91 @@ func ParseFlags() (*Options, error) {
 	if opts.DecoyIPs == "auto" {
 		opts.DecoyIPs = "1.1.1.1,8.8.8.8,9.9.9.9"
 	}
-	if opts.RateLimit < 0 {
-		return nil, fmt.Errorf("rate must not be negative")
-	}
-	if opts.TopPorts < 0 {
-		return nil, fmt.Errorf("top-ports must not be negative")
-	}
-	if opts.TopPorts > 0 && strings.TrimSpace(opts.Ports) != "" {
-		return nil, fmt.Errorf("ports and top-ports cannot be used together")
-	}
-	if opts.ChangesOutput != "" && opts.BaselineFile == "" {
-		return nil, fmt.Errorf("changes requires a baseline file")
-	}
-	if opts.Profile != "" && opts.Profile != "safe-production" && opts.Profile != "ot" {
-		return nil, fmt.Errorf("profile must be safe-production or ot")
-	}
-	if opts.UdpPing < 0 || opts.UdpPing > 65535 {
-		return nil, fmt.Errorf("UDP ping port must be 0 or between 1 and 65535")
-	}
-	if opts.SourcePort < 0 || opts.SourcePort > 65535 {
-		return nil, fmt.Errorf("source port must be between 1 and 65535")
-	}
-	if opts.TTL < 0 || opts.TTL > 255 {
-		return nil, fmt.Errorf("TTL must be between 1 and 255")
+	if err := validateOptions(opts); err != nil {
+		return nil, err
 	}
 
+	if len(flag.Args()) > 0 {
+		opts.Target = flag.Arg(0)
+	}
+
+	if !opts.Update && !opts.Web && !opts.ShowVersion && opts.Target == "" && opts.InputFile == "" && opts.AWSTags == "" {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if err := ValidateScanCompatibility(opts); err != nil {
+		return nil, err
+	}
+
+	return opts, nil
+}
+
+// validateOptions checks the parsed options for out-of-range values and
+// mutually exclusive combinations, and normalizes a couple of derived flags
+// (DeepInspect turning on its sub-modes). Split out of ParseFlags so this
+// logic can be unit-tested directly without touching global flag state.
+func validateOptions(opts *Options) error {
+	if opts.RateLimit < 0 {
+		return fmt.Errorf("rate must not be negative")
+	}
+	if opts.TopPorts < 0 {
+		return fmt.Errorf("top-ports must not be negative")
+	}
+	if opts.TopPorts > 0 && strings.TrimSpace(opts.Ports) != "" {
+		return fmt.Errorf("ports and top-ports cannot be used together")
+	}
+	if opts.ChangesOutput != "" && opts.BaselineFile == "" {
+		return fmt.Errorf("changes requires a baseline file")
+	}
+	if opts.Profile != "" && opts.Profile != "safe-production" && opts.Profile != "ot" {
+		return fmt.Errorf("profile must be safe-production or ot")
+	}
+	if opts.UdpPing < 0 || opts.UdpPing > 65535 {
+		return fmt.Errorf("UDP ping port must be 0 or between 1 and 65535")
+	}
+	if opts.SourcePort < 0 || opts.SourcePort > 65535 {
+		return fmt.Errorf("source port must be between 1 and 65535")
+	}
+	if opts.TTL < 0 || opts.TTL > 255 {
+		return fmt.Errorf("TTL must be between 1 and 255")
+	}
 	if opts.Jitter < 0 || opts.Jitter > 1.0 {
-		return nil, fmt.Errorf("jitter must be between 0.0 and 1.0")
+		return fmt.Errorf("jitter must be between 0.0 and 1.0")
 	}
 
 	validEvasionModes := map[string]bool{
 		"off": true, "light": true, "moderate": true, "aggressive": true, "stealthy": true,
 	}
 	if !validEvasionModes[opts.EvasionMode] {
-		return nil, fmt.Errorf("evasion mode must be: off, light, moderate, aggressive, or stealthy")
+		return fmt.Errorf("evasion mode must be: off, light, moderate, aggressive, or stealthy")
 	}
 
 	validTTLModes := map[string]bool{
 		"fixed": true, "random": true, "probe": true,
 	}
 	if !validTTLModes[opts.TTLMode] {
-		return nil, fmt.Errorf("ttl-mode must be: fixed, random, or probe")
+		return fmt.Errorf("ttl-mode must be: fixed, random, or probe")
 	}
 
 	validSourcePortModes := map[string]bool{
 		"fixed": true, "random": true,
 	}
 	if !validSourcePortModes[opts.SourcePortMode] {
-		return nil, fmt.Errorf("source-port-mode must be: fixed or random")
+		return fmt.Errorf("source-port-mode must be: fixed or random")
 	}
 
 	if opts.ProbeTTL < 1 || opts.ProbeTTL > 255 {
-		return nil, fmt.Errorf("probe-ttl must be between 1 and 255")
+		return fmt.Errorf("probe-ttl must be between 1 and 255")
 	}
-
 	if opts.WindowSize < 0 || opts.WindowSize > 65535 {
-		return nil, fmt.Errorf("window-size must be between 0 (auto) and 65535")
+		return fmt.Errorf("window-size must be between 0 (auto) and 65535")
 	}
-
 	if opts.OSIVerbosity < 1 || opts.OSIVerbosity > 7 {
-		return nil, fmt.Errorf("osi-verbosity must be between 1 (minimal) and 7 (full dissection)")
+		return fmt.Errorf("osi-verbosity must be between 1 (minimal) and 7 (full dissection)")
 	}
 
 	if opts.DeepInspect {
-
 		opts.HexDump = true
 		opts.TimingAnalysis = true
 		opts.ProtocolTracing = true
@@ -570,23 +591,10 @@ func ParseFlags() (*Options, error) {
 		}
 	}
 	if scanTypes > 1 {
-		return nil, fmt.Errorf("scan types are mutually exclusive")
+		return fmt.Errorf("scan types are mutually exclusive")
 	}
 
-	if len(flag.Args()) > 0 {
-		opts.Target = flag.Arg(0)
-	}
-
-	if !opts.Update && !opts.Web && !opts.ShowVersion && opts.Target == "" && opts.InputFile == "" && opts.AWSTags == "" {
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	if err := ValidateScanCompatibility(opts); err != nil {
-		return nil, err
-	}
-
-	return opts, nil
+	return nil
 }
 
 // OTDefaultPorts are the well-known TCP ports of industrial / OT protocols,

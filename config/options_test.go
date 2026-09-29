@@ -166,6 +166,87 @@ func TestApplyOTProfileKeepsExplicitPorts(t *testing.T) {
 	}
 }
 
+// validOptions returns an Options with the same defaults ParseFlags sets, so
+// each test can flip one field and check that validateOptions reacts to it.
+func validOptions() *Options {
+	return &Options{
+		EvasionMode:    "off",
+		TTLMode:        "fixed",
+		SourcePortMode: "fixed",
+		ProbeTTL:       64,
+		OSIVerbosity:   4,
+		WindowSize:     0,
+	}
+}
+
+func TestValidateOptionsAcceptsDefaults(t *testing.T) {
+	if err := validateOptions(validOptions()); err != nil {
+		t.Fatalf("default options should validate, got: %v", err)
+	}
+}
+
+func TestValidateOptionsRejectsBadValues(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(*Options)
+	}{
+		{"negative rate", func(o *Options) { o.RateLimit = -1 }},
+		{"negative top-ports", func(o *Options) { o.TopPorts = -1 }},
+		{"ports and top-ports together", func(o *Options) { o.TopPorts = 100; o.Ports = "80" }},
+		{"changes without baseline", func(o *Options) { o.ChangesOutput = "d.json" }},
+		{"unknown profile", func(o *Options) { o.Profile = "turbo" }},
+		{"udp-ping out of range", func(o *Options) { o.UdpPing = 70000 }},
+		{"source port out of range", func(o *Options) { o.SourcePort = -5 }},
+		{"ttl out of range", func(o *Options) { o.TTL = 300 }},
+		{"jitter out of range", func(o *Options) { o.Jitter = 1.5 }},
+		{"bad evasion mode", func(o *Options) { o.EvasionMode = "ninja" }},
+		{"bad ttl-mode", func(o *Options) { o.TTLMode = "sideways" }},
+		{"bad source-port-mode", func(o *Options) { o.SourcePortMode = "wander" }},
+		{"probe-ttl out of range", func(o *Options) { o.ProbeTTL = 0 }},
+		{"window-size out of range", func(o *Options) { o.WindowSize = 70000 }},
+		{"osi-verbosity out of range", func(o *Options) { o.OSIVerbosity = 9 }},
+		{"two scan types", func(o *Options) { o.SynScan = true; o.ConnectScan = true }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			o := validOptions()
+			tc.mutate(o)
+			if err := validateOptions(o); err == nil {
+				t.Errorf("expected %s to be rejected, got nil error", tc.name)
+			}
+		})
+	}
+}
+
+func TestValidateOptionsAllowsKnownProfiles(t *testing.T) {
+	for _, p := range []string{"", "safe-production", "ot"} {
+		o := validOptions()
+		o.Profile = p
+		if err := validateOptions(o); err != nil {
+			t.Errorf("profile %q should be accepted, got: %v", p, err)
+		}
+	}
+}
+
+func TestValidateOptionsDeepInspectEnablesSubModes(t *testing.T) {
+	o := validOptions()
+	o.DeepInspect = true
+	if err := validateOptions(o); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !o.HexDump || !o.TimingAnalysis || !o.ProtocolTracing {
+		t.Errorf("deep-inspect should turn on hex-dump, timing-analysis and protocol-tracing: %+v", o)
+	}
+}
+
+func TestValidateOptionsSingleScanTypeOK(t *testing.T) {
+	o := validOptions()
+	o.SynScan = true
+	if err := validateOptions(o); err != nil {
+		t.Errorf("a single scan type must validate, got: %v", err)
+	}
+}
+
 func TestRenderBannerEmptyFallsBackToEth0(t *testing.T) {
 	if got := RenderBanner(""); !strings.Contains(got, "[eth0]") {
 		t.Errorf("RenderBanner(\"\") = %q, want it to fall back to the eth0 placeholder", got)
