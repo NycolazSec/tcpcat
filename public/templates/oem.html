@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% set page_lang = 'en' %}
+{% block title %}tcpcat — OEM / Commercial Licensing{% endblock %}
+{% block description %}tcpcat commercial and OEM licensing — embed tcpcat in a proprietary product or hosted service without the AGPL's copyleft obligations.{% endblock %}
+{% block head %}
+<style>
+  body{ font-size:14px; line-height:1.7; }
+  .wrap{max-width:720px; margin:0 auto; padding:0 24px;}
+  main{padding:56px 0 96px;}
+  .meta{
+    font-size:11px; color:var(--ink-soft);
+    display:grid; grid-template-columns:1fr 1fr; gap:2px 32px;
+    margin-bottom:40px;
+  }
+  .meta div:nth-child(even){text-align:right;}
+  .wrap h1{
+    font-family:'Space Grotesk', monospace; font-weight:700;
+    font-size:28px; line-height:1.2; margin:0 0 8px;
+  }
+  .subtitle{color:var(--ink-faint); font-size:11px; text-transform:uppercase; letter-spacing:.12em; margin:0 0 40px;}
+  .wrap section{margin-bottom:36px; padding-top:28px; border-top:1px solid var(--rule);}
+  .wrap section:first-of-type{border-top:1.5px solid var(--ink); padding-top:32px;}
+  .wrap h2{
+    font-family:'Space Grotesk', monospace; font-weight:600;
+    font-size:16px; margin:0 0 12px; display:flex; align-items:baseline; gap:10px;
+  }
+  h2 .n{color:var(--ink-faint); font-family:'IBM Plex Mono', monospace; font-weight:500; font-size:12px;}
+  .wrap p{margin:0 0 12px; color:var(--ink);}
+  .wrap ul{margin:0 0 12px; padding-left:20px;}
+  .wrap li{margin:0 0 6px; color:var(--ink);}
+  code{
+    font-family:'IBM Plex Mono', monospace; background:var(--card);
+    border:1px solid var(--rule); padding:1px 5px; border-radius:2px; font-size:.92em;
+  }
+  a.doclink{color:var(--wire); text-decoration:underline; text-underline-offset:2px; text-decoration-color:rgba(31,92,111,0.4);}
+  a.doclink:hover{text-decoration-color:var(--wire);}
+  .cta{
+    display:flex; flex-wrap:wrap; gap:14px 24px; align-items:baseline;
+    background:var(--card); border:1px solid var(--rule-strong);
+    padding:18px 20px; margin-top:8px;
+  }
+  .cta .mail{font-family:'Space Grotesk', monospace; font-weight:700; font-size:18px;}
+  .cta .mail a{color:var(--stamp); text-decoration:none;}
+  .cta .mail a:hover{text-decoration:underline;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:0 28px;}
+  .card-box{border:1px solid var(--rule); background:var(--card); padding:16px 18px; font-size:13px;}
+  .card-box h3{font-family:'Space Grotesk', monospace; font-weight:600; font-size:13.5px; margin:0 0 8px;}
+  .card-box.free h3{color:#2f6b3a;}
+  .card-box.oem h3{color:var(--stamp);}
+  footer{
+    border-top:1.5px solid var(--ink); padding:24px 0 40px;
+    font-size:11px; color:var(--ink-faint);
+  }
+  footer .wrap{display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;}
+  @media (max-width:640px){
+    .meta{grid-template-columns:1fr;}
+    .meta div:nth-child(even){text-align:left;}
+    .wrap h1{font-size:22px;}
+    .grid2{grid-template-columns:1fr; gap:16px 0;}
+  }
+</style>
+{% endblock %}
+{% block brand_tag %}<span class="hidden sm:inline text-[10px] font-mono font-normal tracking-widest text-[var(--ink-faint)] uppercase" data-i18n="brand-tag">OEM</span>{% endblock %}
+{% block body %}
+  <main class="wrap">
+    <div class="meta">
+      <div data-i18n="meta-doctype">Document type: Commercial / OEM licensing</div>
+      <div>N. — NycolazSec</div>
+      <div data-i18n="meta-project">Project: tcpcat</div>
+      <div>github.com/NycolazSec/tcpcat</div>
+      <div data-i18n="meta-status">Licensing: AGPL-3.0 or commercial</div>
+      <div class="sm:text-right">support@tcpcat.io</div>
+    </div>
+
+    <h1 data-i18n="title">Commercial &amp; OEM Licensing</h1>
+    <p class="subtitle" data-i18n="subtitle">Build tcpcat into your product — without the copyleft</p>
+
+    <section>
+      <h2><span class="n">1</span><span data-i18n="s1-h">tcpcat is dual-licensed</span></h2>
+      <p data-i18n="s1-p1">tcpcat's public version is released under the <strong>GNU Affero General Public License v3.0 (AGPL-3.0)</strong>. You can use, study, modify, and self-host it freely. But the AGPL is <strong>copyleft</strong>: if you distribute tcpcat, or offer it to others over a network, you must release the complete corresponding source of your product under the AGPL too.</p>
+      <p data-i18n="s1-p2">The <strong>commercial (OEM) license</strong> lifts that obligation, so you can embed tcpcat in a proprietary product or hosted service without open-sourcing your own code.</p>
+    </section>
+
+    <section>
+      <h2><span class="n">2</span><span data-i18n="s2-h">Which one do you need?</span></h2>
+      <div class="grid2">
+        <div class="card-box free">
+          <h3 data-i18n="s2-free-h">Free under AGPL-3.0</h3>
+          <p data-i18n="s2-free-p">Personal use, study, and research. A company running tcpcat on its own or its clients' authorized networks. Any project you're happy to release under the AGPL.</p>
+        </div>
+        <div class="card-box oem">
+          <h3 data-i18n="s2-oem-h">Needs a commercial license</h3>
+          <p data-i18n="s2-oem-p">Embedding tcpcat in a product, appliance, container image, or VM you sell. Offering it as a hosted/managed service without publishing your source. Reselling or bundling it in a paid product.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="n">3</span><span data-i18n="s3-h">What the OEM license grants</span></h2>
+      <ul>
+        <li data-i18n="s3-l1">Incorporate, bundle, and embed tcpcat (source or binary) into your commercial product.</li>
+        <li data-i18n="s3-l2">Distribute it in binary form as part of that product to your end-users.</li>
+        <li data-i18n="s3-l3">Release from the AGPL's copyleft obligations — no requirement to open-source your product.</li>
+      </ul>
+      <p data-i18n="s3-p1">The full terms are in the repository's <a class="doclink" href="https://github.com/NycolazSec/tcpcat/blob/main/COMMERCIAL-LICENSE.md" target="_blank" rel="noreferrer">COMMERCIAL-LICENSE.md</a>.</p>
+    </section>
+
+    <section>
+      <h2><span class="n">4</span><span data-i18n="s4-h">Pricing</span></h2>
+      <p data-i18n="s4-p1">Pricing is per commercial order and depends on your model — per-device royalty, annual distribution volume, or an unlimited-appliance tier. Tell us what you're building and how you plan to distribute it, and we'll send terms.</p>
+    </section>
+
+    <section>
+      <h2><span class="n">5</span><span data-i18n="s5-h">Get a commercial license</span></h2>
+      <p data-i18n="s5-p1">Email us with your product, expected distribution volume, and whether you need source or binary redistribution:</p>
+      <div class="cta">
+        <span class="mail"><a href="mailto:support@tcpcat.io?subject=tcpcat%20OEM%20license">support@tcpcat.io</a></span>
+        <span data-i18n="s5-note" style="color:var(--ink-soft);">Nicolas Blondelle (NycolazSec) — usually replies within a few business days.</span>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="n">6</span><span data-i18n="s6-h">Earlier versions</span></h2>
+      <p data-i18n="s6-p1">Versions up to and including <code>v1.4.1</code> were released under the Apache License 2.0 and remain available under those permissive terms. The AGPL / commercial dual-license applies to later versions only.</p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span data-i18n="footer-license">tcpcat — AGPL-3.0 or commercial</span>
+      <span><a class="doclink" href="mailto:support@tcpcat.io">support@tcpcat.io</a></span>
+      <span><a class="doclink" href="https://github.com/NycolazSec/tcpcat" target="_blank" rel="noreferrer">github.com/NycolazSec/tcpcat</a></span>
+    </div>
+  </footer>
+
+  <script src="{{ url_for('static', filename='lang-toggle.js') }}"></script>
+  <script>
+    TcpcatI18n.init({
+      "brand-tag": "OEM",
+      "nav-home": "Accueil",
+      "nav-internals": "Internals",
+      "nav-releases": "Releases",
+      "nav-notice": "Mentions",
+      "nav-oem": "OEM",
+      "meta-doctype": "Type de document : licence commerciale / OEM",
+      "meta-project": "Projet : tcpcat",
+      "meta-status": "Licence : AGPL-3.0 ou commerciale",
+      "title": "Licence commerciale et OEM",
+      "subtitle": "Intégrez tcpcat à votre produit — sans le copyleft",
+      "s1-h": "tcpcat est en double licence",
+      "s1-p1": "La version publique de tcpcat est publiée sous <strong>licence GNU Affero General Public License v3.0 (AGPL-3.0)</strong>. Vous pouvez l'utiliser, l'étudier, la modifier et l'héberger librement. Mais l'AGPL est <strong>copyleft</strong> : si vous distribuez tcpcat, ou le proposez à des tiers via un réseau, vous devez publier l'intégralité du code source correspondant de votre produit sous AGPL également.",
+      "s1-p2": "La <strong>licence commerciale (OEM)</strong> lève cette obligation, pour intégrer tcpcat dans un produit propriétaire ou un service hébergé sans ouvrir votre propre code.",
+      "s2-h": "Laquelle vous faut-il ?",
+      "s2-free-h": "Gratuit sous AGPL-3.0",
+      "s2-free-p": "Usage personnel, étude, recherche. Une entreprise qui exécute tcpcat sur ses propres réseaux ou ceux de ses clients autorisés. Tout projet que vous acceptez de publier sous AGPL.",
+      "s2-oem-h": "Nécessite une licence commerciale",
+      "s2-oem-p": "Intégrer tcpcat dans un produit, un boîtier, une image de conteneur ou une VM que vous vendez. Le proposer en service hébergé/géré sans publier votre source. Le revendre ou l'inclure dans un produit payant.",
+      "s3-h": "Ce que la licence OEM accorde",
+      "s3-l1": "Incorporer, regrouper et embarquer tcpcat (source ou binaire) dans votre produit commercial.",
+      "s3-l2": "Le distribuer sous forme binaire dans ce produit à vos utilisateurs finaux.",
+      "s3-l3": "Être libéré des obligations copyleft de l'AGPL — aucune obligation d'ouvrir le code de votre produit.",
+      "s3-p1": "Les conditions complètes sont dans le fichier <a class=\"doclink\" href=\"https://github.com/NycolazSec/tcpcat/blob/main/COMMERCIAL-LICENSE.md\" target=\"_blank\" rel=\"noreferrer\">COMMERCIAL-LICENSE.md</a> du dépôt.",
+      "s4-h": "Tarifs",
+      "s4-p1": "Le tarif dépend de votre modèle — redevance par appareil, volume de distribution annuel, ou palier « appareils illimités ». Décrivez ce que vous construisez et comment vous comptez le distribuer, et nous vous enverrons des conditions.",
+      "s5-h": "Obtenir une licence commerciale",
+      "s5-p1": "Écrivez-nous en précisant votre produit, le volume de distribution prévu, et si vous avez besoin d'une redistribution en source ou en binaire :",
+      "s5-note": "Nicolas Blondelle (NycolazSec) — réponse généralement sous quelques jours ouvrés.",
+      "s6-h": "Versions antérieures",
+      "s6-p1": "Les versions jusqu'à <code>v1.4.1</code> incluse ont été publiées sous licence Apache 2.0 et restent disponibles sous ces conditions permissives. La double licence AGPL / commerciale s'applique aux versions ultérieures uniquement.",
+      "footer-license": "tcpcat — AGPL-3.0 ou commerciale"
+    }, { defaultLang: 'en', otherLang: 'fr' });
+  </script>
+{% endblock %}

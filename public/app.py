@@ -6,19 +6,21 @@ from flask import Flask, Response, render_template, url_for
 import routes.release as release
 import routes.notice as notice
 import routes.internals as internals
+import routes.oem as oem
 
 app = Flask(__name__, template_folder='templates')
 
 app.register_blueprint(release.release_bp)
 app.register_blueprint(notice.notice_bp)
 app.register_blueprint(internals.internals_bp)
+app.register_blueprint(oem.oem_bp)
 
 # Public origin used for absolute URLs (canonical links, Open Graph image,
 # sitemap). Not derived from the request: behind a reverse proxy the app
 # sees its internal host and plain http, which social crawlers can't use.
 SITE_URL = os.environ.get('SITE_URL', 'https://tcpcat.io').rstrip('/')
 
-INDEXED_ENDPOINTS = ['undex', 'internals.internals', 'release.release', 'notice.notice']
+INDEXED_ENDPOINTS = ['undex', 'internals.internals', 'release.release', 'notice.notice', 'oem.oem']
 
 
 @app.context_processor
