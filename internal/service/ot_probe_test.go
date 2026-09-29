@@ -127,3 +127,74 @@ func TestProbeOTServiceSkipsUnregisteredPort(t *testing.T) {
 		t.Fatal("no probe is registered for port 65000; must return ok=false")
 	}
 }
+
+// buildENIPListIdentityResponse assembles a valid EtherNet/IP List Identity
+// reply carrying the given product name and revision.
+func buildENIPListIdentityResponse(product string, revMajor, revMinor byte) []byte {
+	identity := make([]byte, 0, 40)
+	identity = append(identity, 0x01, 0x00)             // encapsulation protocol version
+	identity = append(identity, make([]byte, 16)...)    // socket address
+	identity = append(identity, 0x01, 0x00)             // vendor id
+	identity = append(identity, 0x0E, 0x00)             // device type
+	identity = append(identity, 0x54, 0x00)             // product code
+	identity = append(identity, revMajor, revMinor)     // revision
+	identity = append(identity, 0x30, 0x00)             // status
+	identity = append(identity, 0x2A, 0x00, 0x00, 0x00) // serial number
+	identity = append(identity, byte(len(product)))     // product name length
+	identity = append(identity, []byte(product)...)     // product name
+	identity = append(identity, 0x03)                   // state
+
+	// CPF: item count (1), item type (0x000C CIP Identity), item length.
+	data := make([]byte, 0, 6+len(identity))
+	data = append(data, 0x01, 0x00)
+	data = append(data, 0x0C, 0x00)
+	itemLen := make([]byte, 2)
+	binary.LittleEndian.PutUint16(itemLen, uint16(len(identity)))
+	data = append(data, itemLen...)
+	data = append(data, identity...)
+
+	// Encapsulation header (24 bytes): command 0x0063, length = len(data),
+	// session 0, status 0, context 0, options 0.
+	header := make([]byte, 24)
+	binary.LittleEndian.PutUint16(header[0:2], 0x0063)
+	binary.LittleEndian.PutUint16(header[2:4], uint16(len(data)))
+	return append(header, data...)
+}
+
+func TestENIPIdentifyParsesIdentity(t *testing.T) {
+	resp := buildENIPListIdentityResponse("1756-L61/B LOGIX5561", 20, 11)
+	port, stop := startModbusStub(t, resp) // generic one-shot TCP responder
+	defer stop()
+
+	conn := dialStub(t, port)
+	defer func() { _ = conn.Close() }()
+
+	name, version, banner, ok := enipIdentify(conn, 2*time.Second)
+	if !ok {
+		t.Fatal("expected the EtherNet/IP List Identity probe to succeed")
+	}
+	if name != "ethernet-ip" {
+		t.Errorf("name = %q, want %q", name, "ethernet-ip")
+	}
+	if version != "20.11" {
+		t.Errorf("version = %q, want %q", version, "20.11")
+	}
+	if banner != "1756-L61/B LOGIX5561 20.11" {
+		t.Errorf("banner = %q", banner)
+	}
+}
+
+func TestENIPIdentifyRejectsWrongCommand(t *testing.T) {
+	// A reply echoing a different encapsulation command must be ignored.
+	bad := make([]byte, 24)
+	binary.LittleEndian.PutUint16(bad[0:2], 0x0065) // RegisterSession, not ListIdentity
+	port, stop := startModbusStub(t, bad)
+	defer stop()
+
+	conn := dialStub(t, port)
+	defer func() { _ = conn.Close() }()
+
+	if _, _, _, ok := enipIdentify(conn, 2*time.Second); ok {
+		t.Fatal("a non-ListIdentity reply must not be parsed as an identity")
+	}
+}

@@ -189,7 +189,7 @@ By default, OT ports are named passively — no query is sent to a control port.
 sudo tcpcat --profile ot --ot-probe -p 502 10.10.0.5
 ```
 
-`--ot-probe` sends **one well-formed, read-only** protocol query per supported port and parses the reply. Currently supported: Modbus (function 43 / MEI 14, "Read Device Identification" → vendor, product, revision). It never sends a malformed frame and never writes to or commands the device. It only fires on ports with a registered probe; any other port is still named passively. Because even a legitimate query can disturb the most fragile equipment, `--ot-probe` is strictly opt-in and is never enabled by the `ot` profile on its own.
+`--ot-probe` sends **one well-formed, read-only** protocol query per supported port and parses the reply. Currently supported: Modbus (function 43 / MEI 14, "Read Device Identification" → vendor, product, revision) and EtherNet/IP (encapsulation "List Identity" → product name, revision). It never sends a malformed frame and never writes to or commands the device. It only fires on ports with a registered probe; any other port is still named passively. Because even a legitimate query can disturb the most fragile equipment, `--ot-probe` is strictly opt-in and is never enabled by the `ot` profile on its own.
 
 Even the `ot` profile is not risk-free on the most sensitive equipment. Scan only within an authorized scope and maintenance window, and coordinate with the OT/process owner first.
 

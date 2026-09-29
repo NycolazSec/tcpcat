@@ -34,7 +34,8 @@ type otIdentifier func(conn net.Conn, timeout time.Duration) (name, version, ban
 // otIdentifiers maps a TCP port to its identification probe. Only ports
 // listed here are ever actively probed under --ot-probe.
 var otIdentifiers = map[int]otIdentifier{
-	502: modbusIdentify,
+	502:   modbusIdentify,
+	44818: enipIdentify,
 }
 
 // probeOTService dials the port itself (own connection, closed here, same
@@ -140,4 +141,71 @@ func modbusIdentify(conn net.Conn, timeout time.Duration) (name, version, banner
 		}
 	}
 	return name, revision, strings.Join(bannerParts, " "), true
+}
+
+// enipIdentify sends an EtherNet/IP "List Identity" request (encapsulation
+// command 0x0063) and parses the CIP Identity item from the reply for the
+// product name and revision. List Identity is a standard, read-only
+// discovery command -- it queries the device's identity object and changes
+// nothing. The reply's Product Name (e.g. "1756-L61/B LOGIX5561") plus the
+// major.minor revision give CVE correlation a concrete string to key on.
+func enipIdentify(conn net.Conn, timeout time.Duration) (name, version, banner string, ok bool) {
+	// Encapsulation header (24 bytes), all little-endian: command 0x0063,
+	// length 0 (no command data), the rest zero. A zero session handle is
+	// valid for List Identity (it needs no registered session).
+	req := make([]byte, 24)
+	binary.LittleEndian.PutUint16(req[0:2], 0x0063)
+
+	_ = conn.SetWriteDeadline(time.Now().Add(timeout))
+	if _, err := conn.Write(req); err != nil {
+		return "", "", "", false
+	}
+
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	buf := make([]byte, 512)
+	n, err := conn.Read(buf)
+	if err != nil || n < 24 {
+		return "", "", "", false
+	}
+	resp := buf[:n]
+
+	// Reply must echo command 0x0063 and report status 0 (success).
+	if binary.LittleEndian.Uint16(resp[0:2]) != 0x0063 {
+		return "", "", "", false
+	}
+	if binary.LittleEndian.Uint32(resp[8:12]) != 0 {
+		return "", "", "", false
+	}
+
+	data := resp[24:] // encapsulation data follows the 24-byte header
+	// data: item count (2), item type (2), item length (2), then the CIP
+	// identity structure.
+	if len(data) < 6 {
+		return "", "", "", false
+	}
+	if binary.LittleEndian.Uint16(data[2:4]) != 0x000C { // CIP Identity item
+		return "", "", "", false
+	}
+	id := data[6:]
+	// Identity layout up to the fields we read:
+	//   protocol version (2), socket address (16), vendor id (2),
+	//   device type (2), product code (2), revision major (1) + minor (1),
+	//   status (2), serial (4), product name length (1), product name (n).
+	const nameLenOff = 2 + 16 + 2 + 2 + 2 + 2 + 2 + 4 // = 32
+	if len(id) < nameLenOff+1 {
+		return "", "", "", false
+	}
+	revMajor := id[2+16+2+2+2]
+	revMinor := id[2+16+2+2+2+1]
+	nameLen := int(id[nameLenOff])
+	if nameLen == 0 || nameLenOff+1+nameLen > len(id) {
+		return "", "", "", false
+	}
+	product := sanitizeBanner(string(id[nameLenOff+1 : nameLenOff+1+nameLen]))
+	if product == "" {
+		return "", "", "", false
+	}
+
+	version = strconv.Itoa(int(revMajor)) + "." + strconv.Itoa(int(revMinor))
+	return "ethernet-ip", version, product + " " + version, true
 }
