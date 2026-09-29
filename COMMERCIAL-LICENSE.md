@@ -97,7 +97,7 @@ Except as expressly stated in a dedicated Service Level Agreement (SLA):
 This Agreement shall be governed by and construed in accordance with the laws
 of France. Any dispute arising out of or in connection with this Agreement
 shall be subject to the exclusive jurisdiction of the competent courts of
-**[CITY — e.g. your city of residence or registered office]**.
+**Lille**.
 
 ---
 
