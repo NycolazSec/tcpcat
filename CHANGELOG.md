@@ -25,6 +25,16 @@ Full diffs for every release are available via GitHub's
   "List Identity"), which feeds CVE correlation. Never sends malformed frames, never writes to the
   device, and is never enabled automatically by the `ot` profile.
 
+### Changed
+- TLS inspection and JARM fingerprinting now cover any open port, not just
+  443/8443: a broader set of implicit-TLS ports is always inspected, and with
+  `--jarm` a TLS handshake is attempted on every open port so JARM covers a
+  TLS service the fast `--ebpf` scan finds on a non-standard port.
+
+### Fixed
+- TLS and JARM results were only attached to the output for web ports; a TLS
+  service on a non-web port had its fingerprint computed but dropped.
+
 ## [1.4.1] - 2026-09-28
 
 ### Added

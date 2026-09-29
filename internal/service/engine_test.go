@@ -857,3 +857,26 @@ func TestResolveDefaultPortNameOT(t *testing.T) {
 		t.Errorf("resolveDefaultPortName(12345) = %q, want %q", got, "unknown")
 	}
 }
+
+func TestDetectServiceJARMOnNonStandardTLSPort(t *testing.T) {
+	// A TLS service on a port that is neither 443 nor 8443, exactly what the
+	// fast --ebpf scan might turn up. With --jarm (jarmEnabled) DetectService
+	// should still fingerprint it.
+	cert := selfSignedCert(t, "127.0.0.1", time.Now().AddDate(1, 0, 0))
+	port := startPlainTLSServer(t, cert)
+
+	withJARM := DetectService("127.0.0.1", port, 2*time.Second, true, "", true, false)
+	if withJARM.TLS == nil {
+		t.Fatalf("expected TLS to be detected on non-standard port %d with --jarm", port)
+	}
+	if withJARM.JARM == nil || len(withJARM.JARM.Hash) != 62 {
+		t.Fatalf("expected a JARM fingerprint on port %d with --jarm, got %+v", port, withJARM.JARM)
+	}
+
+	// Without --jarm, a non-known TLS port is not probed for TLS, so the extra
+	// handshakes are not paid -- JARM stays nil.
+	noJARM := DetectService("127.0.0.1", port, 2*time.Second, true, "", false, false)
+	if noJARM.JARM != nil {
+		t.Errorf("JARM must not run on a non-standard port without --jarm")
+	}
+}

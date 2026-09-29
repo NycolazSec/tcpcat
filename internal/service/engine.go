@@ -12,6 +12,20 @@ import (
 	"time"
 )
 
+// knownTLSPorts are ports that speak TLS implicitly (no STARTTLS upgrade),
+// so a TLS handshake -- and JARM under --jarm -- is worth attempting there
+// even before any banner. Beyond 443/8443 this covers the common alternate
+// HTTPS ports and other implicit-TLS services, so the fast (--ebpf) scan's
+// findings on non-standard ports still get fingerprinted.
+var knownTLSPorts = map[int]bool{
+	443: true, 8443: true, 9443: true, 4443: true, 10443: true, // HTTPS + alternates
+	465: true, 993: true, 995: true, // SMTPS, IMAPS, POP3S
+	563: true, 636: true, 989: true, 990: true, 992: true, 994: true, // NNTPS, LDAPS, FTPS, TelnetS, IRCS
+	853:  true, // DNS over TLS
+	5061: true, // SIP over TLS
+	4911: true, // Niagara Fox over TLS (OT)
+}
+
 type ServiceInfo struct {
 	Name        string           `json:"name"`
 	Version     string           `json:"version,omitempty"`
@@ -72,9 +86,14 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 	// (waiting on a ClientHello the passive banner read never sends)
 	// and starves probeTLS's own connection out of the accept queue until
 	// it times out.
-	isTLSPort := port == 443 || port == 8443
+	// Attempt a TLS handshake on well-known TLS ports always, and on ANY
+	// open port when the user asked for thorough TLS fingerprinting (--jarm).
+	// The latter is what lets JARM cover a TLS service the fast --ebpf scan
+	// turned up on a non-standard port (e.g. 9443, an OT TLS port) instead
+	// of only 443/8443. probeTLS returns nil when the port isn't really TLS,
+	// so a wrong guess just costs one quick failed handshake.
 	var tlsInfo *TLSInfo
-	if isTLSPort {
+	if knownTLSPorts[port] || jarmEnabled {
 		tlsInfo = probeTLS(ip, port, timeout, hostname)
 		if tlsInfo != nil {
 			tlsInfo.SupportedVersions = probeSupportedTLSVersions(ip, port, timeout, hostname)
@@ -88,6 +107,10 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 		}
 	}
 
+	// TLS is treated as present on a known TLS port (as before) or wherever a
+	// handshake actually completed -- the authoritative signal for JARM.
+	isTLSPort := knownTLSPorts[port] || tlsInfo != nil
+
 	// JARM is opt-in (10 extra connections/handshakes per TLS port, with
 	// deliberately non-standard ClientHellos) -- same discipline as the
 	// probes above: its own independent connections, run to completion
@@ -96,6 +119,12 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 	if isTLSPort && jarmEnabled {
 		jarmInfo = ProbeJARM(ip, port, timeout, hostname)
 	}
+
+	// Attach TLS/JARM to the result here, for every TLS port -- not only the
+	// web-port branch further down, which used to be the sole place these
+	// were set and so dropped them on a non-standard TLS port.
+	info.TLS = tlsInfo
+	info.JARM = jarmInfo
 
 	if tlsInfo != nil && tlsInfo.CertFingerprint != "" {
 		jarmHash := ""
@@ -205,9 +234,6 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 		var negotiatedALPN string
 
 		if isTLS {
-			info.TLS = tlsInfo
-			info.JARM = jarmInfo
-
 			tlsConfig := &tls.Config{
 				InsecureSkipVerify: insecureSkipVerify, // #nosec G402 -- opt-in via caller flag; banner grabbing must complete the handshake against untrusted/self-signed target certs
 				NextProtos:         []string{"h2", "http/1.1"},
