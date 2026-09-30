@@ -46,8 +46,32 @@ if PORTAL_ENABLED:
         MAX_CONTENT_LENGTH=10 * 1024 * 1024,  # cap PDF uploads at 10 MB
     )
 
+    import portal_billing
+
     portal_db.init_app(app)
     portal_auth.init_app(app)
+    app.jinja_env.globals.update(
+        fmt_date=portal_billing.fmt_date,
+        tier_label=portal_billing.tier_label,
+        license_state=portal_billing.license_state,
+        maintenance_state=portal_billing.maintenance_state,
+        line_total=portal_billing.line_total,
+        doc_totals=portal_billing.totals,
+    )
+
+    @app.template_filter('amount_input')
+    def amount_input(cents):
+        """Cents -> editable euros ('3980,00'); None/blank -> ''."""
+        if cents is None or cents == '':
+            return ''
+        return f"{cents / 100:.2f}".replace('.', ',')
+
+    @app.template_filter('num')
+    def num(value):
+        """1.0 -> '1', 5.5 -> '5,5'; non-numbers are shown as typed."""
+        if isinstance(value, (int, float)):
+            return ('%.3f' % value).rstrip('0').rstrip('.').replace('.', ',')
+        return value or ''
     # Ensure the schema exists at startup so the app is self-healing: no more
     # "no such table: users" if flask init-db was skipped or the DB path moved.
     # Idempotent (CREATE TABLE IF NOT EXISTS).
@@ -93,6 +117,8 @@ _STATUS_FR = {
     'draft': 'Brouillon', 'sent': 'Envoyé', 'accepted': 'Accepté', 'declined': 'Refusé',
     'unpaid': 'Impayée', 'paid': 'Payée', 'cancelled': 'Annulée',
     'open': 'Ouvert', 'pending': 'En attente', 'closed': 'Clôturé',
+    'active': 'Active', 'expired': 'Expirée', 'suspended': 'Suspendue', 'revoked': 'Révoquée',
+    'soon': 'Bientôt', 'ok': 'À jour', 'overdue': 'En retard',
 }
 
 

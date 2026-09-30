@@ -2,67 +2,42 @@
 {% set active = 'invoices' %}
 {% block title %}Factures — Admin tcpcat{% endblock %}
 {% block content %}
-<h1>Factures</h1>
-<p class="sub">Facturation manuelle — les paiements sont suivis à la main.</p>
-
-<div class="card section" style="margin-top:0">
-  <h3 style="margin-top:0">Nouvelle facture</h3>
-  {% if clients %}
-  <form method="post" action="{{ url_for('admin.invoice_new') }}" enctype="multipart/form-data">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="form-row">
-      <div class="field"><label>Client</label>
-        <select name="client_id" required>
-          <option value="">—</option>
-          {% for c in clients %}<option value="{{ c['id'] }}">{{ c['company'] or c['email'] }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="field"><label>Numéro</label><input type="text" name="number" placeholder="FAC-2026-001" required></div>
-      <div class="field"><label>Montant (€)</label><input type="text" name="amount" placeholder="3980,00"></div>
-      <div class="field"><label>Statut</label>
-        <select name="status">
-          <option value="unpaid">Impayée</option><option value="paid">Payée</option><option value="cancelled">Annulée</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="field" style="flex:2"><label>Objet</label><input type="text" name="title" required></div>
-      <div class="field"><label>PDF (optionnel)</label><input type="file" name="pdf" accept="application/pdf"></div>
-    </div>
-    <button type="submit">Créer la facture</button>
-  </form>
-  {% else %}<p class="empty">Créez d'abord un client dans l'onglet Clients.</p>{% endif %}
+<div class="page-head">
+  <div><h1>Factures</h1><p class="sub">Facturation manuelle — les paiements sont suivis à la main.</p></div>
+  <div class="actions"><a class="btn" href="{{ url_for('admin.invoice_new') }}">+ Nouvelle facture</a></div>
 </div>
 
-<div class="section">
-  {% if invoices %}
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Numéro</th><th>Client</th><th>Objet</th><th class="right">Montant</th><th>Statut</th><th>Émise</th><th class="right">Actions</th></tr></thead>
-      <tbody>
-        {% for i in invoices %}
-        <tr>
-          <td class="num">{{ i['number'] }}</td>
-          <td>{{ i['company'] or i['email'] }}</td>
-          <td>{{ i['title'] }}</td>
-          <td class="right num">{{ i['amount_cents'] | euros(i['currency']) }}</td>
-          <td>
-            <form class="inline-form" method="post" action="{{ url_for('admin.invoice_status', iid=i['id']) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <select name="status" onchange="this.form.submit()">
-                {% for s, lbl in [('unpaid','Impayée'),('paid','Payée'),('cancelled','Annulée')] %}
-                <option value="{{ s }}" {{ 'selected' if i['status'] == s }}>{{ lbl }}</option>
-                {% endfor %}
-              </select>
-            </form>
-          </td>
-          <td class="num">{{ i['issued_at'][:10] }}</td>
-          <td class="right"><a class="btn ghost small" href="{{ url_for('admin.invoice_pdf', iid=i['id']) }}">PDF{{ '' if i['pdf_path'] else ' ↗' }}</a></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}<p class="empty">Aucune facture.</p>{% endif %}
+{% if invoices %}
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Numéro</th><th>Client</th><th>Objet</th><th class="right">Total TTC</th><th>Échéance</th><th>Statut</th><th class="right"></th></tr></thead>
+    <tbody>
+      {% for i in invoices %}
+      {% set late = i.status == 'unpaid' and i.due_date and i.due_date < today %}
+      <tr>
+        <td class="num"><a href="{{ url_for('admin.invoice_edit', iid=i.id) }}">{{ i.number }}</a></td>
+        <td>{{ i.company or i.email }}</td>
+        <td>{{ i.title }}</td>
+        <td class="right num">{{ i.amount_cents | euros(i.currency) }}</td>
+        <td class="num{{ ' late' if late }}">{{ fmt_date(i.due_date) or '—' }}{{ ' (en retard)' if late }}</td>
+        <td>
+          <form class="inline-form" method="post" action="{{ url_for('admin.invoice_status', iid=i.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="status" onchange="this.form.submit()" aria-label="Statut">
+              {% for s, lbl in [('unpaid','Impayée'),('paid','Payée'),('cancelled','Annulée')] %}
+              <option value="{{ s }}" {{ 'selected' if i.status == s }}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </form>
+        </td>
+        <td class="right" style="white-space:nowrap">
+          <a class="btn ghost small" href="{{ url_for('admin.invoice_pdf', iid=i.id) }}">PDF</a>
+          <a class="btn ghost small" href="{{ url_for('admin.invoice_edit', iid=i.id) }}">Ouvrir</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
+{% else %}<p class="empty">Aucune facture. Créez-en une ici ou depuis un devis accepté.</p>{% endif %}
 {% endblock %}

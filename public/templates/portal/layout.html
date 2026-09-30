@@ -25,6 +25,7 @@
       {% if user['role'] == 'admin' %}
         <a href="{{ url_for('admin.dashboard') }}" class="{{ 'active' if active == 'dashboard' }}">Tableau de bord</a>
         <a href="{{ url_for('admin.clients') }}" class="{{ 'active' if active == 'clients' }}">Clients</a>
+        <a href="{{ url_for('admin.licenses') }}" class="{{ 'active' if active == 'licenses' }}">Licences</a>
         <a href="{{ url_for('admin.quotes') }}" class="{{ 'active' if active == 'quotes' }}">Devis</a>
         <a href="{{ url_for('admin.invoices') }}" class="{{ 'active' if active == 'invoices' }}">Factures</a>
         <a href="{{ url_for('admin.tickets') }}" class="{{ 'active' if active == 'tickets' }}">Tickets</a>

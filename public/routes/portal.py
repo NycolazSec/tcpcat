@@ -1,6 +1,7 @@
-"""Client space (/pro): a logged-in client sees only their own quotes,
-invoices, and support tickets. Every query is scoped to the session user's
-id, and PDF downloads verify ownership before serving the file.
+"""Client space (/pro): a logged-in client sees only their own licenses,
+quotes, invoices, and support tickets. Every query is scoped to the session
+user's id, and PDF downloads verify ownership before serving the file.
+Draft quotes stay private to the admin until they are sent.
 """
 
 import os
@@ -10,9 +11,18 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 
 from portal_db import get_db, now_iso, UPLOAD_DIR
 from portal_auth import client_required, current_user
+import portal_billing as billing
 import portal_pdf
 
 portal_bp = Blueprint('portal', __name__, template_folder='../templates')
+
+# What a client may see of each table (quotes: never drafts).
+_VISIBLE = {
+    'quotes': "status != 'draft'",
+    'invoices': '1',
+    'tickets': '1',
+    'licenses': '1',
+}
 
 
 @portal_bp.route('/pro')
@@ -20,15 +30,23 @@ portal_bp = Blueprint('portal', __name__, template_folder='../templates')
 def dashboard():
     db = get_db()
     uid = current_user()['id']
-    quotes = db.execute('SELECT * FROM quotes WHERE client_id = ? ORDER BY created_at DESC', (uid,)).fetchall()
-    invoices = db.execute('SELECT * FROM invoices WHERE client_id = ? ORDER BY issued_at DESC', (uid,)).fetchall()
-    tickets = db.execute('SELECT * FROM tickets WHERE client_id = ? ORDER BY updated_at DESC', (uid,)).fetchall()
-    return render_template('portal/dashboard.html', quotes=quotes, invoices=invoices, tickets=tickets)
+    licenses = db.execute(
+        "SELECT * FROM licenses WHERE client_id = ? AND status != 'revoked' ORDER BY start_date DESC",
+        (uid,)).fetchall()
+    quotes = db.execute(
+        "SELECT * FROM quotes WHERE client_id = ? AND status != 'draft' ORDER BY created_at DESC",
+        (uid,)).fetchall()
+    invoices = db.execute(
+        'SELECT * FROM invoices WHERE client_id = ? ORDER BY issued_at DESC', (uid,)).fetchall()
+    tickets = db.execute(
+        'SELECT * FROM tickets WHERE client_id = ? ORDER BY updated_at DESC', (uid,)).fetchall()
+    return render_template('portal/dashboard.html', licenses=licenses, quotes=quotes,
+                           invoices=invoices, tickets=tickets, today=billing.today_iso())
 
 
 def _owned_or_404(table, doc_id):
     row = get_db().execute(
-        f'SELECT * FROM {table} WHERE id = ? AND client_id = ?',
+        f'SELECT * FROM {table} WHERE id = ? AND client_id = ? AND {_VISIBLE[table]}',
         (doc_id, current_user()['id'])).fetchone()
     if row is None:
         abort(404)
@@ -52,7 +70,35 @@ def quote_pdf(qid):
     row = _owned_or_404('quotes', qid)
     if row['pdf_path']:
         return _send_pdf(row)
-    return portal_pdf.as_response(portal_pdf.build_quote_pdf(row, current_user()), f"{row['number']}.pdf")
+    items = billing.load_items(get_db(), 'quote', qid)
+    return portal_pdf.as_response(portal_pdf.build_quote_pdf(row, current_user(), items),
+                                  f"{row['number']}.pdf")
+
+
+@portal_bp.route('/pro/quote/<int:qid>/decision', methods=['POST'])
+@client_required
+def quote_decision(qid):
+    """Accept or decline a sent quote online, while it is still valid."""
+    row = _owned_or_404('quotes', qid)
+    action = request.form.get('action')
+    if row['status'] != 'sent':
+        flash("Ce devis n'est plus en attente de réponse.", 'error')
+    elif row['valid_until'] and row['valid_until'] < billing.today_iso():
+        flash("Ce devis a expiré. Contactez-nous pour une nouvelle proposition.", 'error')
+    elif action == 'accept':
+        db = get_db()
+        db.execute("UPDATE quotes SET status = 'accepted', accepted_at = ? WHERE id = ?",
+                   (now_iso(), qid))
+        db.commit()
+        flash(f"Devis {row['number']} accepté. Merci, nous revenons vers vous rapidement.", 'ok')
+    elif action == 'decline':
+        db = get_db()
+        db.execute("UPDATE quotes SET status = 'declined' WHERE id = ?", (qid,))
+        db.commit()
+        flash(f"Devis {row['number']} refusé.", 'ok')
+    else:
+        abort(400)
+    return redirect(url_for('portal.dashboard'))
 
 
 @portal_bp.route('/pro/invoice/<int:iid>/pdf')
@@ -61,7 +107,22 @@ def invoice_pdf(iid):
     row = _owned_or_404('invoices', iid)
     if row['pdf_path']:
         return _send_pdf(row)
-    return portal_pdf.as_response(portal_pdf.build_invoice_pdf(row, current_user()), f"{row['number']}.pdf")
+    db = get_db()
+    quote = db.execute("SELECT number FROM quotes WHERE id = ? AND client_id = ?",
+                       (row['quote_id'], row['client_id'])).fetchone() if row['quote_id'] else None
+    pdf = portal_pdf.build_invoice_pdf(row, current_user(), billing.load_items(db, 'invoice', iid),
+                                       quote['number'] if quote else None)
+    return portal_pdf.as_response(pdf, f"{row['number']}.pdf")
+
+
+@portal_bp.route('/pro/license/<int:lid>/pdf')
+@client_required
+def license_pdf(lid):
+    row = _owned_or_404('licenses', lid)
+    if row['status'] == 'revoked':
+        abort(404)
+    return portal_pdf.as_response(portal_pdf.build_license_pdf(row, current_user()),
+                                  f"licence-{row['license_key']}.pdf")
 
 
 @portal_bp.route('/pro/tickets/new', methods=['POST'])

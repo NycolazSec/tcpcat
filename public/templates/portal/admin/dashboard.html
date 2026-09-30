@@ -6,11 +6,61 @@
 <p class="sub">Vue d'ensemble de l'activité tcpcat.</p>
 
 <div class="grid cols-4">
-  <div class="card stat"><div class="n">{{ stats['clients'] }}</div><div class="l">Clients</div></div>
-  <div class="card stat"><div class="n">{{ stats['quotes'] }}</div><div class="l">Devis</div></div>
-  <div class="card stat"><div class="n">{{ stats['invoices_unpaid'] }}</div><div class="l">Factures impayées</div></div>
-  <div class="card stat"><div class="n">{{ stats['tickets_open'] }}</div><div class="l">Tickets ouverts</div></div>
+  <a class="card stat" href="{{ url_for('admin.clients') }}"><div class="n">{{ stats.clients }}</div><div class="l">Clients</div></a>
+  <a class="card stat" href="{{ url_for('admin.licenses', filter='active') }}"><div class="n">{{ stats.licenses_active }}</div><div class="l">Licences actives</div></a>
+  <a class="card stat" href="{{ url_for('admin.invoices') }}"><div class="n">{{ stats.invoices_unpaid }}</div><div class="l">Impayées · {{ stats.unpaid_total | euros }}</div></a>
+  <a class="card stat" href="{{ url_for('admin.tickets') }}"><div class="n">{{ stats.tickets_open }}</div><div class="l">Tickets ouverts</div></a>
 </div>
+
+{% if renewals %}
+<div class="section">
+  <h2>Licences à renouveler <span class="hint">(échéance sous 30 jours ou dépassée)</span></h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Client</th><th>Clé</th><th>Formule</th><th>Fin</th><th>Maintenance</th><th></th></tr></thead>
+      <tbody>
+        {% for l in renewals %}
+        <tr>
+          <td>{{ l.company or l.email }}</td>
+          <td><a class="key" href="{{ url_for('admin.license_edit', lid=l.id) }}">{{ l.license_key }}</a></td>
+          <td>{{ tier_label(l.tier) }}</td>
+          <td class="num{{ ' late' if l.end_date and l.end_date < today }}">{{ fmt_date(l.end_date) if l.end_date else 'Perpétuelle' }}</td>
+          <td class="num{{ ' late' if l.maintenance_until and l.maintenance_until < today }}">{{ fmt_date(l.maintenance_until) or '—' }}</td>
+          <td class="right">
+            <form class="inline-form" method="post" action="{{ url_for('admin.license_renew', lid=l.id) }}"
+                  onsubmit="return confirm('Prolonger cette licence d\'un an ?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn ghost small">+1 an</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if overdue %}
+<div class="section">
+  <h2>Factures en retard</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Numéro</th><th>Client</th><th class="right">Montant</th><th>Échéance</th></tr></thead>
+      <tbody>
+        {% for i in overdue %}
+        <tr>
+          <td class="num"><a href="{{ url_for('admin.invoice_edit', iid=i.id) }}">{{ i.number }}</a></td>
+          <td>{{ i.company or i.email }}</td>
+          <td class="right num">{{ i.amount_cents | euros(i.currency) }}</td>
+          <td class="num late">{{ fmt_date(i.due_date) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 <div class="section">
   <h2>Tickets à traiter</h2>
@@ -21,16 +71,16 @@
       <tbody>
         {% for t in open_tickets %}
         <tr>
-          <td>{{ t['subject'] }}</td>
-          <td>{{ t['company'] or t['email'] }}</td>
-          <td><span class="badge {{ t['status'] }}">{{ status_fr(t['status']) }}</span></td>
-          <td class="num">{{ t['updated_at'][:16] | replace('T', ' ') }}</td>
-          <td class="right"><a class="btn ghost small" href="{{ url_for('admin.ticket_view', tid=t['id']) }}">Ouvrir</a></td>
+          <td>{{ t.subject }}</td>
+          <td>{{ t.company or t.email }}</td>
+          <td><span class="badge {{ t.status }}">{{ status_fr(t.status) }}</span></td>
+          <td class="num">{{ t.updated_at[:16] | replace('T', ' ') }}</td>
+          <td class="right"><a class="btn ghost small" href="{{ url_for('admin.ticket_view', tid=t.id) }}">Ouvrir</a></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  {% else %}<p class="empty">Aucun ticket en attente. 🎉</p>{% endif %}
+  {% else %}<p class="empty">Aucun ticket en attente.</p>{% endif %}
 </div>
 {% endblock %}

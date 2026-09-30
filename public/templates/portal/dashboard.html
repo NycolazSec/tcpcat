@@ -3,30 +3,33 @@
 {% block title %}Mon espace — tcpcat{% endblock %}
 {% block content %}
 {% set user = current_user() %}
-<h1>Bonjour{{ ' ' + user['full_name'] if user['full_name'] }}</h1>
-<p class="sub">{{ user['company'] or user['email'] }}</p>
+<h1>Bonjour{{ ' ' + user.full_name if user.full_name }}</h1>
+<p class="sub">{{ user.company or user.email }}</p>
 
-<div class="section">
-  <h2>Mes factures</h2>
-  {% if invoices %}
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Numéro</th><th>Objet</th><th class="right">Montant</th><th>Statut</th><th>Émise le</th><th></th></tr></thead>
-      <tbody>
-        {% for i in invoices %}
-        <tr>
-          <td class="num">{{ i['number'] }}</td>
-          <td>{{ i['title'] }}</td>
-          <td class="right num">{{ i['amount_cents'] | euros(i['currency']) }}</td>
-          <td><span class="badge {{ i['status'] }}">{{ status_fr(i['status']) }}</span></td>
-          <td class="num">{{ i['issued_at'][:10] }}</td>
-          <td class="right"><a class="btn ghost small" href="{{ url_for('portal.invoice_pdf', iid=i['id']) }}">PDF</a></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<div class="section" style="margin-top:0">
+  <h2>Mes licences</h2>
+  {% if licenses %}
+  <div class="grid cols-2">
+    {% for l in licenses %}
+    {% set st = license_state(l, today) %}
+    {% set ms = maintenance_state(l, today) %}
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:.6rem">
+        <strong>{{ l.product }} · {{ tier_label(l.tier) }}</strong>
+        <span class="badge {{ st }}">{{ status_fr(st) }}</span>
+      </div>
+      <div class="key key-big" style="margin-bottom:.8rem">{{ l.license_key }}</div>
+      <table style="font-size:.78rem">
+        <tr><td>Produits / appliances</td><td class="right num">{{ l.seats }}</td></tr>
+        <tr><td>Validité</td><td class="right num">{{ fmt_date(l.start_date) }} → {{ fmt_date(l.end_date) if l.end_date else 'perpétuelle' }}</td></tr>
+        <tr><td>Maintenance &amp; mises à jour</td>
+            <td class="right num">{% if ms %}jusqu'au {{ fmt_date(l.maintenance_until) }}{% if ms in ('soon', 'expired') %} <span class="badge {{ ms }}">{{ 'expirée' if ms == 'expired' else 'bientôt' }}</span>{% endif %}{% else %}non incluse{% endif %}</td></tr>
+      </table>
+      <div style="margin-top:.8rem"><a class="btn ghost small" href="{{ url_for('portal.license_pdf', lid=l.id) }}">Certificat PDF</a></div>
+    </div>
+    {% endfor %}
   </div>
-  {% else %}<p class="empty">Aucune facture pour le moment.</p>{% endif %}
+  {% else %}<p class="empty">Aucune licence pour le moment.</p>{% endif %}
 </div>
 
 <div class="section">
@@ -34,16 +37,33 @@
   {% if quotes %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Numéro</th><th>Objet</th><th class="right">Montant</th><th>Statut</th><th>Date</th><th></th></tr></thead>
+      <thead><tr><th>Numéro</th><th>Objet</th><th class="right">Total TTC</th><th>Valable jusqu'au</th><th>Statut</th><th class="right"></th></tr></thead>
       <tbody>
         {% for q in quotes %}
+        {% set open = q.status == 'sent' and not (q.valid_until and q.valid_until < today) %}
         <tr>
-          <td class="num">{{ q['number'] }}</td>
-          <td>{{ q['title'] }}</td>
-          <td class="right num">{{ q['amount_cents'] | euros(q['currency']) }}</td>
-          <td><span class="badge {{ q['status'] }}">{{ status_fr(q['status']) }}</span></td>
-          <td class="num">{{ q['created_at'][:10] }}</td>
-          <td class="right"><a class="btn ghost small" href="{{ url_for('portal.quote_pdf', qid=q['id']) }}">PDF</a></td>
+          <td class="num">{{ q.number }}</td>
+          <td>{{ q.title }}</td>
+          <td class="right num">{{ q.amount_cents | euros(q.currency) }}</td>
+          <td class="num">{{ fmt_date(q.valid_until) or '—' }}</td>
+          <td><span class="badge {{ q.status }}">{{ status_fr(q.status) if q.status != 'sent' else 'En attente' }}</span></td>
+          <td class="right" style="white-space:nowrap">
+            <a class="btn ghost small" href="{{ url_for('portal.quote_pdf', qid=q.id) }}">PDF</a>
+            {% if open %}
+            <form class="inline-form" method="post" action="{{ url_for('portal.quote_decision', qid=q.id) }}"
+                  onsubmit="return confirm('Accepter ce devis ? Votre accord sera enregistré.')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="accept">
+              <button type="submit" class="small">Accepter</button>
+            </form>
+            <form class="inline-form" method="post" action="{{ url_for('portal.quote_decision', qid=q.id) }}"
+                  onsubmit="return confirm('Refuser ce devis ?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="decline">
+              <button type="submit" class="btn ghost small">Refuser</button>
+            </form>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -53,28 +73,49 @@
 </div>
 
 <div class="section">
+  <h2>Mes factures</h2>
+  {% if invoices %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Numéro</th><th>Objet</th><th class="right">Total TTC</th><th>Échéance</th><th>Statut</th><th></th></tr></thead>
+      <tbody>
+        {% for i in invoices %}
+        <tr>
+          <td class="num">{{ i.number }}</td>
+          <td>{{ i.title }}</td>
+          <td class="right num">{{ i.amount_cents | euros(i.currency) }}</td>
+          <td class="num{{ ' late' if i.status == 'unpaid' and i.due_date and i.due_date < today }}">{{ fmt_date(i.due_date) or '—' }}</td>
+          <td><span class="badge {{ i.status }}">{{ status_fr(i.status) }}</span></td>
+          <td class="right"><a class="btn ghost small" href="{{ url_for('portal.invoice_pdf', iid=i.id) }}">PDF</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Aucune facture pour le moment.</p>{% endif %}
+</div>
+
+<div class="section">
   <h2>Support</h2>
   <div class="grid cols-2">
     <div class="card">
-      <h3 style="margin-top:0">Mes tickets</h3>
+      <h3>Mes tickets</h3>
       {% if tickets %}
-        <div class="table-wrap" style="box-shadow:none;border:none">
-          <table>
-            <tbody>
-              {% for t in tickets %}
-              <tr>
-                <td><a href="{{ url_for('portal.ticket_view', tid=t['id']) }}">{{ t['subject'] }}</a></td>
-                <td><span class="badge {{ t['status'] }}">{{ status_fr(t['status']) }}</span></td>
-                <td class="num">{{ t['updated_at'][:10] }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+        <table>
+          <tbody>
+            {% for t in tickets %}
+            <tr>
+              <td><a href="{{ url_for('portal.ticket_view', tid=t.id) }}">{{ t.subject }}</a></td>
+              <td><span class="badge {{ t.status }}">{{ status_fr(t.status) }}</span></td>
+              <td class="num">{{ fmt_date(t.updated_at) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       {% else %}<p class="empty">Aucun ticket.</p>{% endif %}
     </div>
     <div class="card">
-      <h3 style="margin-top:0">Ouvrir un ticket</h3>
+      <h3>Ouvrir un ticket</h3>
       <form method="post" action="{{ url_for('portal.ticket_new') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="field">
