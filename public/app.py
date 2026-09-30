@@ -48,6 +48,10 @@ if PORTAL_ENABLED:
 
     portal_db.init_app(app)
     portal_auth.init_app(app)
+    # Ensure the schema exists at startup so the app is self-healing: no more
+    # "no such table: users" if flask init-db was skipped or the DB path moved.
+    # Idempotent (CREATE TABLE IF NOT EXISTS).
+    portal_db.init_db()
     app.register_blueprint(auth.auth_bp)
     app.register_blueprint(admin.admin_bp)
     app.register_blueprint(portal.portal_bp)
