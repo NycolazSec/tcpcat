@@ -34,6 +34,22 @@ Nicolas Blondelle (NycolazSec) — **support@tcpcat.io**
 
 ---
 
+## Pricing
+
+Three tiers, matched to the size of your company and product. Prices in euros,
+excluding VAT.
+
+| Tier | Price | Maintenance & updates | Criteria |
+|---|---|---|---|
+| **Startup & Single-Product** | €3,980 / year (or €1,180 / quarter) | included for the term | < 25 employees · < €2M raised/revenue · 1 single product |
+| **Mid-Market OEM** | €19,980 perpetual (or €1,890 / quarter) | €4,980 / year | < 250 employees · < €50M revenue · 1 product/appliance |
+| **Enterprise OEM** | €39,980 perpetual (or €3,480 / quarter) | €9,980 / year | extended product lines · large accounts · priority support |
+
+Not sure which tier fits, or need custom terms (per-device royalty, volume
+distribution, unlimited-appliance)? Email **support@tcpcat.io**.
+
+---
+
 ## Agreement (template)
 
 This Commercial License Agreement ("Agreement") is entered into by and between

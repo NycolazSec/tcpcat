@@ -47,6 +47,20 @@
   .card-box h3{font-family:'Space Grotesk', monospace; font-weight:600; font-size:13.5px; margin:0 0 8px;}
   .card-box.free h3{color:#2f6b3a;}
   .card-box.oem h3{color:var(--stamp);}
+  /* pricing grid */
+  .tiers{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin:4px 0 8px;}
+  .tier{border:1px solid var(--rule-strong); background:var(--card); padding:18px 16px; display:flex; flex-direction:column;}
+  .tier.featured{border-color:var(--stamp); border-width:1.5px;}
+  .tier .tname{font-family:'Space Grotesk', monospace; font-weight:700; font-size:14px; margin:0 0 2px;}
+  .tier .tfor{font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); margin:0 0 12px;}
+  .tier .price{font-family:'Space Grotesk', monospace; font-weight:700; font-size:22px; color:var(--stamp); line-height:1.1;}
+  .tier .price small{display:block; font-family:'IBM Plex Mono',monospace; font-weight:400; font-size:11px; color:var(--ink-soft); margin-top:3px;}
+  .tier .maint{font-size:11.5px; color:var(--ink-soft); margin:10px 0 12px; padding-top:10px; border-top:1px solid var(--rule);}
+  .tier ul.crit{list-style:none; margin:auto 0 0; padding:0; font-size:11.5px; color:var(--ink-soft);}
+  .tier ul.crit li{margin:0 0 4px; padding-left:14px; position:relative;}
+  .tier ul.crit li::before{content:'·'; position:absolute; left:2px; color:var(--ink-faint);}
+  .price-note{font-size:11px; color:var(--ink-faint); margin-top:10px;}
+  @media (max-width:640px){ .tiers{grid-template-columns:1fr;} }
   footer{
     border-top:1.5px solid var(--ink); padding:24px 0 40px;
     font-size:11px; color:var(--ink-faint);
@@ -107,7 +121,43 @@
 
     <section>
       <h2><span class="n">4</span><span data-i18n="s4-h">Pricing</span></h2>
-      <p data-i18n="s4-p1">Pricing is per commercial order and depends on your model — per-device royalty, annual distribution volume, or an unlimited-appliance tier. Tell us what you're building and how you plan to distribute it, and we'll send terms.</p>
+      <p data-i18n="s4-p1">Three tiers, matched to the size of your company and product. All prices are in euros, excluding VAT.</p>
+      <div class="tiers">
+        <div class="tier">
+          <p class="tname" data-i18n="tier1-name">Startup &amp; Single-Product</p>
+          <p class="tfor" data-i18n="tier1-for">Small teams, one product</p>
+          <p class="price">3 980 €<small data-i18n="tier1-price">/ year (or 1 180 € / quarter)</small></p>
+          <p class="maint" data-i18n="tier1-maint">Updates included for the term.</p>
+          <ul class="crit">
+            <li data-i18n="tier1-c1">&lt; 25 employees</li>
+            <li data-i18n="tier1-c2">&lt; €2M raised or revenue</li>
+            <li data-i18n="tier1-c3">1 single product</li>
+          </ul>
+        </div>
+        <div class="tier">
+          <p class="tname" data-i18n="tier2-name">Mid-Market OEM</p>
+          <p class="tfor" data-i18n="tier2-for">Established SMBs</p>
+          <p class="price">19 980 €<small data-i18n="tier2-price">perpetual (or 1 890 € / quarter)</small></p>
+          <p class="maint" data-i18n="tier2-maint">Maintenance &amp; updates: 4 980 € / year.</p>
+          <ul class="crit">
+            <li data-i18n="tier2-c1">&lt; 250 employees</li>
+            <li data-i18n="tier2-c2">&lt; €50M revenue</li>
+            <li data-i18n="tier2-c3">1 product / appliance</li>
+          </ul>
+        </div>
+        <div class="tier featured">
+          <p class="tname" data-i18n="tier3-name">Enterprise OEM</p>
+          <p class="tfor" data-i18n="tier3-for">Product lines &amp; large accounts</p>
+          <p class="price">39 980 €<small data-i18n="tier3-price">perpetual (or 3 480 € / quarter)</small></p>
+          <p class="maint" data-i18n="tier3-maint">Maintenance &amp; updates: 9 980 € / year.</p>
+          <ul class="crit">
+            <li data-i18n="tier3-c1">Extended product lines</li>
+            <li data-i18n="tier3-c2">Large accounts</li>
+            <li data-i18n="tier3-c3">Priority support</li>
+          </ul>
+        </div>
+      </div>
+      <p class="price-note" data-i18n="s4-note">Not sure which tier fits, or need custom terms? Email us and we'll advise.</p>
     </section>
 
     <section>
@@ -161,7 +211,29 @@
       "s3-l3": "Être libéré des obligations copyleft de l'AGPL — aucune obligation d'ouvrir le code de votre produit.",
       "s3-p1": "Les conditions complètes sont dans le fichier <a class=\"doclink\" href=\"https://github.com/NycolazSec/tcpcat/blob/main/COMMERCIAL-LICENSE.md\" target=\"_blank\" rel=\"noreferrer\">COMMERCIAL-LICENSE.md</a> du dépôt.",
       "s4-h": "Tarifs",
-      "s4-p1": "Le tarif dépend de votre modèle — redevance par appareil, volume de distribution annuel, ou palier « appareils illimités ». Décrivez ce que vous construisez et comment vous comptez le distribuer, et nous vous enverrons des conditions.",
+      "s4-p1": "Trois formules, selon la taille de votre entreprise et de votre produit. Prix en euros, hors taxes.",
+      "tier1-name": "Startup & produit unique",
+      "tier1-for": "Petites équipes, un produit",
+      "tier1-price": "/ an (ou 1 180 € / trimestre)",
+      "tier1-maint": "Mises à jour incluses pendant la durée.",
+      "tier1-c1": "< 25 salariés",
+      "tier1-c2": "< 2 M€ de levée ou de CA",
+      "tier1-c3": "1 produit unique",
+      "tier2-name": "Mid-Market OEM",
+      "tier2-for": "PME établies",
+      "tier2-price": "perpétuel (ou 1 890 € / trimestre)",
+      "tier2-maint": "Maintenance & mises à jour : 4 980 € / an.",
+      "tier2-c1": "< 250 salariés",
+      "tier2-c2": "< 50 M€ de CA",
+      "tier2-c3": "1 produit / appliance",
+      "tier3-name": "Enterprise OEM",
+      "tier3-for": "Gammes de produits & grands comptes",
+      "tier3-price": "perpétuel (ou 3 480 € / trimestre)",
+      "tier3-maint": "Maintenance & mises à jour : 9 980 € / an.",
+      "tier3-c1": "Gammes de produits étendues",
+      "tier3-c2": "Grands comptes",
+      "tier3-c3": "Support prioritaire",
+      "s4-note": "Vous hésitez sur la formule, ou il vous faut des conditions sur mesure ? Écrivez-nous, on vous conseille.",
       "s5-h": "Obtenir une licence commerciale",
       "s5-p1": "Écrivez-nous en précisant votre produit, le volume de distribution prévu, et si vous avez besoin d'une redistribution en source ou en binaire :",
       "s5-note": "Nicolas Blondelle (NycolazSec) — réponse généralement sous quelques jours ouvrés.",
