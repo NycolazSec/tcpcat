@@ -1,0 +1,36 @@
+{% extends "portal/layout.html" %}
+{% set active = 'dashboard' %}
+{% block title %}Admin — tcpcat{% endblock %}
+{% block content %}
+<h1>Tableau de bord</h1>
+<p class="sub">Vue d'ensemble de l'activité tcpcat.</p>
+
+<div class="grid cols-4">
+  <div class="card stat"><div class="n">{{ stats['clients'] }}</div><div class="l">Clients</div></div>
+  <div class="card stat"><div class="n">{{ stats['quotes'] }}</div><div class="l">Devis</div></div>
+  <div class="card stat"><div class="n">{{ stats['invoices_unpaid'] }}</div><div class="l">Factures impayées</div></div>
+  <div class="card stat"><div class="n">{{ stats['tickets_open'] }}</div><div class="l">Tickets ouverts</div></div>
+</div>
+
+<div class="section">
+  <h2>Tickets à traiter</h2>
+  {% if open_tickets %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Sujet</th><th>Client</th><th>Statut</th><th>Mis à jour</th><th></th></tr></thead>
+      <tbody>
+        {% for t in open_tickets %}
+        <tr>
+          <td>{{ t['subject'] }}</td>
+          <td>{{ t['company'] or t['email'] }}</td>
+          <td><span class="badge {{ t['status'] }}">{{ status_fr(t['status']) }}</span></td>
+          <td class="num">{{ t['updated_at'][:16] | replace('T', ' ') }}</td>
+          <td class="right"><a class="btn ghost small" href="{{ url_for('admin.ticket_view', tid=t['id']) }}">Ouvrir</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Aucun ticket en attente. 🎉</p>{% endif %}
+</div>
+{% endblock %}

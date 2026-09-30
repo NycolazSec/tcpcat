@@ -1,0 +1,29 @@
+{% extends "portal/layout.html" %}
+{% set active = 'tickets' %}
+{% block title %}Tickets — Admin tcpcat{% endblock %}
+{% block content %}
+<h1>Tickets</h1>
+<p class="sub">Support client.</p>
+
+<div class="section" style="margin-top:0">
+  {% if tickets %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Sujet</th><th>Client</th><th>Messages</th><th>Statut</th><th>Mis à jour</th><th></th></tr></thead>
+      <tbody>
+        {% for t in tickets %}
+        <tr>
+          <td>{{ t['subject'] }}</td>
+          <td>{{ t['company'] or t['email'] }}</td>
+          <td class="num">{{ t['msg_count'] }}</td>
+          <td><span class="badge {{ t['status'] }}">{{ status_fr(t['status']) }}</span></td>
+          <td class="num">{{ t['updated_at'][:16] | replace('T', ' ') }}</td>
+          <td class="right"><a class="btn ghost small" href="{{ url_for('admin.ticket_view', tid=t['id']) }}">Ouvrir</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Aucun ticket.</p>{% endif %}
+</div>
+{% endblock %}

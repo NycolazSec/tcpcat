@@ -1,0 +1,58 @@
+{#- Standalone shell for the portal + admin back-office. Not the marketing
+    base.html: this is an app, so it has its own header, nav (role-aware) and
+    stylesheet. current_user() and csrf_token() are Jinja globals. -#}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>{% block title %}Espace tcpcat{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='portal.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+{% set user = current_user() %}
+{% if user %}
+<header class="portal-header">
+  <div class="inner">
+    <span class="brand">tcpcat<span class="dot">.</span><span class="tag">{{ 'Admin' if user['role'] == 'admin' else 'Espace pro' }}</span></span>
+    <nav class="portal-nav">
+      {% if user['role'] == 'admin' %}
+        <a href="{{ url_for('admin.dashboard') }}" class="{{ 'active' if active == 'dashboard' }}">Tableau de bord</a>
+        <a href="{{ url_for('admin.clients') }}" class="{{ 'active' if active == 'clients' }}">Clients</a>
+        <a href="{{ url_for('admin.quotes') }}" class="{{ 'active' if active == 'quotes' }}">Devis</a>
+        <a href="{{ url_for('admin.invoices') }}" class="{{ 'active' if active == 'invoices' }}">Factures</a>
+        <a href="{{ url_for('admin.tickets') }}" class="{{ 'active' if active == 'tickets' }}">Tickets</a>
+      {% else %}
+        <a href="{{ url_for('portal.dashboard') }}" class="{{ 'active' if active == 'dashboard' }}">Mon espace</a>
+      {% endif %}
+    </nav>
+    <div class="userbox">
+      <span>{{ user['email'] }}</span>
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn ghost small">Déconnexion</button>
+      </form>
+    </div>
+  </div>
+</header>
+{% endif %}
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul class="flashes">
+        {% for category, message in messages %}
+          <li class="{{ 'error' if category == 'error' else 'ok' }}">{{ message }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

@@ -1,0 +1,69 @@
+{% extends "portal/layout.html" %}
+{% set active = 'quotes' %}
+{% block title %}Devis — Admin tcpcat{% endblock %}
+{% block content %}
+<h1>Devis</h1>
+<p class="sub">Devis rattachés aux clients.</p>
+
+<div class="card section" style="margin-top:0">
+  <h3 style="margin-top:0">Nouveau devis</h3>
+  {% if clients %}
+  <form method="post" action="{{ url_for('admin.quote_new') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-row">
+      <div class="field"><label>Client</label>
+        <select name="client_id" required>
+          <option value="">—</option>
+          {% for c in clients %}<option value="{{ c['id'] }}">{{ c['company'] or c['email'] }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field"><label>Numéro</label><input type="text" name="number" placeholder="DEV-2026-001" required></div>
+      <div class="field"><label>Montant (€)</label><input type="text" name="amount" placeholder="3980,00"></div>
+      <div class="field"><label>Statut</label>
+        <select name="status">
+          <option value="draft">Brouillon</option><option value="sent">Envoyé</option>
+          <option value="accepted">Accepté</option><option value="declined">Refusé</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="field" style="flex:2"><label>Objet</label><input type="text" name="title" required></div>
+      <div class="field"><label>PDF (optionnel)</label><input type="file" name="pdf" accept="application/pdf"></div>
+    </div>
+    <button type="submit">Créer le devis</button>
+  </form>
+  {% else %}<p class="empty">Créez d'abord un client dans l'onglet Clients.</p>{% endif %}
+</div>
+
+<div class="section">
+  {% if quotes %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Numéro</th><th>Client</th><th>Objet</th><th class="right">Montant</th><th>Statut</th><th>Date</th><th class="right">Actions</th></tr></thead>
+      <tbody>
+        {% for q in quotes %}
+        <tr>
+          <td class="num">{{ q['number'] }}</td>
+          <td>{{ q['company'] or q['email'] }}</td>
+          <td>{{ q['title'] }}</td>
+          <td class="right num">{{ q['amount_cents'] | euros(q['currency']) }}</td>
+          <td>
+            <form class="inline-form" method="post" action="{{ url_for('admin.quote_status', qid=q['id']) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <select name="status" onchange="this.form.submit()">
+                {% for s, lbl in [('draft','Brouillon'),('sent','Envoyé'),('accepted','Accepté'),('declined','Refusé')] %}
+                <option value="{{ s }}" {{ 'selected' if q['status'] == s }}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+          <td class="num">{{ q['created_at'][:10] }}</td>
+          <td class="right">{% if q['pdf_path'] %}<a class="btn ghost small" href="{{ url_for('admin.quote_pdf', qid=q['id']) }}">PDF</a>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Aucun devis.</p>{% endif %}
+</div>
+{% endblock %}

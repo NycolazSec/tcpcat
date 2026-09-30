@@ -1,0 +1,30 @@
+{% extends "portal/layout.html" %}
+{% set active = 'dashboard' %}
+{% block title %}{{ ticket['subject'] }} — tcpcat{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('portal.dashboard') }}">← Retour à mon espace</a>
+<h1>{{ ticket['subject'] }}</h1>
+<p class="sub">Statut : <span class="badge {{ ticket['status'] }}">{{ status_fr(ticket['status']) }}</span> · ouvert le {{ ticket['created_at'][:10] }}</p>
+
+<div class="section">
+  {% for m in messages %}
+    <div class="msg {{ m['author_role'] }}">
+      <div class="meta">{{ 'Support tcpcat' if m['author_role'] == 'admin' else 'Vous' }} · {{ m['created_at'][:16] | replace('T', ' ') }}</div>
+      <div class="body">{{ m['body'] }}</div>
+    </div>
+  {% endfor %}
+</div>
+
+{% if ticket['status'] != 'closed' %}
+<div class="card section">
+  <h3 style="margin-top:0">Répondre</h3>
+  <form method="post" action="{{ url_for('portal.ticket_view', tid=ticket['id']) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field"><textarea name="body" required></textarea></div>
+    <button type="submit">Envoyer</button>
+  </form>
+</div>
+{% else %}
+<p class="empty">Ce ticket est clôturé. Ouvrez-en un nouveau depuis votre espace si besoin.</p>
+{% endif %}
+{% endblock %}
