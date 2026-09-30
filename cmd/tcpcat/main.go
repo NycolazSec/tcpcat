@@ -63,6 +63,11 @@ func main() {
 
 	if opts.ShowVersion {
 		fmt.Printf("tcpcat %s (commit %s, built %s)\n", version, commit, date)
+		fmt.Println(licenseShort)
+		return
+	}
+	if opts.ShowLicense {
+		fmt.Print(licenseNotice)
 		return
 	}
 

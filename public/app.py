@@ -9,6 +9,7 @@ import routes.release as release
 import routes.notice as notice
 import routes.internals as internals
 import routes.oem as oem
+import routes.trademark as trademark
 
 app = Flask(__name__, template_folder='templates')
 
@@ -17,6 +18,7 @@ app.register_blueprint(release.release_bp)
 app.register_blueprint(notice.notice_bp)
 app.register_blueprint(internals.internals_bp)
 app.register_blueprint(oem.oem_bp)
+app.register_blueprint(trademark.trademark_bp)
 
 # --- Client portal + admin back-office (opt-in) -----------------------------
 # The portal exposes a login/admin/pro surface, so it is NOT part of the public
@@ -140,7 +142,7 @@ def inject_portal_helpers():
 # sees its internal host and plain http, which social crawlers can't use.
 SITE_URL = os.environ.get('SITE_URL', 'https://tcpcat.io').rstrip('/')
 
-INDEXED_ENDPOINTS = ['undex', 'internals.internals', 'release.release', 'notice.notice', 'oem.oem']
+INDEXED_ENDPOINTS = ['undex', 'internals.internals', 'release.release', 'notice.notice', 'oem.oem', 'trademark.trademark']
 
 
 @app.context_processor

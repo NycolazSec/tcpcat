@@ -150,6 +150,7 @@ type Options struct {
 	WebAddr     string
 	Update      bool
 	ShowVersion bool
+	ShowLicense bool
 }
 
 // looksLikeFlagValue reports whether s should be consumed as the value for
@@ -354,6 +355,7 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.WebAddr, "web-addr", "127.0.0.1:8080", "Web interface listen address")
 	flag.BoolVar(&opts.Update, "update", false, "Check GitHub and update the tcpcat binary")
 	flag.BoolVar(&opts.ShowVersion, "version", false, "Print version information and exit")
+	flag.BoolVar(&opts.ShowLicense, "license", false, "Print licensing terms (AGPL-3.0 / commercial OEM) and exit")
 
 	flag.BoolVar(&opts.InsecureTLS, "insecure", false, "Allow insecure server connections")
 
@@ -495,7 +497,7 @@ func ParseFlags() (*Options, error) {
 		opts.Target = flag.Arg(0)
 	}
 
-	if !opts.Update && !opts.Web && !opts.ShowVersion && opts.Target == "" && opts.InputFile == "" && opts.AWSTags == "" {
+	if !opts.Update && !opts.Web && !opts.ShowVersion && !opts.ShowLicense && opts.Target == "" && opts.InputFile == "" && opts.AWSTags == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
