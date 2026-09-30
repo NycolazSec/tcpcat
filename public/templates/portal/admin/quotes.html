@@ -58,7 +58,7 @@
             </form>
           </td>
           <td class="num">{{ q['created_at'][:10] }}</td>
-          <td class="right">{% if q['pdf_path'] %}<a class="btn ghost small" href="{{ url_for('admin.quote_pdf', qid=q['id']) }}">PDF</a>{% else %}—{% endif %}</td>
+          <td class="right"><a class="btn ghost small" href="{{ url_for('admin.quote_pdf', qid=q['id']) }}">PDF{{ '' if q['pdf_path'] else ' ↗' }}</a></td>
         </tr>
         {% endfor %}
       </tbody>

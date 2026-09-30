@@ -20,7 +20,7 @@
           <td class="right num">{{ i['amount_cents'] | euros(i['currency']) }}</td>
           <td><span class="badge {{ i['status'] }}">{{ status_fr(i['status']) }}</span></td>
           <td class="num">{{ i['issued_at'][:10] }}</td>
-          <td class="right">{% if i['pdf_path'] %}<a class="btn ghost small" href="{{ url_for('portal.invoice_pdf', iid=i['id']) }}">PDF</a>{% endif %}</td>
+          <td class="right"><a class="btn ghost small" href="{{ url_for('portal.invoice_pdf', iid=i['id']) }}">PDF</a></td>
         </tr>
         {% endfor %}
       </tbody>
@@ -43,7 +43,7 @@
           <td class="right num">{{ q['amount_cents'] | euros(q['currency']) }}</td>
           <td><span class="badge {{ q['status'] }}">{{ status_fr(q['status']) }}</span></td>
           <td class="num">{{ q['created_at'][:10] }}</td>
-          <td class="right">{% if q['pdf_path'] %}<a class="btn ghost small" href="{{ url_for('portal.quote_pdf', qid=q['id']) }}">PDF</a>{% endif %}</td>
+          <td class="right"><a class="btn ghost small" href="{{ url_for('portal.quote_pdf', qid=q['id']) }}">PDF</a></td>
         </tr>
         {% endfor %}
       </tbody>

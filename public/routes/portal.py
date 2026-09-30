@@ -10,6 +10,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 
 from portal_db import get_db, now_iso, UPLOAD_DIR
 from portal_auth import client_required, current_user
+import portal_pdf
 
 portal_bp = Blueprint('portal', __name__, template_folder='../templates')
 
@@ -48,13 +49,19 @@ def _send_pdf(row):
 @portal_bp.route('/pro/quote/<int:qid>/pdf')
 @client_required
 def quote_pdf(qid):
-    return _send_pdf(_owned_or_404('quotes', qid))
+    row = _owned_or_404('quotes', qid)
+    if row['pdf_path']:
+        return _send_pdf(row)
+    return portal_pdf.as_response(portal_pdf.build_quote_pdf(row, current_user()), f"{row['number']}.pdf")
 
 
 @portal_bp.route('/pro/invoice/<int:iid>/pdf')
 @client_required
 def invoice_pdf(iid):
-    return _send_pdf(_owned_or_404('invoices', iid))
+    row = _owned_or_404('invoices', iid)
+    if row['pdf_path']:
+        return _send_pdf(row)
+    return portal_pdf.as_response(portal_pdf.build_invoice_pdf(row, current_user()), f"{row['number']}.pdf")
 
 
 @portal_bp.route('/pro/tickets/new', methods=['POST'])

@@ -14,6 +14,7 @@ from werkzeug.utils import secure_filename
 
 from portal_db import get_db, now_iso, UPLOAD_DIR
 from portal_auth import admin_required
+import portal_pdf
 
 admin_bp = Blueprint('admin', __name__, template_folder='../templates')
 
@@ -193,7 +194,13 @@ def quote_status(qid):
 @admin_bp.route('/admin/quotes/<int:qid>/pdf')
 @admin_required
 def quote_pdf(qid):
-    return _send_pdf(get_db().execute("SELECT * FROM quotes WHERE id = ?", (qid,)).fetchone())
+    row = get_db().execute("SELECT * FROM quotes WHERE id = ?", (qid,)).fetchone()
+    if row is None:
+        abort(404)
+    if row['pdf_path']:
+        return _send_pdf(row)
+    client = get_db().execute("SELECT * FROM users WHERE id = ?", (row['client_id'],)).fetchone()
+    return portal_pdf.as_response(portal_pdf.build_quote_pdf(row, client), f"{row['number']}.pdf")
 
 
 # --- Invoices (facturation) -------------------------------------------------
@@ -246,7 +253,13 @@ def invoice_status(iid):
 @admin_bp.route('/admin/invoices/<int:iid>/pdf')
 @admin_required
 def invoice_pdf(iid):
-    return _send_pdf(get_db().execute("SELECT * FROM invoices WHERE id = ?", (iid,)).fetchone())
+    row = get_db().execute("SELECT * FROM invoices WHERE id = ?", (iid,)).fetchone()
+    if row is None:
+        abort(404)
+    if row['pdf_path']:
+        return _send_pdf(row)
+    client = get_db().execute("SELECT * FROM users WHERE id = ?", (row['client_id'],)).fetchone()
+    return portal_pdf.as_response(portal_pdf.build_invoice_pdf(row, client), f"{row['number']}.pdf")
 
 
 # --- Tickets ----------------------------------------------------------------
