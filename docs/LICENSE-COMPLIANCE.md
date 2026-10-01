@@ -1,5 +1,7 @@
 # Conformité de licence : détecter et traiter une intégration non déclarée
 
+[English version](LICENSE-COMPLIANCE.en.md)
+
 > **Modèle, pas avis juridique.** Les courriers ci-dessous suivent la logique de
 > la double licence AGPL-3.0 / OEM. Faites-les relire par votre avocat avant envoi,
 > comme `COMMERCIAL-LICENSE.md`.
