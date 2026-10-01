@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <title>tcpcat</title>
-  <rect x="2" y="2" width="60" height="60" rx="13" fill="#eef1ec" stroke="#9c2b21" stroke-width="3"/>
-  <path d="M15 47 C15 55 49 55 49 47 L49 25 L46 11 L36 19 L28 19 L18 11 L15 25 Z"
-        fill="none" stroke="#9c2b21" stroke-width="4" stroke-linejoin="round"/>
-  <circle cx="25" cy="33" r="3.4" fill="#2f6b3a"/>
-  <circle cx="39" cy="33" r="3.4" fill="#2f6b3a"/>
-  <path d="M29.5 40 H34.5 L32 43 Z" fill="#9c2b21"/>
-</svg>

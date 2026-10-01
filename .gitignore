@@ -50,5 +50,5 @@ __pycache__/
 *.pyc
 bench_lab.sh
 
-# Client portal data — SQLite DB + uploaded PDFs hold customer PII, never commit
-public/data/
+# Website + client portal: kept out of this public repository (login code, customer data)
+public/
