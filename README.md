@@ -1,4 +1,4 @@
-# tcpcat — Enterprise-Grade Network Reconnaissance & Vulnerability Intelligence Platform
+# tcpcat — a fast network scanner in Go, with an eBPF/AF_XDP engine
 
 <div align="center">
 
@@ -12,8 +12,7 @@
                                          [ eBPF / AF_XDP ] by NycolazSec
 ```
 
-**High-Performance Network Analysis Platform**  
-*eBPF Kernel-Space Operations · Multilayered Evasion · WASM Detection Scripting*
+*eBPF/AF_XDP kernel-space I/O · service & OS detection · CVE correlation · WASM detection scripting*
 
 [![CI](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml/badge.svg)](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14561/badge)](https://www.bestpractices.dev/projects/14561)
@@ -22,6 +21,64 @@
 [![Latest Release](https://img.shields.io/github/v/release/NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/releases)
 [![Discord](https://img.shields.io/badge/Discord-Rejoindre-5865F2?logo=discord&logoColor=white)](https://discord.gg/syn)
 </div>
+
+Fast network scanner in Go with an eBPF/AF_XDP engine, service and OS
+detection, CVE correlation, and JSON/SARIF reports. Built for **authorized**
+security assessments.
+
+<!--
+  DEMO: record a short terminal GIF of a real scan and drop it at docs/demo.gif,
+  then uncomment the line below. A ~10s asciinema/vhs capture of the Quick start
+  command works well.
+  ![tcpcat demo](docs/demo.gif)
+-->
+
+## Quick start
+
+```bash
+# Install (Go 1.26+)
+go install github.com/NycolazSec/tcpcat/cmd/tcpcat@latest
+
+# Scan an authorized host with service + version detection
+sudo tcpcat -sV -p 22,80,443 scanme.nmap.org
+```
+
+Prefer a prebuilt binary or a `.deb`/`.dmg`? Grab one from the
+[releases page](https://github.com/NycolazSec/tcpcat/releases). To build from
+source, see [Installation](#installation--prerequisites).
+
+```text
+[*] Target loaded: scanme.nmap.org (1 IP(s) resolved)
+[*] Running Host Discovery...
+    ├─ [UP] 45.33.32.156
+[*] Ports loaded: 3 port(s) targeted
+────────────────────────────────────────────────────────────────────────────
+[+] 45.33.32.156:22    ─ OPEN  (time=151.73ms | reason=SYN-ACK Received)
+[+] 45.33.32.156:80    ─ OPEN  (time=150.57ms | reason=SYN-ACK Received)
+[~] 45.33.32.156 ─ Not shown: 1 closed port(s)
+────────────────────────────────────────────────────────────────────────────
+[*] Running Service & Version Detection...
+[v] 45.33.32.156:22    ─ SERVICE: openssh 6.6.1p1 (OS: ubuntu)
+[v] 45.33.32.156:80    ─ SERVICE: apache 2.4.7 (OS: ubuntu)
+    [!] http: missing security header: Content-Security-Policy
+    [!] http: missing security header: X-Frame-Options
+────────────────────────────────────────────────────────────────────────────
+[*] Running Vulnerability Lookup (Source: OSV API)...
+[!] 45.33.32.156:22    - 56 vulnerabilities found for openssh 6.6.1p1
+    |_ CVE-2023-38408 (CVSS: 9.8) - insufficiently trustworthy search path in ssh-agent PKCS#11...
+    |_ CVE-2020-15778 (CVSS: 7.8) - command injection in scp.c toremote function...
+    ... (trimmed)
+```
+
+Add `-j report.json` for a full JSON report or `--sarif report.sarif` for
+SARIF 2.1.0 output.
+
+> Only scan hosts and networks you own or have explicit written permission to
+> test. `scanme.nmap.org` is a public host Nmap provides for scan testing. See
+> the [Legal & Ethical Notice](#legal--ethical-notice).
+
+More recipes — eBPF high-throughput scans, OT/ICS, scope files, WASM detection
+scripts, AWS discovery — are in [examples/](examples/).
 
 ---
 
@@ -81,7 +138,13 @@ Real-time CVE correlation across multiple intelligence feeds (Vulners API, Googl
 - CAP_SYS_ADMIN or root (for raw socket operations)
 - gcc/clang (for eBPF compilation, optional)
 
-**Build:**
+**Install with Go (fastest):**
+```bash
+go install github.com/NycolazSec/tcpcat/cmd/tcpcat@latest
+sudo tcpcat --help
+```
+
+**Build from source:**
 ```bash
 git clone https://github.com/NycolazSec/tcpcat.git
 cd tcpcat
@@ -89,6 +152,9 @@ go mod tidy
 go build -o tcpcat ./cmd/tcpcat
 sudo ./tcpcat --help
 ```
+
+**Prebuilt packages:** `.deb`, `.dmg`, and per-platform binaries are attached
+to each [GitHub release](https://github.com/NycolazSec/tcpcat/releases).
 
 ---
 

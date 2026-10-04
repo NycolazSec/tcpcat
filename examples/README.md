@@ -1,138 +1,130 @@
 # tcpcat Examples
 
-Ce répertoire contient des exemples d'utilisation de tcpcat.
+Practical, copy-pasteable examples. Every flag below is a real tcpcat flag —
+run `tcpcat --help` for the full list, and see the main [README](../README.md)
+for the complete CLI reference.
 
-## Basic Scanner
+> **Authorization required.** Only scan hosts and networks you own or have
+> explicit written permission to test. `scanme.nmap.org` (used below) is a
+> public host Nmap provides specifically for scan testing.
 
-```bash
-tcpcat -target 192.168.1.1 -ports 22,80,443 -concurrency 4
-```
-
-## Scan avec Service Detection
-
-```bash
-tcpcat -target 192.168.1.1 -ports 1-1000 -service-detect -output json
-```
-
-## Scan Vulnerabilités
+## Quick scan
 
 ```bash
-tcpcat -target 192.168.1.1 -ports 1-1000 -vuln-check -output json > results.json
+# Top 1000 ports, SYN scan, on an authorized host
+sudo tcpcat -sS --top-ports 1000 scanme.nmap.org
 ```
 
-## Evasion Techniques
+## Service and version detection
 
 ```bash
-tcpcat -target 192.168.1.1 \
-  -ports 22,80,443 \
-  -randomize-delay \
-  -spoof-source \
-  -fragment
+# Detect services, versions, OS, and TLS posture on specific ports
+sudo tcpcat -sV -O -p 22,80,443 scanme.nmap.org -j report.json
 ```
 
-## AWS VPC Scanning
+A trimmed example of the JSON this produces is in
+[`sample-report.json`](sample-report.json).
+
+## CVE correlation
+
+`-sV` correlates detected service versions against the embedded offline
+database. Add a Vulners API key for broader online coverage:
 
 ```bash
-tcpcat -target vpc-12345 \
-  -aws-profile production \
-  -service-detect \
-  -output json
+sudo tcpcat -sV -p 1-1000 --vulners-apikey "$VULNERS_API_KEY" target -j report.json
 ```
 
-## Cloud Masscan
+## Reports in multiple formats
 
 ```bash
-# Scan complet d'un range
-tcpcat -targets 10.0.0.0/8 \
-  -ports 1-65535 \
-  -cloud-mode \
-  -distributed
+# Every format can be requested in the same run; each writes its own file
+sudo tcpcat -sV -p 443 target \
+  -j report.json \
+  --sarif report.sarif \
+  -oX report.xml \
+  -oN report.txt
 ```
 
-## Custom WASM Script
-
-```javascript
-// detect-custom.wasm (pseudo-code)
-module.exports = {
-  detect: async (service) => {
-    if (service.banner.includes("CustomApp/1.0")) {
-      return {
-        name: "CustomApp",
-        version: "1.0",
-        vulns: ["CVE-2024-0001"]
-      };
-    }
-  }
-};
-```
-
-Utilisation:
-```bash
-tcpcat -target 192.168.1.1 -script detect-custom.wasm
-```
-
-## Benchmarking
+## High-throughput scan (eBPF/AF_XDP, Linux 5.8+)
 
 ```bash
-# Mesurer performance
-time tcpcat -target localhost -ports 1-10000 -concurrency 8
-
-# Output expected (~1M pps après optimization)
-# real    0m0.010s
+sudo tcpcat --ebpf -i eth0 -p 1-65535 -sS --open -T 5 --rate 25000 target
 ```
 
-## Docker
+## Authorized audit with a scope file
+
+Restrict resolved targets to an explicitly authorized list. Blank lines and
+`#` comments are ignored.
+
+```text
+# scope.txt
+10.42.0.0/16
+app-test.example.internal
+```
 
 ```bash
-docker run --network=host -v $(pwd)/targets.txt:/targets.txt \
-  tcpcat:latest \
-  -targets-file /targets.txt \
-  -ports 1-1000
+sudo tcpcat \
+  --profile safe-production \
+  --scope-file scope.txt \
+  -Pn -p 443 -sV \
+  -j report.json \
+  --audit-log audit.jsonl \
+  10.42.10.15
 ```
 
-## Kubernetes CronJob
+`safe-production` applies conservative timing (`-T 2`), caps the rate at 300
+pps, and disables evasion, fragmentation, and decoys.
 
-```yaml
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: tcpcat-scan
-spec:
-  schedule: "0 2 * * *"
-  jobTemplate:
-    spec:
-      template:
-        spec:
-          containers:
-          - name: tcpcat
-            image: tcpcat:latest
-            args: ["-targets", "k8s-nodes", "-output", "prometheus"]
-          restartPolicy: OnFailure
-```
+## Comparing against a baseline
 
-## Integration Zeek
+Detect newly exposed ports, version changes, and new CVEs relative to a
+previous tcpcat JSON report:
 
 ```bash
-# Export tcpcat results to Zeek
-tcpcat -target 192.168.1.0/24 -output zeek-log | zeek -r -
+sudo tcpcat --profile safe-production --scope-file scope.txt \
+  -Pn -p 443 -sV \
+  -j report-current.json \
+  --baseline report-previous.json \
+  --changes changes.json \
+  10.42.10.15
 ```
 
-## Notes
+## Industrial / OT networks (gentle profile)
 
-- Les exemples utilisent la CLI `tcpcat` principale
-- Pour l'API Go, voir `internal/` packages
-- Pour plus de détails, voir `docs/` directory
-- Benchmarks complets dans `docs/XDP_OPTIMIZATION.md`
+```bash
+# Full TCP connect only, one connection at a time, 5 pps, no crafted packets
+sudo tcpcat --profile ot --scope-file scope.txt 10.10.0.0/24
+```
 
-## Contribution
+Add `--ot-probe` to read an exact vendor/version from OT ports (Modbus,
+EtherNet/IP) via a single read-only query. See the main README for the risks.
 
-Pour contribuer des exemples:
-1. Ajouter un exemple documenté
-2. Incluire output d'exécution
-3. Expliquer les cas d'usage
-4. Tester sur votre machine
+## WASM detection scripts
+
+Load a directory of sandboxed WASM detection modules written in Rust, C, Go,
+or AssemblyScript:
+
+```bash
+sudo tcpcat -sV --scripts ./my-detections/ -p 1-1000 target
+```
+
+## AWS EC2 tag-based discovery
+
+Discover and scan EC2 instances matching tags (requires AWS credentials in the
+environment):
+
+```bash
+sudo tcpcat --aws-region eu-west-1 --aws-tags 'Key=App,Value=Web' -sV -p 443
+```
+
+## Local web interface
+
+```bash
+# Starts a local dashboard on 127.0.0.1:8080 by default
+sudo tcpcat --web
+```
 
 ---
 
-**Version**: v0.2-dev
-**Dernière mise à jour**: 2024-08-28
+- For the full CLI reference and licensing, see the main [README](../README.md).
+- For the Go packages, see [`internal/`](../internal/).

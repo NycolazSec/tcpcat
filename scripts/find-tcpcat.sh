@@ -24,7 +24,6 @@ STRONG=(
 # Weak indicators: only meaningful together with a strong one.
 WEAK=(
   'tcpcat'
-  'rapport-entreprise'
 )
 
 found=0
