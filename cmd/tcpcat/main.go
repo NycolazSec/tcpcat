@@ -607,6 +607,15 @@ func main() {
 			fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
 			fmt.Printf("%s[*] Running Vulnerability Lookup (Source: %s)...%s\n", config.Red, vulnScanner.SourceName(), config.Reset)
 
+			// Exploit intelligence is opt-in (it adds live KEV/EPSS lookups).
+			// The enricher is created once and reused across every port so the
+			// multi-MB KEV catalog is downloaded at most once for the whole scan.
+			var exploitEnricher *vuln.ExploitEnricher
+			if opts.ExploitIntel {
+				exploitEnricher = vuln.NewExploitEnricher()
+				fmt.Printf("%s[*] Exploit intelligence enabled: enriching CVEs with CISA KEV + EPSS.%s\n", config.Gray, config.Reset)
+			}
+
 			for i := range results {
 				r := &results[i]
 				if r.State != scan.StateOpen {
@@ -683,6 +692,13 @@ func main() {
 					})
 					vulnerabilities = vuln.Enrich(vulnerabilities)
 					vulnerabilities = vuln.AnnotateApplicability(vulnerabilities, r.OS)
+					if exploitEnricher != nil {
+						// Tag with KEV/EPSS, then reorder so known-exploited and
+						// high-EPSS CVEs lead -- this also feeds the RiskSeverity
+						// pick below, which takes the first applicable entry.
+						vulnerabilities = exploitEnricher.Enrich(vulnerabilities)
+						vuln.PrioritizeExploitability(vulnerabilities)
+					}
 					r.Vulnerabilities = vulnerabilities
 					if len(vulnerabilities) > 0 {
 						// The headline severity should reflect what this host is
@@ -731,6 +747,15 @@ func main() {
 								note = fmt.Sprintf(" %s[not applicable: %s-only]%s", config.White, strings.TrimPrefix(v.Applicability, "not_applicable_os:"), config.Reset)
 							case strings.HasPrefix(v.Applicability, "requires_component:"):
 								note = fmt.Sprintf(" %s[requires %s]%s", config.White, strings.TrimPrefix(v.Applicability, "requires_component:"), config.Reset)
+							}
+							// Exploit-intelligence badges: KEV (known exploited in
+							// the wild) is the loudest signal, EPSS the predicted
+							// probability. Shown only when --exploit-intel ran.
+							if v.KnownExploited {
+								note += fmt.Sprintf(" %s[KEV: exploited in the wild]%s", config.Red, config.Reset)
+							}
+							if v.EPSS > 0 {
+								note += fmt.Sprintf(" %s[EPSS %.1f%%]%s", config.Gray, v.EPSS*100, config.Reset)
 							}
 							fmt.Printf("    |_ %s (%sCVSS: %.1f%s) - %s%s\n", v.ID, cvssColor, v.CVSS, config.Reset, v.Title, note)
 						}

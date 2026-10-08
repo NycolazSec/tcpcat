@@ -141,6 +141,7 @@ type Options struct {
 	KiddieOutput   string
 	ScriptPath     string
 	VulnersAPIKey  string
+	ExploitIntel   bool
 	SmartBypass    bool
 
 	AWSRegion string
@@ -345,6 +346,7 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.KiddieOutput, "oS", "", "Export results in leetspeak (script kiddie format)")
 	flag.StringVar(&opts.ScriptPath, "scripts", "", "Path to directory containing Go scripts")
 	flag.StringVar(&opts.VulnersAPIKey, "vulners-apikey", "", "Vulners.com API key for CVE lookup")
+	flag.BoolVar(&opts.ExploitIntel, "exploit-intel", false, "Enrich CVEs with CISA KEV (known-exploited) + EPSS scores and prioritize by them")
 	flag.BoolVar(&opts.SmartBypass, "smart-bypass", false, "Enable advanced monitoring validation on filtered ports")
 	flag.BoolVar(&opts.SmartBypass, "spoof-agent", false, "Alias for --smart-bypass")
 	flag.StringVar(&opts.DecoyIPs, "decoy", "", "Comma-separated list of decoy IPs (e.g., 1.1.1.1,2.2.2.2). Without a value, a default decoy pool is used.")
@@ -395,6 +397,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s-sV%s             Service & Version detection\n", White, Reset)
 		fmt.Printf("  %s--scripts <dir>%s Run scripts from directory for advanced detection\n", White, Reset)
 		fmt.Printf("  %s--vulners-apikey <key>%s Perform CVE lookup for detected services\n", White, Reset)
+		fmt.Printf("  %s--exploit-intel%s Enrich CVEs with CISA KEV + EPSS and prioritize by real-world exploitation\n", White, Reset)
 		fmt.Printf("  %s-O%s              Enable OS detection\n", White, Reset)
 		fmt.Printf("  %s--mptcp%s         Detect Multipath-TCP-capable hosts (MP_CAPABLE in SYN; needs -sS or --ebpf)\n", White, Reset)
 		fmt.Printf("  %s--jarm%s          Compute an active JARM TLS fingerprint on TLS ports (10 extra probes/target)\n", White, Reset)

@@ -21,6 +21,16 @@ type Vulnerability struct {
 	// found, just not counted toward this host's headline risk (see
 	// cmd/tcpcat/main.go's RiskSeverity selection).
 	Applicability string `json:"applicability,omitempty"`
+	// KnownExploited is true when this CVE is in CISA's Known Exploited
+	// Vulnerabilities (KEV) catalog -- exploitation has been observed in the
+	// wild, so it should be prioritized regardless of CVSS. EPSS is FIRST.org's
+	// predicted probability (0.0-1.0) of exploitation in the next 30 days, and
+	// EPSSPercentile its rank among all scored CVEs. All three are populated
+	// only when exploit-intelligence enrichment runs (--exploit-intel); see
+	// prioritize.go.
+	KnownExploited bool    `json:"known_exploited,omitempty"`
+	EPSS           float64 `json:"epss,omitempty"`
+	EPSSPercentile float64 `json:"epss_percentile,omitempty"`
 }
 
 type Scanner interface {

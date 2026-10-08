@@ -344,6 +344,7 @@ pointed at an IPv6 target instead of silently misbehaving.
 --scripts <dir>       Load WASM detection modules
 --jarm                Active JARM TLS fingerprint on TLS ports (opt-in: 10 extra probes/target)
 --ot-probe            Read exact vendor/version from OT ports (Modbus...) via one read-only query (opt-in)
+--exploit-intel       Enrich correlated CVEs with CISA KEV + EPSS and prioritize by them (opt-in)
 ```
 On a `443`/`8443` port, `-sV` also runs an independent TLS/certificate
 probe and attaches the result as `tls` in JSON output: negotiated
@@ -470,6 +471,8 @@ For every open port examined with `-sV`, `vulnerability_assessment` explains the
 | `not_assessed` | A reliable service version was not detected, so no version-based lookup was possible. |
 
 Version-based findings include a CVSS-derived severity, remediation guidance, and `confidence: "version-based"`. They are correlation results, not proof that an issue is exploitable on the target.
+
+With `--exploit-intel`, tcpcat additionally queries two live feeds and reorders each host's findings so the most urgent lead: CVEs in CISA's **Known Exploited Vulnerabilities (KEV)** catalog (`known_exploited: true` in JSON, `[KEV: exploited in the wild]` in the console) come first, then by **EPSS** score (`epss`/`epss_percentile` in JSON — FIRST.org's predicted 30-day exploitation probability), then by CVSS. This turns a long CVSS-ranked list into a "patch these first" order; a high-CVSS CVE that nobody is exploiting sinks below a medium-CVSS one that is. Enrichment is best-effort and opt-in (it adds network round-trips): offline or on a feed error, findings keep their CVSS-only ordering. KEV/EPSS are prioritization signals, not proof of exploitability on your specific target.
 
 Without `--vulners-apikey`, tcpcat uses its embedded offline vulnerability database. The database currently includes selected Apache, nginx, and OpenSSH versions; its coverage is intentionally limited and an absent match is not evidence that a target is secure.
 
