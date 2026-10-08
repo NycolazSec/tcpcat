@@ -842,6 +842,7 @@ func main() {
 		write  func(string, string, []scan.TargetResult, time.Duration) error
 	}{
 		{"XML", opts.XMLOutput, output.ExportXML},
+		{"HTML", opts.HTMLOutput, output.ExportHTML},
 		{"grepable", opts.GrepableOutput, output.ExportGrepable},
 		{"normal", opts.NormalOutput, output.ExportNormal},
 		{"leetspeak", opts.KiddieOutput, output.ExportScriptKiddie},

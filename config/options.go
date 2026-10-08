@@ -136,6 +136,7 @@ type Options struct {
 	ChangesOutput  string
 	SARIFOutput    string
 	XMLOutput      string
+	HTMLOutput     string
 	GrepableOutput string
 	NormalOutput   string
 	KiddieOutput   string
@@ -213,6 +214,7 @@ func ParseFlags() (*Options, error) {
 		"--sarif":             true,
 		"--exclude":           true,
 		"-oX":                 true,
+		"-oH":                 true,
 		"-oG":                 true,
 		"-oN":                 true,
 		"-oS":                 true,
@@ -341,6 +343,7 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.ChangesOutput, "changes", "", "Write scan changes to a JSON file (requires --baseline)")
 	flag.StringVar(&opts.SARIFOutput, "sarif", "", "Export security findings as SARIF 2.1.0")
 	flag.StringVar(&opts.XMLOutput, "oX", "", "Export results as XML")
+	flag.StringVar(&opts.HTMLOutput, "oH", "", "Export results as a self-contained HTML report")
 	flag.StringVar(&opts.GrepableOutput, "oG", "", "Export results in grepable format")
 	flag.StringVar(&opts.NormalOutput, "oN", "", "Export results as a plain-text report")
 	flag.StringVar(&opts.KiddieOutput, "oS", "", "Export results in leetspeak (script kiddie format)")
@@ -440,6 +443,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s-j <file>%s       Export results to JSON file\n", White, Reset)
 		fmt.Printf("  %s--sarif <file>%s  Export findings as SARIF 2.1.0\n", White, Reset)
 		fmt.Printf("  %s-oX <file>%s      Export results as XML\n", White, Reset)
+		fmt.Printf("  %s-oH <file>%s      Export a self-contained HTML report (shareable; shows KEV/EPSS when enabled)\n", White, Reset)
 		fmt.Printf("  %s-oG <file>%s      Export results in grepable format\n", White, Reset)
 		fmt.Printf("  %s-oN <file>%s      Export results as a plain-text report\n", White, Reset)
 		fmt.Printf("  %s-oS <file>%s      Export results in leetspeak\n", White, Reset)

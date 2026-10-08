@@ -431,6 +431,7 @@ flagged for files that don't really exist.
 ```
 -j <file>              Export a detailed JSON report
 -oX <file>              Export XML
+-oH <file>              Export a self-contained HTML report (shareable; shows KEV/EPSS when enabled)
 -oG <file>              Export grepable output (one line per host)
 -oN <file>              Export a plain-text report
 -oS <file>              Export leetspeak
