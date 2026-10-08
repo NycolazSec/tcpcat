@@ -156,6 +156,26 @@ sudo ./tcpcat --help
 **Prebuilt packages:** `.deb`, `.dmg`, and per-platform binaries are attached
 to each [GitHub release](https://github.com/NycolazSec/tcpcat/releases).
 
+### Verifying a release
+
+Every release ships a `checksums.txt`, a CycloneDX **SBOM** per archive, and a
+**cosign** signature of the checksums file (keyless, tied to the GitHub Actions
+OIDC identity and logged in Sigstore's public transparency log). To verify an
+archive you downloaded:
+
+```bash
+# 1. Verify the checksums file was signed by this project's release workflow
+cosign verify-blob \
+  --certificate checksums.txt.pem \
+  --signature  checksums.txt.sig \
+  --certificate-identity-regexp 'https://github.com/NycolazSec/tcpcat/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+
+# 2. Verify your archive's hash is the one listed in the signed checksums file
+sha256sum --check --ignore-missing checksums.txt
+```
+
 ---
 
 ## Common Scenarios

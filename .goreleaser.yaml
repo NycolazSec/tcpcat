@@ -21,11 +21,11 @@ builds:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
 
 archives:
-  - format: tar.gz
+  - formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
     files:
       - README.md
       - LICENSE
@@ -58,8 +58,36 @@ release:
 checksum:
   name_template: "checksums.txt"
 
+# Generate a CycloneDX SBOM (via syft) for every release archive, so consumers
+# and supply-chain scanners get a full dependency inventory per artifact.
+sboms:
+  - artifacts: archive
+
+# Sign the checksums file with cosign in keyless mode: the signature is tied to
+# the GitHub Actions OIDC identity (no long-lived private key to manage) and
+# recorded in the public Rekor transparency log. Because checksums.txt lists
+# the SHA-256 of every archive/package, signing it cryptographically covers the
+# whole release. Verify with:
+#   cosign verify-blob \
+#     --certificate checksums.txt.pem \
+#     --signature  checksums.txt.sig \
+#     --certificate-identity-regexp 'https://github.com/NycolazSec/tcpcat/.*' \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+#     checksums.txt
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
 snapshot:
-  name_template: "{{ incpatch .Version }}-snapshot"
+  version_template: "{{ incpatch .Version }}-snapshot"
 
 changelog:
   sort: asc
