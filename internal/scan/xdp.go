@@ -21,6 +21,7 @@ import (
 	"github.com/asavie/xdp"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	"golang.org/x/sys/unix"
 )
 
 var GlobalXsk any
@@ -89,6 +90,22 @@ func countRXQueueDirs(queuesDir string) int {
 		return 1
 	}
 	return count
+}
+
+// xdpSocketZeroCopy reports whether the kernel actually placed this AF_XDP
+// socket in zero-copy mode. tcpcat binds with the default flags (0), which
+// tells the kernel to negotiate zero-copy when the driver supports it (only
+// possible under a native-mode XDP attach) and silently fall back to copy
+// mode otherwise. The negotiated result isn't visible from the bind call, so
+// the only reliable way to know which one we got is to read it back from the
+// XDP_OPTIONS socket option after bind. Any error is treated as "not
+// zero-copy", since this only drives an informational log line.
+func xdpSocketZeroCopy(xsk *xdp.Socket) bool {
+	opts, err := unix.GetsockoptInt(xsk.FD(), unix.SOL_XDP, unix.XDP_OPTIONS)
+	if err != nil {
+		return false
+	}
+	return opts&unix.XDP_OPTIONS_ZEROCOPY != 0
 }
 
 func getDefaultNetworkInfo() (string, net.IP, *net.IPNet, error) {
@@ -214,18 +231,35 @@ func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 	}
 	localMAC = iface.HardwareAddr
 
+	// AF_XDP only reaches true zero-copy when the program is attached in the
+	// driver's native receive path (XDPDriverMode): there the kernel can hand
+	// frames straight into the socket's UMEM. XDPGenericMode (SKB) runs the
+	// program after the kernel has already allocated an skb, which forces every
+	// AF_XDP socket on this interface into copy mode no matter what bind flags
+	// ask for. So try native first and fall back to generic -- many virtual
+	// NICs (cloud instances, VMs, Linux bridges) only support generic, and
+	// failing hard there would break --ebpf for the common case.
+	attachMode := "native driver"
 	l, err := link.AttachXDP(link.XDPOptions{
 		Program:   prog,
 		Interface: iface.Index,
-		Flags:     link.XDPGenericMode,
+		Flags:     link.XDPDriverMode,
 	})
 	if err != nil {
+		l, err = link.AttachXDP(link.XDPOptions{
+			Program:   prog,
+			Interface: iface.Index,
+			Flags:     link.XDPGenericMode,
+		})
+		attachMode = "generic (SKB)"
+	}
+	if err != nil {
 		coll.Close()
-		return nil, fmt.Errorf("failed to attach XDP hook: %v", err)
+		return nil, fmt.Errorf("failed to attach XDP hook (tried native driver and generic modes): %v", err)
 	}
 	xdpLink = l
 	if xdpDebug {
-		log.Println("[+] eBPF assembly hook attached successfully at physical level.")
+		log.Printf("[+] eBPF hook attached in %s mode.", attachMode)
 	}
 
 	numQueues := getInterfaceRXQueueCount(ifaceName)
@@ -268,7 +302,11 @@ func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 	}
 
 	if xdpDebug {
-		log.Printf("[+] Zero-copy bridge (ring buffer) established on %d RX queue(s). Engine ready.", len(xdpSockets))
+		dataPath := "copy mode"
+		if len(xdpSockets) > 0 && xdpSocketZeroCopy(xdpSockets[0]) {
+			dataPath = "zero-copy"
+		}
+		log.Printf("[+] AF_XDP engine ready: %s attach, %s, on %d RX queue(s).", attachMode, dataPath, len(xdpSockets))
 		logNAPITuningHint(ifaceName)
 	}
 
