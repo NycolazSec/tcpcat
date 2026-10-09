@@ -135,6 +135,7 @@ type Options struct {
 	BaselineFile   string
 	ChangesOutput  string
 	NotifyWebhook  string
+	ConfigFile     string
 	SARIFOutput    string
 	XMLOutput      string
 	HTMLOutput     string
@@ -170,10 +171,100 @@ func looksLikeFlagValue(s string) bool {
 	return err == nil
 }
 
+// configArgsFromArgs looks for a --config/-config <file> in args and, if
+// present, returns that file's entries as flag tokens (`--key=value`) ready to
+// be spliced ahead of the command line. No --config means no tokens and no
+// error. The --config token itself is left in args so flag.Parse still records
+// it; re-reading it there is harmless.
+func configArgsFromArgs(args []string) ([]string, error) {
+	path := ""
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--config" || a == "-config" {
+			if i+1 < len(args) {
+				path = args[i+1]
+			}
+			break
+		}
+		if v, ok := strings.CutPrefix(a, "--config="); ok {
+			path = v
+			break
+		}
+		if v, ok := strings.CutPrefix(a, "-config="); ok {
+			path = v
+			break
+		}
+	}
+	if path == "" {
+		return nil, nil
+	}
+	return parseConfigFile(path)
+}
+
+// parseConfigFile reads a flat `key: value` (or `key = value`) config file into
+// flag tokens. Blank lines and `#` comments are ignored; keys may be written
+// with or without leading dashes; surrounding quotes on a value are stripped. A
+// key with no value is skipped. Boolean flags are written `key: true` /
+// `key: false`. Nested structures are not supported -- every tcpcat flag is a
+// flat scalar, so a flat file is all that's needed (and a flat YAML file parses
+// here too).
+func parseConfigFile(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config %s: %w", path, err)
+	}
+
+	var tokens []string
+	for n, raw := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// Allow a trailing `# comment` after the value.
+		if i := strings.Index(line, " #"); i >= 0 {
+			line = strings.TrimSpace(line[:i])
+		}
+
+		var key, val string
+		if i := strings.IndexAny(line, ":="); i >= 0 {
+			key = strings.TrimSpace(line[:i])
+			val = strings.TrimSpace(line[i+1:])
+		} else {
+			return nil, fmt.Errorf("config %s line %d: expected `key: value`, got %q", path, n+1, line)
+		}
+
+		key = strings.TrimLeft(key, "-")
+		if key == "" {
+			return nil, fmt.Errorf("config %s line %d: empty key", path, n+1)
+		}
+		if len(val) >= 2 && (val[0] == '"' && val[len(val)-1] == '"' || val[0] == '\'' && val[len(val)-1] == '\'') {
+			val = val[1 : len(val)-1]
+		}
+		if val == "" {
+			continue
+		}
+		tokens = append(tokens, "--"+key+"="+val)
+	}
+	return tokens, nil
+}
+
 func ParseFlags() (*Options, error) {
 	opts := &Options{}
 
 	rawArgs := os.Args[1:]
+
+	// A --config <file> loads flag defaults from a file, so a repeatable scan
+	// doesn't need a long command line. Its entries are spliced in *before* the
+	// rest of the arguments, so anything also given on the command line wins
+	// (flag.Parse keeps the last value for a repeated flag). A parse error here
+	// is fatal rather than warned-about: a config the operator can't see was
+	// applied cleanly is worse than a clear up-front failure.
+	if cfgArgs, err := configArgsFromArgs(rawArgs); err != nil {
+		return nil, err
+	} else if len(cfgArgs) > 0 {
+		rawArgs = append(cfgArgs, rawArgs...)
+	}
+
 	var flagsArgs []string
 	var posArgs []string
 
@@ -213,6 +304,7 @@ func ParseFlags() (*Options, error) {
 		"--baseline":          true,
 		"--changes":           true,
 		"--notify-webhook":    true,
+		"--config":            true,
 		"--sarif":             true,
 		"--exclude":           true,
 		"-oX":                 true,
@@ -342,6 +434,7 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.Profile, "profile", "", "Scan profile: safe-production | ot (industrial/OT)")
 	flag.StringVar(&opts.AuditLog, "audit-log", "", "Append one audit record per scan to a JSONL file")
 	flag.StringVar(&opts.BaselineFile, "baseline", "", "Prior JSON report used as a comparison baseline")
+	flag.StringVar(&opts.ConfigFile, "config", "", "Load flag defaults from a config file (key: value); command-line flags override it")
 	flag.StringVar(&opts.ChangesOutput, "changes", "", "Write scan changes to a JSON file (requires --baseline)")
 	flag.StringVar(&opts.NotifyWebhook, "notify-webhook", "", "POST an alert to this Discord/Slack/HTTP webhook when changes vs --baseline are found")
 	flag.StringVar(&opts.SARIFOutput, "sarif", "", "Export security findings as SARIF 2.1.0")
@@ -452,6 +545,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s-oS <file>%s      Export results in leetspeak\n", White, Reset)
 		fmt.Printf("  %s--audit-log <file>%s Append an audit record in JSONL\n", White, Reset)
 		fmt.Printf("  %s--baseline <file>%s Compare with a prior JSON report\n", White, Reset)
+		fmt.Printf("  %s--config <file>%s  Load flag defaults from a file (key: value); CLI flags override it\n", White, Reset)
 		fmt.Printf("  %s--changes <file>%s Write comparison results (requires --baseline)\n", White, Reset)
 		fmt.Printf("  %s--notify-webhook <url>%s Alert a Discord/Slack/HTTP webhook on changes (requires --baseline)\n", White, Reset)
 		fmt.Printf("  %s--profile safe-production%s Conservative authorized-production profile\n", White, Reset)

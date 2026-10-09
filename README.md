@@ -470,11 +470,34 @@ the port state.
 
 ### Enterprise Scan Controls
 ```
+--config <file>             Load flag defaults from a file; command-line flags override them
 --scope-file <file>         Restrict resolved targets to authorized CIDRs, IPs, or hostnames
 --resume <file>             Resume an interrupted scan: skip target/ports already recorded, append new ones
 --exclude <list>            Comma-separated hosts, CIDRs, or names to leave out of the scan
 --profile safe-production   Apply conservative rate, timing, and non-evasive scan settings
 --profile ot                Gentle profile for fragile industrial/OT networks (PLC/RTU/ICS)
+```
+
+#### Config files
+
+Keep a repeatable scan in a file instead of a long command line. The format is
+flat `key: value` (or `key = value`); keys are flag names with or without
+leading dashes, `#` starts a comment, and booleans are `true`/`false`. A flat
+YAML file works too.
+
+```yaml
+# scan.conf
+profile: safe-production
+scope-file: /etc/tcpcat/scope.txt
+sV: true
+exploit-intel: true
+p: "22,80,443"
+rate: 300
+```
+
+```bash
+# Anything on the command line overrides the file (here, the ports):
+sudo tcpcat --config scan.conf -p 443 10.42.0.0/24
 ```
 
 ### Report Semantics
