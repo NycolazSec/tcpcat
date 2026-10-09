@@ -10,6 +10,38 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-10-09
+
+### Added
+- `--exploit-intel`: enrich correlated CVEs with CISA KEV (known-exploited)
+  and FIRST.org EPSS scores, and reorder each host's findings KEV-first, then
+  by EPSS, then CVSS. New `known_exploited`/`epss`/`epss_percentile` JSON
+  fields and console badges. Best-effort and opt-in (adds live lookups).
+- `-oH`: export a self-contained, responsive HTML report (summary cards,
+  per-host open ports, CVEs with CVSS/severity and KEV/EPSS badges). Rendered
+  with `html/template`, so host-supplied banners/CVE titles are auto-escaped.
+- `--notify-webhook`: when a scan's comparison against `--baseline` finds a new
+  open port, a changed service/version, or a new CVE, POST an alert to a
+  Discord, Slack, or generic HTTP webhook. Nothing is sent when nothing
+  changed. Point `-j` and `--baseline` at one state file for scheduled
+  attack-surface monitoring.
+- `--config`: load flag defaults from a flat `key: value` file (a flat YAML
+  file works too); command-line flags override it.
+- SSH configuration audit (`ssh_posture`): `-sV` reads an SSH server's offered
+  key-exchange/host-key/cipher/MAC algorithms and flags weak or deprecated
+  ones (SHA-1 kex, `ssh-rsa`/`ssh-dss` host keys, CBC/arcfour/3DES ciphers,
+  MD5/SHA-1/truncated/64-bit MACs, legacy protocol 1.x).
+- MQTT (TCP 1883), CoAP (UDP 5683) and IPMI/BMC (UDP 623) service probes, with
+  a finding for an MQTT broker that accepts anonymous connections.
+
+### Changed
+- Load the `--baseline` before exports run, so `-j` and `--baseline` can share
+  one state file; a missing baseline is treated as the first run, not an error.
+
+### Security
+- Release artifacts are now signed with cosign (keyless) and ship a CycloneDX
+  SBOM per archive. See "Verifying a release" in the README.
+
 ## [1.4.2] - 2026-09-30
 
 ### Added
