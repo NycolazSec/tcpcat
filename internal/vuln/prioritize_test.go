@@ -150,10 +150,10 @@ func TestEnrichDownloadsKEVOnlyOnce(t *testing.T) {
 
 func TestPrioritizeExploitability(t *testing.T) {
 	vulns := []Vulnerability{
-		{ID: "CVE-A", CVSS: 9.8, EPSS: 0.10},                     // high CVSS, low EPSS, no KEV
-		{ID: "CVE-B", CVSS: 5.0, EPSS: 0.80},                     // mid CVSS, high EPSS, no KEV
+		{ID: "CVE-A", CVSS: 9.8, EPSS: 0.10},                       // high CVSS, low EPSS, no KEV
+		{ID: "CVE-B", CVSS: 5.0, EPSS: 0.80},                       // mid CVSS, high EPSS, no KEV
 		{ID: "CVE-C", CVSS: 4.0, EPSS: 0.01, KnownExploited: true}, // KEV wins outright
-		{ID: "CVE-D", CVSS: 7.0, EPSS: 0.0},                      // tiebreak by CVSS
+		{ID: "CVE-D", CVSS: 7.0, EPSS: 0.0},                        // tiebreak by CVSS
 	}
 	PrioritizeExploitability(vulns)
 
