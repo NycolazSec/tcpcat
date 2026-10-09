@@ -97,4 +97,8 @@ jobs:
       - name: Run govulncheck
         uses: golang/govulncheck-action@v1
         with:
-          go-version-input: "stable"
+          # Pin to the patched release govulncheck wants: GitHub's "stable"
+          # often lags a patch behind freshly disclosed stdlib advisories, so
+          # analyzing against it fails on CVEs already fixed upstream. Keep this
+          # in step with the toolchain directive in go.mod.
+          go-version-input: "1.27.2"

@@ -2,10 +2,11 @@ module github.com/NycolazSec/tcpcat
 
 go 1.26.0
 
-// Build with 1.26.9+: earlier 1.26.x patch releases carry net/http,
-// net/textproto and crypto/tls standard-library advisories (GO-2026-66xx)
-// that govulncheck flags. The language version above stays at 1.26.0.
-toolchain go1.26.9
+// Build with the patched toolchain: earlier 1.27.x patch releases carry
+// net/http, html/template and crypto/tls standard-library advisories that
+// govulncheck flags; 1.27.2 clears them. Bump this when a newer patch fixes
+// freshly disclosed stdlib advisories. The language version above stays 1.26.0.
+toolchain go1.27.2
 
 require (
 	github.com/asavie/xdp v0.3.3
