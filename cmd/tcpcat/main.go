@@ -17,6 +17,7 @@ import (
 	"github.com/NycolazSec/tcpcat/internal/compare"
 	"github.com/NycolazSec/tcpcat/internal/discovery"
 	"github.com/NycolazSec/tcpcat/internal/netiface"
+	"github.com/NycolazSec/tcpcat/internal/notify"
 	"github.com/NycolazSec/tcpcat/internal/output"
 	"github.com/NycolazSec/tcpcat/internal/ports"
 	"github.com/NycolazSec/tcpcat/internal/scan"
@@ -806,6 +807,24 @@ func main() {
 	fmt.Printf("%s[✓] Scan completed in %v. Found %d open port(s) across %d active target(s).%s\n",
 		config.White, duration.Round(time.Millisecond), openCount, len(activeTargets), config.Reset)
 
+	// Load the baseline before any export runs. A monitoring setup typically
+	// points -j and --baseline at the same state file (each run compares to the
+	// previous one, then becomes the next baseline); exporting first would
+	// overwrite the previous run before it could be compared against. A missing
+	// file is the expected first run of such a setup, not an error.
+	var baseline []scan.TargetResult
+	baselineLoaded := false
+	if opts.BaselineFile != "" {
+		if _, statErr := os.Stat(opts.BaselineFile); os.IsNotExist(statErr) {
+			fmt.Printf("%s[*] No baseline at %s yet: nothing to compare on this first run.%s\n", config.Gray, opts.BaselineFile, config.Reset)
+		} else if b, err := compare.LoadBaseline(opts.BaselineFile); err != nil {
+			fmt.Printf("%s[!] Failed to load baseline: %v%s\n", config.Red, err, config.Reset)
+		} else {
+			baseline = b
+			baselineLoaded = true
+		}
+	}
+
 	if opts.JsonOutput != "" {
 		err := output.ExportJSON(opts.JsonOutput, opts.Target, results, duration, reusedCerts, severitySummary)
 		if err != nil {
@@ -856,17 +875,21 @@ func main() {
 			fmt.Printf("%s[✓] Results exported to %s file: %s%s\n", config.White, export.format, export.path, config.Reset)
 		}
 	}
-	if opts.BaselineFile != "" {
-		baseline, err := compare.LoadBaseline(opts.BaselineFile)
-		if err != nil {
-			fmt.Printf("%s[!] Failed to load baseline: %v%s\n", config.Red, err, config.Reset)
-		} else {
-			changes := compare.Compare(results, baseline)
-			fmt.Printf("%s[*] Comparison: %d new open port(s), %d service change(s), %d new CVE(s).%s\n", config.Gray, len(changes.NewOpenPorts), len(changes.ServiceChanges), len(changes.NewVulnerabilities), config.Reset)
-			if opts.ChangesOutput != "" {
-				if err := compare.WriteReport(opts.ChangesOutput, changes); err != nil {
-					fmt.Printf("%s[!] Failed to write comparison report: %v%s\n", config.Red, err, config.Reset)
-				}
+	if baselineLoaded {
+		changes := compare.Compare(results, baseline)
+		fmt.Printf("%s[*] Comparison: %d new open port(s), %d service change(s), %d new CVE(s).%s\n", config.Gray, len(changes.NewOpenPorts), len(changes.ServiceChanges), len(changes.NewVulnerabilities), config.Reset)
+		if opts.ChangesOutput != "" {
+			if err := compare.WriteReport(opts.ChangesOutput, changes); err != nil {
+				fmt.Printf("%s[!] Failed to write comparison report: %v%s\n", config.Red, err, config.Reset)
+			}
+		}
+		if opts.NotifyWebhook != "" {
+			if !notify.HasChanges(changes) {
+				fmt.Printf("%s[*] No changes since the baseline: no alert sent.%s\n", config.Gray, config.Reset)
+			} else if err := notify.Send(opts.NotifyWebhook, displayTarget, changes); err != nil {
+				fmt.Printf("%s[!] Failed to send webhook alert: %v%s\n", config.Red, err, config.Reset)
+			} else {
+				fmt.Printf("%s[✓] Change alert sent to webhook.%s\n", config.White, config.Reset)
 			}
 		}
 	}

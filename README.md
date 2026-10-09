@@ -294,6 +294,21 @@ sudo tcpcat \
 
 The baseline must be a non-empty JSON report created by tcpcat. A new, empty file cannot be used as a baseline.
 
+### Continuous monitoring with alerts
+
+Point `-j` and `--baseline` at the same state file and run tcpcat on a schedule: each run compares against the previous one, then becomes the next baseline. Add `--notify-webhook` to be alerted only when something changes — a newly exposed port, a changed service/version, or a newly correlated CVE:
+
+```bash
+# crontab -e — every night at 02:00, against an authorized scope
+0 2 * * * /usr/local/bin/tcpcat --profile safe-production --scope-file /etc/tcpcat/scope.txt \
+  -Pn -p 22,80,443 -sV --exploit-intel \
+  -j /var/lib/tcpcat/state.json --baseline /var/lib/tcpcat/state.json \
+  --notify-webhook "https://discord.com/api/webhooks/..." \
+  10.42.0.0/24
+```
+
+The first run has no baseline yet and only records the state. The payload adapts to the destination: Discord webhooks receive a chat message, Slack incoming webhooks receive `{"text": ...}`, and any other URL receives a JSON body with the message plus the full structured comparison. No alert is sent when nothing changed. Treat the webhook URL as a secret, since anyone who has it can post to your channel.
+
 ---
 
 ## CLI Reference
@@ -439,6 +454,7 @@ flagged for files that don't really exist.
 --audit-log <file>      Append one scan audit record per line (JSONL)
 --baseline <file>       Load a previous tcpcat JSON report for comparison
 --changes <file>        Write comparison results; requires --baseline
+--notify-webhook <url>  Alert a Discord/Slack/HTTP webhook when changes are found; requires --baseline
 --update                Check the latest GitHub release and update this binary
 ```
 

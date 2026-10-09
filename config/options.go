@@ -134,6 +134,7 @@ type Options struct {
 	AuditLog       string
 	BaselineFile   string
 	ChangesOutput  string
+	NotifyWebhook  string
 	SARIFOutput    string
 	XMLOutput      string
 	HTMLOutput     string
@@ -211,6 +212,7 @@ func ParseFlags() (*Options, error) {
 		"--audit-log":         true,
 		"--baseline":          true,
 		"--changes":           true,
+		"--notify-webhook":    true,
 		"--sarif":             true,
 		"--exclude":           true,
 		"-oX":                 true,
@@ -341,6 +343,7 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.AuditLog, "audit-log", "", "Append one audit record per scan to a JSONL file")
 	flag.StringVar(&opts.BaselineFile, "baseline", "", "Prior JSON report used as a comparison baseline")
 	flag.StringVar(&opts.ChangesOutput, "changes", "", "Write scan changes to a JSON file (requires --baseline)")
+	flag.StringVar(&opts.NotifyWebhook, "notify-webhook", "", "POST an alert to this Discord/Slack/HTTP webhook when changes vs --baseline are found")
 	flag.StringVar(&opts.SARIFOutput, "sarif", "", "Export security findings as SARIF 2.1.0")
 	flag.StringVar(&opts.XMLOutput, "oX", "", "Export results as XML")
 	flag.StringVar(&opts.HTMLOutput, "oH", "", "Export results as a self-contained HTML report")
@@ -450,6 +453,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--audit-log <file>%s Append an audit record in JSONL\n", White, Reset)
 		fmt.Printf("  %s--baseline <file>%s Compare with a prior JSON report\n", White, Reset)
 		fmt.Printf("  %s--changes <file>%s Write comparison results (requires --baseline)\n", White, Reset)
+		fmt.Printf("  %s--notify-webhook <url>%s Alert a Discord/Slack/HTTP webhook on changes (requires --baseline)\n", White, Reset)
 		fmt.Printf("  %s--profile safe-production%s Conservative authorized-production profile\n", White, Reset)
 		fmt.Printf("  %s--profile ot%s   Gentle profile for fragile industrial/OT networks (PLC/RTU/ICS)\n", White, Reset)
 		fmt.Printf("  %s--update%s        Check the latest GitHub release and update this binary\n", White, Reset)
@@ -532,6 +536,9 @@ func validateOptions(opts *Options) error {
 	}
 	if opts.ChangesOutput != "" && opts.BaselineFile == "" {
 		return fmt.Errorf("changes requires a baseline file")
+	}
+	if opts.NotifyWebhook != "" && opts.BaselineFile == "" {
+		return fmt.Errorf("notify-webhook requires a baseline file")
 	}
 	if opts.Profile != "" && opts.Profile != "safe-production" && opts.Profile != "ot" {
 		return fmt.Errorf("profile must be safe-production or ot")
