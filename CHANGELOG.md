@@ -10,6 +10,8 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-10-09
+
 ### Security
 - Local web UI (`--web`): API requests now require a random per-session token,
   delivered in the URL printed at startup. Requests whose `Host` header doesn't
