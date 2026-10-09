@@ -112,7 +112,7 @@ func parseKexInit(payload []byte, info *SSHPostureInfo) {
 	encS2C, ok4 := c.nameList()
 	_, ok5 := c.nameList() // mac c2s
 	macS2C, ok6 := c.nameList()
-	if !(ok1 && ok2 && ok3 && ok4 && ok5 && ok6) {
+	if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 || !ok6 {
 		return
 	}
 	info.KexAlgorithms = kex
