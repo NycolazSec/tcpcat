@@ -10,6 +10,15 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Security
+- Local web UI (`--web`): API requests now require a random per-session token,
+  delivered in the URL printed at startup. Requests whose `Host` header doesn't
+  name the listener (DNS rebinding) or whose `Origin` is another site
+  (cross-site requests) are rejected, and responses set anti-framing and
+  `nosniff` headers. Up to v1.4.3, any web page open in the operator's browser
+  could start a scan through `POST /api/scan` while `--web` was running. A
+  warning is printed when listening beyond loopback.
+
 ## [1.4.3] - 2026-10-09
 
 ### Added

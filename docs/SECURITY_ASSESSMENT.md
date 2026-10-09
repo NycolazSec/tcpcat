@@ -16,7 +16,7 @@ Last reviewed: v1.4.3 (2026-10).
 | 2 | A bug is amplified by elevated privileges (root / eBPF) | Low | High | Mitigated by design |
 | 3 | The XDP program disrupts the host's own traffic | Low | Medium | Mitigated |
 | 4 | Scans leave the authorized scope or disrupt fragile devices | Medium | High | Mitigated (operator controls) |
-| 5 | Local web UI is driven by another site or exposed on the network | Medium | Medium | **Open: see below** |
+| 5 | Local web UI is driven by another site or exposed on the network | Medium | Medium | Mitigated (since v1.4.4) |
 | 6 | Self-update installs a tampered binary | Low | High | Partially mitigated |
 | 7 | A compromised dependency or toolchain | Low | High | Mitigated |
 | 8 | Secrets leak (API keys, webhook URLs, reports) | Medium | Medium | Mitigated; operator guidance |
@@ -61,16 +61,23 @@ overloading fragile industrial equipment.
   in the README and NOTICE.md.
 
 ### 5. Local web UI (`--web`)
-The web UI exposes `POST /api/scan`, which starts a scan. It listens on
-`127.0.0.1:8080` by default and has no authentication or Origin/Host check.
-- **Risk:** a malicious page open in the operator's browser can send a cross-site
-  POST to the loopback address (or use DNS rebinding), and a non-loopback
-  `--web-addr` exposes the API to the network.
-- **Current mitigations:** loopback-only default; a configured `--scope-file` still
+The web UI exposes `POST /api/scan`, which starts a scan, and `/api/status`,
+which returns results. It listens on `127.0.0.1:8080` by default.
+- **Risk:** a malicious page open in the operator's browser could send a
+  cross-site request to the loopback address or use DNS rebinding, and a
+  non-loopback `--web-addr` exposes the API to the network. Versions up to v1.4.3
+  had no protection against this.
+- **Mitigations (since v1.4.4):** every request must carry a `Host` header naming
+  this listener (blocks DNS rebinding); `/api/` requests with a foreign `Origin`
+  are rejected (blocks cross-site requests); every `/api/` request must carry a
+  random 256-bit per-session token, delivered only in the URL fragment printed to
+  the terminal and compared in constant time. Being a custom header, it also
+  forces a CORS preflight that the server never approves. Responses set
+  `X-Frame-Options: DENY`, `nosniff` and `no-referrer`. A `--scope-file` still
   limits what can be scanned.
-- **Planned fix:** reject requests whose `Host`/`Origin` is not the local listener,
-  and require a per-session token for `/api/scan`. Until then, run `--web` only when
-  needed, keep the default loopback address, and always pair it with `--scope-file`.
+- **Residual risk:** the interface uses plain HTTP. On a non-loopback
+  `--web-addr`, anyone who can observe the traffic or the printed URL can drive
+  scans; tcpcat prints a warning in that case. Keep the default loopback address.
 
 ### 6. Self-update integrity (`--update`)
 - **Mitigations:** the release metadata and archive are fetched over HTTPS from

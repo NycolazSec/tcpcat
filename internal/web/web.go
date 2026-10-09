@@ -1,9 +1,13 @@
 package web
 
 import (
+	"crypto/rand"
+	"crypto/subtle"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -56,23 +60,138 @@ type server struct {
 	state scanState
 }
 
-func Run(addr string) error {
-	s := &server{}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleIndex)
-	mux.HandleFunc("/api/scan", s.handleScan)
-	mux.HandleFunc("/api/status", s.handleStatus)
+// tokenHeader carries the per-session token on every /api/ request. Being a
+// custom header, it also forces a CORS preflight for any cross-origin caller,
+// which this server never approves.
+const tokenHeader = "X-Tcpcat-Token" // #nosec G101 -- an HTTP header name, not a credential; the token itself is random per session
 
-	fmt.Printf("[*] Web interface available at http://%s\n", addr)
+func Run(addr string) error {
+	token, err := newToken()
+	if err != nil {
+		return fmt.Errorf("generate session token: %w", err)
+	}
+	handler, err := newHandler(addr, token)
+	if err != nil {
+		return err
+	}
+
+	// The token travels in the URL fragment, which browsers never send to the
+	// server or in Referer headers; the page moves it to sessionStorage and
+	// strips it from the address bar.
+	fmt.Printf("[*] Web interface available at http://%s/#token=%s\n", addr, token)
+	fmt.Println("[*] Open that exact URL: API requests without this session token are rejected.")
+	if host, _, err := net.SplitHostPort(addr); err == nil && !isLoopbackHost(host) {
+		fmt.Println("[!] Warning: the web interface is listening beyond loopback over plain HTTP; anyone who sees the URL can drive scans.")
+	}
+
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 	return srv.ListenAndServe()
+}
+
+// newHandler builds the routed, guarded handler for a server listening on addr
+// and expecting token on API calls.
+func newHandler(addr, token string) (http.Handler, error) {
+	hosts, err := allowedHosts(addr)
+	if err != nil {
+		return nil, err
+	}
+	s := &server{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/api/scan", s.handleScan)
+	mux.HandleFunc("/api/status", s.handleStatus)
+	return guard(mux, hosts, token), nil
+}
+
+// guard rejects requests that could come from another site or a rebound DNS
+// name before they reach a handler:
+//   - Host must name this listener (defeats DNS rebinding, where an attacker's
+//     domain is re-pointed at 127.0.0.1);
+//   - on /api/, a browser-sent Origin must be this listener (defeats cross-site
+//     requests), and the session token must match.
+func guard(next http.Handler, hosts map[string]bool, token string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+
+		if !hosts[strings.ToLower(r.Host)] {
+			writeError(w, http.StatusForbidden, "invalid Host header")
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set("Cache-Control", "no-store")
+			if origin := r.Header.Get("Origin"); origin != "" && !hosts[strings.ToLower(strings.TrimPrefix(origin, "http://"))] {
+				writeError(w, http.StatusForbidden, "cross-origin request rejected")
+				return
+			}
+			if subtle.ConstantTimeCompare([]byte(r.Header.Get(tokenHeader)), []byte(token)) != 1 {
+				writeError(w, http.StatusUnauthorized, "missing or invalid session token: open the URL printed in the terminal")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// allowedHosts lists the Host header values (host:port) that legitimately
+// reach a listener on addr: the loopback names, the bound host itself and, for
+// a wildcard bind, every local interface address. Port 80 is also accepted
+// without a port, as browsers omit it.
+func allowedHosts(addr string) (map[string]bool, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid web address %q: %w", addr, err)
+	}
+	hosts := make(map[string]bool)
+	add := func(h string) {
+		hosts[strings.ToLower(net.JoinHostPort(h, port))] = true
+		if port == "80" {
+			if strings.Contains(h, ":") {
+				h = "[" + h + "]"
+			}
+			hosts[strings.ToLower(h)] = true
+		}
+	}
+	for _, h := range []string{"localhost", "127.0.0.1", "::1"} {
+		add(h)
+	}
+	if host != "" {
+		add(host)
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		if addrs, err := net.InterfaceAddrs(); err == nil {
+			for _, a := range addrs {
+				if ipNet, ok := a.(*net.IPNet); ok {
+					add(ipNet.IP.String())
+				}
+			}
+		}
+	}
+	return hosts, nil
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func newToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {

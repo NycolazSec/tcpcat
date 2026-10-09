@@ -124,6 +124,11 @@ sudo tcpcat --aws-region eu-west-1 --aws-tags 'Key=App,Value=Web' -sV -p 443
 sudo tcpcat --web
 ```
 
+Open the exact URL tcpcat prints (`http://127.0.0.1:8080/#token=…`): it carries
+a per-session token, and API requests without it are rejected. Requests from
+other sites or rebound host names are refused as well. Keep the default loopback
+address; a non-loopback `--web-addr` serves plain HTTP to the network.
+
 ---
 
 - For the full CLI reference and licensing, see the main [README](../README.md).
