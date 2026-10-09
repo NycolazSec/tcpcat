@@ -26,7 +26,7 @@ by its terms.
 
 Requirements:
 
-- Go 1.25 or later (see `go.mod`)
+- Go 1.26 or later (see `go.mod`)
 - Linux with kernel 5.8+ if you're working on the eBPF/AF_XDP path
   (`internal/scan/xdp*.go`); other platforms build and run the socket-based
   scan engine only.
@@ -40,6 +40,31 @@ go test ./...
 
 Cross-platform release binaries can be built with `make build-all` (see the
 [Makefile](Makefile)).
+
+## Dependencies
+
+**How dependencies are obtained.** tcpcat is a Go module. All third-party
+code comes in through Go modules: `go.mod` pins each dependency's version and
+`go.sum` records its cryptographic hash, which the Go toolchain verifies
+(against the public Go checksum database) on every download. Nothing is
+vendored or fetched outside of Go modules.
+
+**How dependencies are selected.** Prefer the Go standard library. A new
+third-party module is added only when it is actively maintained, widely used,
+and under a license compatible with tcpcat's licensing (see [LICENSE](LICENSE)
+and [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). A pull request that adds
+one must say why the standard library or an existing dependency isn't enough.
+
+**How dependencies are tracked.**
+- [Dependabot](.github/dependabot.yml) checks Go modules and GitHub Actions
+  weekly and opens update pull requests; they go through the same CI as any
+  other change.
+- CI runs `govulncheck` and `gosec` on every push to `main` and every pull
+  request against it, so a
+  newly disclosed vulnerability in a dependency (or the Go standard library)
+  fails the build.
+- Every release ships a CycloneDX SBOM per archive listing the exact modules
+  and versions it was built from.
 
 ## Before opening a pull request
 
