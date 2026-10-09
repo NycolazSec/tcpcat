@@ -6,6 +6,24 @@ This file lists everyone with access to tcpcat's sensitive resources.
 |------|--------|------|
 | Nicolas Blondelle | [@NycolazSec](https://github.com/NycolazSec) | Sole maintainer |
 
+## Roles and responsibilities
+
+**Maintainer** — currently @NycolazSec:
+- Reviews and merges pull requests, and keeps CI (build, tests, lint, gosec,
+  govulncheck) green on `main`.
+- Cuts releases: updates CHANGELOG.md and pushes the `v*` tag that triggers the
+  signed release workflow.
+- Triages issues and Dependabot updates.
+- Handles vulnerability reports privately per [SECURITY.md](SECURITY.md),
+  including fixes and advisories.
+- Upholds the authorized-use policy in [NOTICE.md](NOTICE.md) and the
+  [Code of Conduct](CODE_OF_CONDUCT.md).
+
+**Contributors** — anyone who opens an issue or pull request:
+- Follow [CONTRIBUTING.md](CONTRIBUTING.md): focused changes, tests for
+  behavioral changes, docs updated for user-facing changes, CI passing.
+- Report security issues privately, never as public issues.
+
 ## Access to sensitive resources
 
 | Resource | Who has access |
