@@ -107,7 +107,22 @@ Guidelines:
   responsive to review feedback; PRs with no activity for an extended period
   may be closed and can be reopened when you're ready to continue.
 
-## License
+## License and Contributor License Agreement
 
-By contributing, you agree that your contributions will be licensed under the
-project's [Apache License 2.0](LICENSE).
+tcpcat is dual-licensed: it is published under the
+[GNU Affero General Public License v3.0](LICENSE) and also offered under a
+[commercial license](COMMERCIAL-LICENSE.md). Versions up to and including
+v1.4.1 were released under the Apache License 2.0.
+
+Before your first pull request can be merged, you must accept the
+[Contributor License Agreement](CLA.md). You keep the copyright in your work.
+The CLA lets the project distribute your contribution under both licenses, and
+commits the project to keeping every accepted contribution available under the
+AGPL-3.0 or another OSI-approved license.
+
+The CLA Assistant bot comments on your first pull request. To sign, reply:
+
+> I have read the CLA Document and I hereby sign the CLA
+
+You only sign once. The CLA check runs on every pull request and must pass for
+each commit author before merging.
