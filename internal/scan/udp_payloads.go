@@ -47,6 +47,8 @@ var udpProbesByPort = map[int][]udpProbe{
 	69:   {tftpProbe},
 	443:  {quicProbe}, // QUIC / HTTP/3
 	8443: {quicProbe},
+	623:  {ipmiProbe}, // IPMI / BMC (out-of-band management)
+	5683: {coapProbe}, // CoAP (IoT)
 }
 
 // probesForPort returns the probes to try against a port, or nil when none
@@ -230,6 +232,44 @@ var rpcProbe = udpProbe{
 	Match: func(resp []byte) bool {
 		return len(resp) >= 8 && resp[2] == 0x13 && resp[3] == 0x37 &&
 			resp[4] == 0 && resp[5] == 0 && resp[6] == 0 && resp[7] == 1
+	},
+}
+
+// coapProbe is a CoAP GET for /.well-known/core (RFC 7252 §7.2, the standard
+// resource-discovery request every CoAP server answers). The header is a
+// confirmable (CON) GET with message ID 0x1337; the two Uri-Path options carry
+// ".well-known" and "core". A reply is a CoAP message (version bits 01 in the
+// high two bits of byte 0) echoing the message ID.
+var coapProbe = udpProbe{
+	Name: "coap",
+	Payload: append([]byte{
+		0x40, 0x01, 0x13, 0x37, // ver=1, type=CON, TKL=0 | code=0.01 GET | message ID
+		0xbb, // option: delta=11 (Uri-Path), len=11
+	}, append([]byte(".well-known"),
+		append([]byte{0x04}, []byte("core")...)...)..., // delta=0 (Uri-Path), len=4
+	),
+	Match: func(resp []byte) bool {
+		return len(resp) >= 4 && resp[0]&0xc0 == 0x40 && resp[2] == 0x13 && resp[3] == 0x37
+	},
+}
+
+// ipmiProbe is an RMCP "Get Channel Authentication Capabilities" request
+// (the standard BMC discovery packet). A BMC answers with an RMCP+IPMI reply
+// whose header is the same 06 00 ff 07 (version 1.0, class = IPMI). Exposing an
+// IPMI/BMC interface to an untrusted network is itself a notable finding.
+var ipmiProbe = udpProbe{
+	Name: "ipmi",
+	Payload: []byte{
+		0x06, 0x00, 0xff, 0x07, // RMCP: version 1.0, reserved, seq=255 (no ack), class=IPMI
+		0x00,                   // auth type = none
+		0x00, 0x00, 0x00, 0x00, // session sequence number
+		0x00, 0x00, 0x00, 0x00, // session id
+		0x09,             // IPMI message length
+		0x20, 0x18, 0xc8, // rsAddr=BMC, netFn=App, checksum1
+		0x81, 0x00, 0x38, 0x0e, 0x04, 0x35, // rqAddr, rqSeq, cmd=Get Channel Auth Cap, channel, priv, checksum2
+	},
+	Match: func(resp []byte) bool {
+		return len(resp) >= 4 && resp[0] == 0x06 && resp[1] == 0x00 && resp[2] == 0xff && resp[3] == 0x07
 	},
 }
 

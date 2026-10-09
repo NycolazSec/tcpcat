@@ -468,6 +468,14 @@ func parseSSHVersion(banner string) string {
 
 func resolveDefaultPortName(port int) string {
 	switch port {
+	case 623:
+		return "ipmi"
+	case 1883:
+		return "mqtt"
+	case 5683:
+		return "coap"
+	case 8883:
+		return "mqtt-tls"
 	case 21:
 		return "ftp"
 	case 22:
@@ -583,9 +591,43 @@ func activeProbe(port int, conn net.Conn, timeout time.Duration) (ServiceInfo, b
 		return probeSMB(conn, timeout)
 	case 3389:
 		return probeRDP(conn, timeout)
+	case 1883:
+		return probeMQTT(conn, timeout)
 	default:
 		return ServiceInfo{}, false
 	}
+}
+
+// probeMQTT sends an MQTT CONNECT and expects a CONNACK (fixed-header byte
+// 0x20). MQTT brokers stay silent until a client connects, so without this an
+// open 1883 reads back as "unknown". The CONNACK's return/reason code also
+// tells whether the broker accepts anonymous clients -- a common, high-impact
+// IoT exposure worth surfacing.
+func probeMQTT(conn net.Conn, timeout time.Duration) (ServiceInfo, bool) {
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return ServiceInfo{}, false
+	}
+	// CONNECT: protocol "MQTT" level 4 (v3.1.1), clean session, client id "tcpcat".
+	connect := []byte{
+		0x10, 0x12,
+		0x00, 0x04, 'M', 'Q', 'T', 'T', 0x04, 0x02, 0x00, 0x3c,
+		0x00, 0x06, 't', 'c', 'p', 'c', 'a', 't',
+	}
+	if _, err := conn.Write(connect); err != nil {
+		return ServiceInfo{}, false
+	}
+	buf := make([]byte, 8)
+	n, err := conn.Read(buf)
+	if err != nil || n < 2 || buf[0] != 0x20 {
+		return ServiceInfo{}, false
+	}
+	info := ServiceInfo{Name: "mqtt", Banner: "MQTT (CONNACK)"}
+	// Byte 4 is the return code (v3.1.1) / reason code (v5); 0x00 means the
+	// broker accepted an unauthenticated client.
+	if n >= 4 && buf[3] == 0x00 {
+		info.Findings = append(info.Findings, "MQTT broker accepts anonymous connections")
+	}
+	return info, true
 }
 
 func firstLine(s string) string {

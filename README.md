@@ -406,6 +406,15 @@ host keys, CBC/arcfour/3DES ciphers, and MD5/SHA-1/truncated/64-bit MACs, plus
 a legacy SSH protocol 1.x offer. It's a configuration audit — offering a weak
 algorithm is a finding to review, not proof a session will negotiate it.
 
+`-sV` also actively identifies common IoT and out-of-band-management services
+that stay silent until spoken to: **MQTT** (TCP 1883; sends a CONNECT and reads
+the CONNACK, and flags a broker that accepts anonymous connections), **CoAP**
+(UDP 5683; a `/.well-known/core` discovery request), and **IPMI/BMC** (UDP 623;
+an RMCP Get-Channel-Authentication-Capabilities request — an IPMI interface
+reachable from an untrusted network is itself worth flagging). These join the
+existing UDP probes (DNS, SNMP, NTP, SSDP, mDNS, SIP, IKE, QUIC, …) and OT
+control-port naming.
+
 ### IDS/IPS Visibility Controls (Phase 4)
 ```
 --evasion <mode>          Coordinated packet-variation level for authorized testing:
