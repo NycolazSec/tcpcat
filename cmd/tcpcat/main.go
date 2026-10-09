@@ -507,6 +507,7 @@ func main() {
 				results[i].TLS = svc.TLS
 				results[i].JARM = svc.JARM
 				results[i].HTTPPosture = svc.HTTPPosture
+				results[i].SSHPosture = svc.SSHPosture
 				results[i].Findings = svc.Findings
 				fmt.Printf("%s[v] %s:%-5d ─ SERVICE: %s%s %s%s%s%s\n",
 					config.Bold, results[i].IP, results[i].Port, config.Bold, svc.Name, svc.Version, osDisp, config.Reset, bannerDisp)
@@ -559,6 +560,12 @@ func main() {
 				if svc.HTTPPosture != nil {
 					for _, warning := range svc.HTTPPosture.Warnings {
 						fmt.Printf("    %s[!] http: %s%s\n", config.Red, warning, config.Reset)
+					}
+				}
+
+				if svc.SSHPosture != nil {
+					for _, warning := range svc.SSHPosture.Warnings {
+						fmt.Printf("    %s[!] ssh: %s%s\n", config.Red, warning, config.Reset)
 					}
 				}
 			}

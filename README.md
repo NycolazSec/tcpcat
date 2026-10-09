@@ -397,6 +397,15 @@ each checked against the response body's own content, not just its status
 code, so a site whose router returns `200` for any path doesn't get
 flagged for files that don't really exist.
 
+On an SSH service, `-sV` also audits the server's configuration and attaches
+the result as `ssh_posture` in JSON output. It completes the SSH
+identification and key-exchange-init exchange (on the same connection, so no
+second socket an SSH server would throttle), reads the offered algorithms, and
+flags the weak or deprecated ones: SHA-1 key exchanges, `ssh-rsa`/`ssh-dss`
+host keys, CBC/arcfour/3DES ciphers, and MD5/SHA-1/truncated/64-bit MACs, plus
+a legacy SSH protocol 1.x offer. It's a configuration audit — offering a weak
+algorithm is a finding to review, not proof a session will negotiate it.
+
 ### IDS/IPS Visibility Controls (Phase 4)
 ```
 --evasion <mode>          Coordinated packet-variation level for authorized testing:

@@ -34,6 +34,7 @@ type ServiceInfo struct {
 	TLS         *TLSInfo         `json:"tls,omitempty"`
 	JARM        *JARMInfo        `json:"jarm,omitempty"`
 	HTTPPosture *HTTPPostureInfo `json:"http_posture,omitempty"`
+	SSHPosture  *SSHPostureInfo  `json:"ssh_posture,omitempty"`
 	// Findings is a small, generic slot for a plain-language observation a
 	// protocol probe wants surfaced as its own console line (e.g. "SSL not
 	// offered", "SMBv1 (insecure) is enabled") -- distinct from Banner
@@ -159,6 +160,23 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 	if n > 0 {
 		rawBanner := strings.TrimSpace(string(buf[:n]))
 		info.Banner = sanitizeBanner(rawBanner)
+
+		// Audit SSH algorithms up front, while this connection is live and before
+		// any name-detection branch returns (the curated signatures below match
+		// OpenSSH/dropbear and would otherwise return first). Reuse this socket
+		// rather than dialing a second one, which SSH servers throttle per
+		// source; the banner read may already hold the start of the KEXINIT.
+		if strings.HasPrefix(rawBanner, "SSH-") {
+			var ident string
+			var leftover []byte
+			if idx := bytes.IndexByte(buf[:n], '\n'); idx >= 0 {
+				ident = strings.TrimRight(string(buf[:idx+1]), "\r\n")
+				leftover = buf[idx+1 : n]
+			} else {
+				ident = rawBanner
+			}
+			info.SSHPosture = sshPostureFromConn(conn, ident, leftover)
+		}
 
 		// Try the curated signature table first: it names the exact
 		// product (proftpd, postfix, nginx, ...) and pulls a version out of
