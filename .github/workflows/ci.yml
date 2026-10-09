@@ -86,7 +86,10 @@ jobs:
       - name: Run gosec
         uses: securego/gosec@master
         with:
-          args: "-exclude=G104,G115,G304,G404 -fmt sarif -out gosec-results.sarif ./..."
+          # G703/G304 (path taint): tcpcat deliberately reads operator-specified
+          # file paths (--config, --scope-file, --baseline, -iL). G304 was
+          # already excluded for this; G703 is its taint-analysis sibling.
+          args: "-exclude=G104,G115,G304,G404,G703 -fmt sarif -out gosec-results.sarif ./..."
 
       - name: Upload gosec SARIF
         if: always()
