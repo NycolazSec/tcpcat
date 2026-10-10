@@ -10,6 +10,8 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-10
+
 ### Added
 - `tcpcat policy check <policy.yaml> --from <vantage>`: segmentation testing as
   code. A YAML policy declares zones and, per vantage point, which TCP ports may
@@ -28,18 +30,22 @@ Full diffs for every release are available via GitHub's
 - With `-sV`, unrecognized services are grouped across hosts by normalized
   banner, with a suggested signature; `--fingerprints-out` exports the groups
   without addresses or raw banners.
-
-- `tcpcat inventory` + `tcpcat explain`: exposure attribution. `inventory` (Linux,
-  run on the host) lists every listening TCP socket with its process, systemd
-  unit, Docker container (docker-proxy included) or Kubernetes pod; `explain`
-  joins it with an outside scan and classifies each port as EXPOSED (with the
-  owner and a concrete fix), FORWARDED (reachable with no local listener),
-  SHIELDED (only the firewall protects it), REFUSED (e.g. a stale Docker port
-  mapping), LOCAL or UNTESTED. Exits 1 when a
-  port not declared with `--expect` is reachable.
+- `tcpcat inventory` + `tcpcat explain`: exposure attribution. `inventory`
+  (Linux, run on the host, reads /proc) lists every listening TCP socket with
+  its owner: process, systemd unit, Docker container (docker-proxy included)
+  or Kubernetes pod. Copied to another machine, `tcpcat explain
+  inventory.json` probes the host from there and classifies each port as
+  EXPOSED (owner and a concrete fix), FORWARDED (NAT, Docker or Kubernetes,
+  with the Service named), SHIELDED (only the firewall protects it), REFUSED
+  (e.g. a stale Docker port mapping), LOCAL or UNTESTED. Control ports detect
+  a VPN, proxy or anti-DDoS device answering for the host, and explain then
+  refuses to report. Exits 1 when a port not declared with `--expect` is
+  reachable.
 
 ### Changed
 - SARIF locations for IPv6 addresses are now bracketed (`tcp://[2001:db8::1]:22`).
+- Subcommands (`policy`, `inventory`, `explain`, `evidence`, `replay`) print the
+  startup banner; the scan engine gained a quiet mode for them.
 
 ### Fixed
 - Host names containing a dash (`my-server.example.com`) were rejected as
@@ -775,7 +781,10 @@ Full diffs for every release are available via GitHub's
   visibility-testing controls, and a WASM-based scripting engine for custom
   detectors and exploit modules.
 
-[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.4.2...HEAD
+[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/NycolazSec/tcpcat/compare/v1.4.4...v1.5.0
+[1.4.4]: https://github.com/NycolazSec/tcpcat/compare/v1.4.3...v1.4.4
+[1.4.3]: https://github.com/NycolazSec/tcpcat/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/NycolazSec/tcpcat/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/NycolazSec/tcpcat/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/NycolazSec/tcpcat/compare/v1.3.0...v1.4.0
