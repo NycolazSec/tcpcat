@@ -253,7 +253,7 @@ func isLocalAddress(ip string) bool {
 // the kernel would route target through, if any. Connecting a UDP socket
 // only selects a route; nothing is sent.
 func tunnelInterfaceFor(target string) (string, string) {
-	conn, err := net.Dial("udp", net.JoinHostPort(target, "9"))
+	conn, err := net.Dial("udp", net.JoinHostPort(target, "9")) // #nosec G704 -- route lookup only: connecting a UDP socket sends nothing, and target is the host the operator asked to probe
 	if err != nil {
 		return "", ""
 	}
