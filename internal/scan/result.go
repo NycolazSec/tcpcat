@@ -36,6 +36,16 @@ type TargetResult struct {
 	RiskSeverity    string                   `json:"risk_severity,omitempty"`
 	Vulnerabilities []vuln.Vulnerability     `json:"vulnerabilities,omitempty"`
 	Assessment      VulnerabilityAssessment  `json:"vulnerability_assessment,omitempty"`
+	DualStack       *DualStackInfo           `json:"dual_stack,omitempty"`
+}
+
+// DualStackInfo marks an IPv6 result whose port is open on IPv6 but not on
+// the IPv4 address published for the same name (see internal/dualstack).
+type DualStackInfo struct {
+	Gap         string `json:"gap"`
+	Name        string `json:"name"`
+	Counterpart string `json:"ipv4_counterpart"`
+	Sensitive   bool   `json:"sensitive_port"`
 }
 
 type VulnerabilityAssessment struct {

@@ -145,6 +145,10 @@ type Options struct {
 	ScriptPath     string
 	VulnersAPIKey  string
 	ExploitIntel   bool
+	DualStack      bool
+	EvidenceOutput string
+	EvidenceKey    string
+	FingerprintOut string
 	SmartBypass    bool
 
 	AWSRegion string
@@ -306,6 +310,9 @@ func ParseFlags() (*Options, error) {
 		"--notify-webhook":    true,
 		"--config":            true,
 		"--sarif":             true,
+		"--evidence":          true,
+		"--evidence-key":      true,
+		"--fingerprints-out":  true,
 		"--exclude":           true,
 		"-oX":                 true,
 		"-oH":                 true,
@@ -438,6 +445,9 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.ChangesOutput, "changes", "", "Write scan changes to a JSON file (requires --baseline)")
 	flag.StringVar(&opts.NotifyWebhook, "notify-webhook", "", "POST an alert to this Discord/Slack/HTTP webhook when changes vs --baseline are found")
 	flag.StringVar(&opts.SARIFOutput, "sarif", "", "Export security findings as SARIF 2.1.0")
+	flag.StringVar(&opts.EvidenceOutput, "evidence", "", "Write an evidence bundle (every open port: when, from where, how it answered) for audit and `tcpcat replay`")
+	flag.StringVar(&opts.FingerprintOut, "fingerprints-out", "", "With -sV, export unrecognized-service groups as anonymized banner templates (no addresses, no raw banners)")
+	flag.StringVar(&opts.EvidenceKey, "evidence-key", "", "Sign the --evidence bundle with this Ed25519 private key (see `tcpcat evidence keygen`)")
 	flag.StringVar(&opts.XMLOutput, "oX", "", "Export results as XML")
 	flag.StringVar(&opts.HTMLOutput, "oH", "", "Export results as a self-contained HTML report")
 	flag.StringVar(&opts.GrepableOutput, "oG", "", "Export results in grepable format")
@@ -446,6 +456,7 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.ScriptPath, "scripts", "", "Path to directory containing Go scripts")
 	flag.StringVar(&opts.VulnersAPIKey, "vulners-apikey", "", "Vulners.com API key for CVE lookup")
 	flag.BoolVar(&opts.ExploitIntel, "exploit-intel", false, "Enrich CVEs with CISA KEV (known-exploited) + EPSS scores and prioritize by them")
+	flag.BoolVar(&opts.DualStack, "dual-stack", false, "Also scan the IPv6 address published (DNS AAAA) for each IPv4 target and report ports open on IPv6 only")
 	flag.BoolVar(&opts.SmartBypass, "smart-bypass", false, "Enable advanced monitoring validation on filtered ports")
 	flag.BoolVar(&opts.SmartBypass, "spoof-agent", false, "Alias for --smart-bypass")
 	flag.StringVar(&opts.DecoyIPs, "decoy", "", "Comma-separated list of decoy IPs (e.g., 1.1.1.1,2.2.2.2). Without a value, a default decoy pool is used.")
@@ -497,6 +508,8 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--scripts <dir>%s Run scripts from directory for advanced detection\n", White, Reset)
 		fmt.Printf("  %s--vulners-apikey <key>%s Perform CVE lookup for detected services\n", White, Reset)
 		fmt.Printf("  %s--exploit-intel%s Enrich CVEs with CISA KEV + EPSS and prioritize by real-world exploitation\n", White, Reset)
+		fmt.Printf("  %s--fingerprints-out <file>%s With -sV: export unknown-service groups as anonymized templates + suggested signatures\n", White, Reset)
+		fmt.Printf("  %s--dual-stack%s    Scan each target's IPv6 address (DNS AAAA) too; flag ports open on IPv6 but not IPv4\n", White, Reset)
 		fmt.Printf("  %s-O%s              Enable OS detection\n", White, Reset)
 		fmt.Printf("  %s--mptcp%s         Detect Multipath-TCP-capable hosts (MP_CAPABLE in SYN; needs -sS or --ebpf)\n", White, Reset)
 		fmt.Printf("  %s--jarm%s          Compute an active JARM TLS fingerprint on TLS ports (10 extra probes/target)\n", White, Reset)
@@ -538,6 +551,8 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--debug%s         Show low-level engine/eBPF diagnostics (interface detection, XDP hook lifecycle, timings)\n", White, Reset)
 		fmt.Printf("  %s-j <file>%s       Export results to JSON file\n", White, Reset)
 		fmt.Printf("  %s--sarif <file>%s  Export findings as SARIF 2.1.0\n", White, Reset)
+		fmt.Printf("  %s--evidence <file>%s Write a verifiable evidence bundle of open ports (re-check later with `tcpcat replay`)\n", White, Reset)
+		fmt.Printf("  %s--evidence-key <key>%s Sign the evidence bundle (Ed25519; create one with `tcpcat evidence keygen`)\n", White, Reset)
 		fmt.Printf("  %s-oX <file>%s      Export results as XML\n", White, Reset)
 		fmt.Printf("  %s-oH <file>%s      Export a self-contained HTML report (shareable; shows KEV/EPSS when enabled)\n", White, Reset)
 		fmt.Printf("  %s-oG <file>%s      Export results in grepable format\n", White, Reset)
@@ -633,6 +648,12 @@ func validateOptions(opts *Options) error {
 	}
 	if opts.NotifyWebhook != "" && opts.BaselineFile == "" {
 		return fmt.Errorf("notify-webhook requires a baseline file")
+	}
+	if opts.FingerprintOut != "" && !opts.ServiceDetect {
+		return fmt.Errorf("fingerprints-out requires -sV (service detection)")
+	}
+	if opts.EvidenceKey != "" && opts.EvidenceOutput == "" {
+		return fmt.Errorf("evidence-key requires --evidence <file>")
 	}
 	if opts.Profile != "" && opts.Profile != "safe-production" && opts.Profile != "ot" {
 		return fmt.Errorf("profile must be safe-production or ot")
