@@ -317,14 +317,13 @@ A scanner sees *that* port 5000 is open, not *which program* is behind it or *wh
 # 1. On the host (Linux, as root): every listening TCP socket and what owns it --
 #    process, systemd unit, Docker container (incl. docker-proxy), Kubernetes pod,
 #    plus NodePort/LoadBalancer Services. Reads /proc; sends nothing on the network.
-sudo tcpcat inventory -o inventory.json
+sudo tcpcat inventory                      # writes inventory.json
 
-# 2. From ANOTHER machine: an ordinary scan of that host.
-tcpcat 203.0.113.5 -sT -Pn -p 1-65535 -j scan.json
-
-# 3. Anywhere: explain every port.
-tcpcat explain inventory.json scan.json --expect 80,443
+# 2. Copy inventory.json to ANOTHER machine (your laptop) and run there:
+tcpcat explain inventory.json --expect 22,80,443,25565-25570
 ```
+
+`explain` takes the host's public address from the inventory, probes from where it runs only the ports that matter (the listening ones, plus Kubernetes Service and node ports), slowly and with retries so anti-scan protections on the path don't make results flicker, then explains each port. It refuses to run on the host itself. Before trusting any result it probes a few ports where, per the inventory, nothing listens: if they answer, a device on the path (VPN, phone hotspot, proxy, antivirus web shield, anti-DDoS mitigation) is answering for the host, and explain stops instead of reporting every port as open. Use `--target` when the host has several public addresses or sits behind NAT, `--ports` to probe more ports, and `tcpcat explain inventory.json scan.json` to explain a scan you ran yourself.
 
 ```
 [!!] EXPOSED     5000/tcp
@@ -346,10 +345,11 @@ tcpcat explain inventory.json scan.json --expect 80,443
 | `EXPOSED` | reachable, and a local process listens on it: owner and a concrete fix (Redis, PostgreSQL, MySQL/MariaDB, MongoDB, SSH, Docker, Node/Python/Java apps...) |
 | `FORWARDED` | reachable with no local listener for that address: Docker/Kubernetes port mapping, DNAT, cloud load balancer (the matching Kubernetes Service is named when kubectl is available) |
 | `SHIELDED` | listens on every interface, but the firewall blocks it: one rule away from exposure |
+| `REFUSED` | listens, but connections are refused: a REJECT rule, or a Docker-published port with nothing listening inside the container |
 | `LOCAL` | bound to loopback or another address only |
 | `UNTESTED` | listens on a reachable address the scan didn't probe |
 
-`explain` exits `1` when something reachable wasn't declared with `--expect`, so it can run in CI. Scan from another machine: a host scanning its own address goes through the loopback path and bypasses most firewall rules. Behind 1:1 NAT (most clouds), pass the scanned public address with `--target`. Secret-looking command-line arguments are redacted from the inventory.
+`explain` exits `1` when something reachable wasn't declared with `--expect`, so it can run in CI. Secret-looking command-line arguments are redacted from the inventory; still, it describes the inside of the host, so don't publish it.
 
 ### Segmentation testing as code
 
@@ -609,7 +609,7 @@ tcpcat evidence keygen --out <prefix>
 tcpcat evidence verify <bundle.json> [--pub <key.pub>]
 tcpcat replay <bundle.json> [--pub <key.pub>] [--finding <id>] [-j f] [--timeout ms]
 tcpcat inventory [-o inventory.json]
-tcpcat explain <inventory.json> <scan.json> [--target ip] [--expect 80,443] [-j f]
+tcpcat explain <inventory.json> [scan.json] [--expect 22,80,443,8000-8010] [--target ip] [--ports p] [-j f]
 ```
 
 Exit status: `0` compliant / all fixed, `1` violation / still reproducing, `2` usage or configuration error.

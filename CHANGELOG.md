@@ -34,7 +34,8 @@ Full diffs for every release are available via GitHub's
   unit, Docker container (docker-proxy included) or Kubernetes pod; `explain`
   joins it with an outside scan and classifies each port as EXPOSED (with the
   owner and a concrete fix), FORWARDED (reachable with no local listener),
-  SHIELDED (only the firewall protects it), LOCAL or UNTESTED. Exits 1 when a
+  SHIELDED (only the firewall protects it), REFUSED (e.g. a stale Docker port
+  mapping), LOCAL or UNTESTED. Exits 1 when a
   port not declared with `--expect` is reachable.
 
 ### Changed

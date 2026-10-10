@@ -8,6 +8,8 @@
 //	           Docker/Kubernetes port mapping, a load balancer
 //	SHIELDED   a process listens on every interface but the scan could not
 //	           reach it: only the firewall stands between it and the network
+//	REFUSED    a process listens, but connections are refused: a REJECT rule,
+//	           or (Docker) a published port with nothing listening behind it
 //	LOCAL      bound to loopback (or another address): not reachable, by design
 //	UNTESTED   listening on a reachable address, but the scan didn't probe it
 //
@@ -29,6 +31,7 @@ const (
 	Exposed   = "EXPOSED"
 	Forwarded = "FORWARDED"
 	Shielded  = "SHIELDED"
+	Refused   = "REFUSED"
 	Local     = "LOCAL"
 	Untested  = "UNTESTED"
 )
@@ -186,6 +189,15 @@ func Explain(inv inventory.Inventory, results []scan.TargetResult, target string
 				e.Why += fmt.Sprintf(" (%s listens on %s only)", ownerLabel(e.Owner), strings.Join(e.Listeners, ", "))
 			}
 			e.Fix = fixForwarded(e.Kube, port)
+		case len(s.reachable) > 0 && scanned && r.State == scan.StateClosed:
+			e.Class = Refused
+			if e.Owner != nil && e.Owner.Process == "docker-proxy" {
+				e.Why = fmt.Sprintf("%s publishes this port, but connections are refused: nothing listens on %s inside the container", ownerLabel(e.Owner), e.Owner.ForwardsTo)
+				e.Fix = "Remove the stale port mapping, or fix the service inside the container so it listens on the published port."
+			} else {
+				e.Why = fmt.Sprintf("%s listens on %s, but connections are refused (a firewall REJECT rule, or a service that turns them away)", ownerLabel(e.Owner), strings.Join(e.Listeners, ", "))
+				e.Fix = fixShielded(e.Owner, port)
+			}
 		case len(s.reachable) > 0 && scanned:
 			e.Class = Shielded
 			e.Why = fmt.Sprintf("%s listens on %s, but the scan found it %s: only the firewall keeps it off the network",
@@ -203,7 +215,7 @@ func Explain(inv inventory.Inventory, results []scan.TargetResult, target string
 		rep.Entries = append(rep.Entries, e)
 	}
 
-	order := map[string]int{Exposed: 0, Forwarded: 1, Shielded: 2, Untested: 3, Local: 4}
+	order := map[string]int{Exposed: 0, Forwarded: 1, Shielded: 2, Refused: 3, Untested: 4, Local: 5}
 	sort.Slice(rep.Entries, func(i, j int) bool {
 		a, b := rep.Entries[i], rep.Entries[j]
 		if a.Expected != b.Expected {
@@ -349,6 +361,9 @@ func fixExposed(o *inventory.Owner, port int) string {
 }
 
 func fixForwarded(k *inventory.KubeService, port int) string {
+	if k != nil && k.NodePort == port && k.Port != port {
+		return fmt.Sprintf("NodePort %d of Kubernetes Service %s (%s): every node accepts it, a duplicate entry next to the Service's own port %d. Firewall the NodePort range (30000-32767), or set `allocateLoadBalancerNodePorts: false` on a LoadBalancer Service.", port, k.Name, k.Type, k.Port)
+	}
 	if k != nil {
 		return fmt.Sprintf("Kubernetes Service %s (%s) maps this port. If it must not be public, make it ClusterIP, or set loadBalancerSourceRanges / a NetworkPolicy.", k.Name, k.Type)
 	}

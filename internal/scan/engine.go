@@ -288,7 +288,7 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 		fmt.Printf("%s[!] Warning: could not flush resume checkpoint: %v%s\n", config.Red, err, config.Reset)
 	}
 
-	if adaptive && limiter != nil {
+	if adaptive && limiter != nil && !e.opts.Quiet {
 		fmt.Printf("%s[*] Adaptive timing: final rate %d pps, SRTT %v%s\n",
 			config.White, limiter.CurrentRate(), e.rtt.SRTT(), config.Reset)
 	}
@@ -309,7 +309,7 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	// any) and resets it -- called on every host change and once more
 	// after the loop, so the last host's count isn't dropped.
 	flushClosedSummary := func() {
-		if hiddenClosed > 0 {
+		if hiddenClosed > 0 && !e.opts.Quiet {
 			fmt.Printf("%s[~] %s ─ Not shown: %d closed port(s)%s\n",
 				config.Bold+config.White, currentHost, hiddenClosed, config.Reset)
 			hiddenClosed = 0
@@ -326,6 +326,9 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 			continue
 		}
 		finalResults = append(finalResults, res)
+		if e.opts.Quiet {
+			continue
+		}
 
 		// CLOSED ports are hidden by default (--show-closed to opt back
 		// in) and rolled into one per-host summary line instead -- a
