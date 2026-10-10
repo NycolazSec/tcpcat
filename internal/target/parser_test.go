@@ -2,6 +2,7 @@ package target
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -240,5 +241,35 @@ func TestIsHostname(t *testing.T) {
 		if got := isHostname(tt.in); got != tt.want {
 			t.Errorf("isHostname(%q) = %v, want %v", tt.in, got, tt.want)
 		}
+	}
+}
+
+func TestLooksLikeRange(t *testing.T) {
+	cases := map[string]bool{
+		"10.0.0.1-20":           true,
+		"10.0.0.1-10.0.0.20":    true,
+		"10.0.0.1":              false,
+		"my-server.example.com": false,
+		"tcpcat-dedicated":      false,
+		"lab-target":            false,
+	}
+	for in, want := range cases {
+		if got := looksLikeRange(in); got != want {
+			t.Errorf("looksLikeRange(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+// A dashed host name must be resolved, not rejected as a malformed range.
+func TestParseTargetDashedHostname(t *testing.T) {
+	_, err := ParseTarget("no-such-host.invalid")
+	if err == nil {
+		t.Fatal("expected a resolution error")
+	}
+	if strings.Contains(err.Error(), "range") {
+		t.Errorf("dashed host name was parsed as a range: %v", err)
+	}
+	if !isHostname("my-server.example.com") {
+		t.Error("isHostname should accept a dashed host name")
 	}
 }

@@ -17,7 +17,7 @@ func ParseTarget(target string) ([]string, error) {
 		return expandCIDR(target)
 	}
 
-	if strings.Contains(target, "-") {
+	if looksLikeRange(target) {
 		return expandRange(target)
 	}
 
@@ -96,10 +96,26 @@ func ParseTargetsWithNames(targets []string) ([]string, map[string]string, error
 // address literal, a range, or a CIDR -- mirroring ParseTarget's own
 // dispatch, which only reaches a DNS lookup for this last case.
 func isHostname(target string) bool {
-	if strings.Contains(target, "/") || strings.Contains(target, "-") {
+	if strings.Contains(target, "/") || looksLikeRange(target) {
 		return false
 	}
 	return net.ParseIP(target) == nil
+}
+
+// looksLikeRange reports whether a target is an IPv4 range ("10.0.0.1-20",
+// "10.0.0.1-10.0.0.20"): digits, dots and a dash only. Anything with a
+// letter is a host name, and host names routinely contain dashes
+// ("my-server.example.com"), which used to be rejected as malformed ranges.
+func looksLikeRange(target string) bool {
+	if !strings.Contains(target, "-") {
+		return false
+	}
+	for _, r := range target {
+		if (r < '0' || r > '9') && r != '.' && r != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // maxIPv6CIDRHostBits caps how many host bits (and so how many addresses)
