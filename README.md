@@ -309,6 +309,48 @@ Point `-j` and `--baseline` at the same state file and run tcpcat on a schedule:
 
 The first run has no baseline yet and only records the state. The payload adapts to the destination: Discord webhooks receive a chat message, Slack incoming webhooks receive `{"text": ...}`, and any other URL receives a JSON body with the message plus the full structured comparison. No alert is sent when nothing changed. Treat the webhook URL as a secret, since anyone who has it can post to your channel.
 
+### Explaining exposure: who is behind each open port (`tcpcat inventory` + `tcpcat explain`)
+
+A scanner sees *that* port 5000 is open, not *which program* is behind it or *why* it is reachable. A host agent sees that a process listens on 5000, not whether anyone outside can reach it. tcpcat joins the two:
+
+```bash
+# 1. On the host (Linux, as root): every listening TCP socket and what owns it --
+#    process, systemd unit, Docker container (incl. docker-proxy), Kubernetes pod,
+#    plus NodePort/LoadBalancer Services. Reads /proc; sends nothing on the network.
+sudo tcpcat inventory -o inventory.json
+
+# 2. From ANOTHER machine: an ordinary scan of that host.
+tcpcat 203.0.113.5 -sT -Pn -p 1-65535 -j scan.json
+
+# 3. Anywhere: explain every port.
+tcpcat explain inventory.json scan.json --expect 80,443
+```
+
+```
+[!!] EXPOSED     5000/tcp
+     reachable from the scanner, and docker-proxy (pid 811, container mock-aws) listens on 0.0.0.0
+     fix: Published by Docker for mock-aws (-> 172.17.0.2:5000). Publish it on loopback only (`-p 127.0.0.1:5000:5000` ...) or drop the port mapping.
+[!!] EXPOSED     6379/tcp
+     reachable from the scanner, and redis-server (pid 912, unit redis-server.service) listens on 0.0.0.0
+     fix: Set `bind 127.0.0.1 ::1` and `protected-mode yes` in redis.conf. Its configuration: `systemctl cat redis-server.service`.
+[!]  FORWARDED   8443/tcp
+     reachable from the scanner, but no process on this host listens on it for this address: the connection is forwarded
+     fix: Find the forwarding rule: `iptables -t nat -S | grep -- '--dport 8443'` ...
+[~]  SHIELDED    5432/tcp
+     postgres (pid 700, unit postgresql@16-main.service) listens on ::, but the scan found it filtered: only the firewall keeps it off the network
+[✓]  EXPOSED (expected) 443/tcp
+```
+
+| Class | Meaning |
+|---|---|
+| `EXPOSED` | reachable, and a local process listens on it: owner and a concrete fix (Redis, PostgreSQL, MySQL/MariaDB, MongoDB, SSH, Docker, Node/Python/Java apps...) |
+| `FORWARDED` | reachable with no local listener for that address: Docker/Kubernetes port mapping, DNAT, cloud load balancer (the matching Kubernetes Service is named when kubectl is available) |
+| `SHIELDED` | listens on every interface, but the firewall blocks it: one rule away from exposure |
+| `LOCAL` | bound to loopback or another address only |
+| `UNTESTED` | listens on a reachable address the scan didn't probe |
+
+`explain` exits `1` when something reachable wasn't declared with `--expect`, so it can run in CI. Scan from another machine: a host scanning its own address goes through the loopback path and bypasses most firewall rules. Behind 1:1 NAT (most clouds), pass the scanned public address with `--target`. Secret-looking command-line arguments are redacted from the inventory.
+
 ### Segmentation testing as code
 
 Describe which flows your network should allow, then let tcpcat check reality from each vantage point (a laptop on the guest Wi-Fi, a CI runner on the internet, a jump host in the office LAN):
@@ -566,6 +608,8 @@ tcpcat policy matrix <report.json>...
 tcpcat evidence keygen --out <prefix>
 tcpcat evidence verify <bundle.json> [--pub <key.pub>]
 tcpcat replay <bundle.json> [--pub <key.pub>] [--finding <id>] [-j f] [--timeout ms]
+tcpcat inventory [-o inventory.json]
+tcpcat explain <inventory.json> <scan.json> [--target ip] [--expect 80,443] [-j f]
 ```
 
 Exit status: `0` compliant / all fixed, `1` violation / still reproducing, `2` usage or configuration error.

@@ -29,8 +29,21 @@ Full diffs for every release are available via GitHub's
   banner, with a suggested signature; `--fingerprints-out` exports the groups
   without addresses or raw banners.
 
+- `tcpcat inventory` + `tcpcat explain`: exposure attribution. `inventory` (Linux,
+  run on the host) lists every listening TCP socket with its process, systemd
+  unit, Docker container (docker-proxy included) or Kubernetes pod; `explain`
+  joins it with an outside scan and classifies each port as EXPOSED (with the
+  owner and a concrete fix), FORWARDED (reachable with no local listener),
+  SHIELDED (only the firewall protects it), LOCAL or UNTESTED. Exits 1 when a
+  port not declared with `--expect` is reachable.
+
 ### Changed
 - SARIF locations for IPv6 addresses are now bracketed (`tcp://[2001:db8::1]:22`).
+
+### Fixed
+- Host names containing a dash (`my-server.example.com`) were rejected as
+  malformed IP ranges ("invalid range format"). Only targets made of digits,
+  dots and a dash are now treated as ranges.
 
 ## [1.4.4] - 2026-10-09
 
