@@ -3,7 +3,9 @@ package output
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 
 	"github.com/NycolazSec/tcpcat/internal/scan"
 )
@@ -71,7 +73,17 @@ func ExportSARIF(filePath string, results []scan.TargetResult, summary []scan.Se
 		if result.State != scan.StateOpen {
 			continue
 		}
-		location := []sarifLocation{{PhysicalLocation: sarifPhysicalLocation{ArtifactLocation: sarifArtifactLocation{URI: fmt.Sprintf("tcp://%s:%d", result.IP, result.Port)}}}}
+		location := []sarifLocation{{PhysicalLocation: sarifPhysicalLocation{ArtifactLocation: sarifArtifactLocation{URI: "tcp://" + net.JoinHostPort(result.IP, strconv.Itoa(result.Port))}}}}
+		if ds := result.DualStack; ds != nil && ds.Gap == "ipv6-only" {
+			ruleID := "DUAL-STACK-IPV6-ONLY"
+			rules[ruleID] = "Port reachable over IPv6 but not over IPv4 (IPv4-only firewall rules)"
+			level := "warning"
+			if ds.Sensitive {
+				level = "error"
+			}
+			run.Results = append(run.Results, sarifResult{RuleID: ruleID, Level: level, Message: sarifMessage{Text: fmt.Sprintf(
+				"Port %d of %s is open on %s but not on its IPv4 address %s", result.Port, ds.Name, result.IP, ds.Counterpart)}, Locations: location})
+		}
 		if len(result.Vulnerabilities) == 0 {
 			ruleID := fmt.Sprintf("OPEN-PORT-%d", result.Port)
 			rules[ruleID] = fmt.Sprintf("Open TCP port %d", result.Port)

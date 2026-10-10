@@ -10,6 +10,28 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Added
+- `tcpcat policy check <policy.yaml> --from <vantage>`: segmentation testing as
+  code. A YAML policy declares zones and, per vantage point, which TCP ports may
+  (`allow`) or must (`require`) be reachable; tcpcat checks them with connect
+  probes and exits 1 on any violation, with JSON and SARIF reports.
+  `tcpcat policy matrix` merges reports from several vantages into one table.
+- `--dual-stack`: scan the IPv6 address published (DNS AAAA) for each IPv4
+  target on the same ports and report ports open on IPv6 only, the usual sign
+  of firewall rules written for IPv4 alone. New `dual_stack` JSON field and
+  `DUAL-STACK-IPV6-ONLY` SARIF rule.
+- `--evidence <file>` (+ `--evidence-key`): a bundle of every open port with
+  when, from where and how it answered, secrets redacted, a SHA-256 digest and
+  an optional Ed25519 signature. `tcpcat evidence keygen|verify` manage keys and
+  check integrity; `tcpcat replay <bundle>` re-probes each finding and exits 0
+  only when all are fixed.
+- With `-sV`, unrecognized services are grouped across hosts by normalized
+  banner, with a suggested signature; `--fingerprints-out` exports the groups
+  without addresses or raw banners.
+
+### Changed
+- SARIF locations for IPv6 addresses are now bracketed (`tcp://[2001:db8::1]:22`).
+
 ## [1.4.4] - 2026-10-09
 
 ### Security

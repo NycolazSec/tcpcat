@@ -16,6 +16,7 @@ import (
 	"github.com/NycolazSec/tcpcat/config"
 	"github.com/NycolazSec/tcpcat/internal/compare"
 	"github.com/NycolazSec/tcpcat/internal/discovery"
+	"github.com/NycolazSec/tcpcat/internal/dualstack"
 	"github.com/NycolazSec/tcpcat/internal/netiface"
 	"github.com/NycolazSec/tcpcat/internal/notify"
 	"github.com/NycolazSec/tcpcat/internal/output"
@@ -37,6 +38,14 @@ var (
 )
 
 func main() {
+	// Audit subcommands have their own flags and run before the scanner's
+	// flag parsing, which would otherwise read "policy" as a target name.
+	if len(os.Args) > 1 {
+		if run, ok := subcommands[os.Args[1]]; ok {
+			os.Exit(run(os.Args[2:]))
+		}
+	}
+
 	opts, err := config.ParseFlags()
 	if err != nil {
 		fmt.Printf("%s[!] Configuration error: %v%s\n", config.Red, err, config.Reset)
@@ -461,6 +470,15 @@ func main() {
 
 	results := engine.Execute(activeTargets, targetedPorts)
 
+	// --dual-stack: scan the IPv6 address published for each IPv4 target on
+	// the same ports. Its results join the main list so -sV / vulnerability
+	// lookup / exports cover them; the IPv4-vs-IPv6 comparison runs after
+	// service detection (which rewrites each result's findings).
+	var dualPairs []dualstack.Pair
+	if opts.DualStack {
+		dualPairs, results = runDualStackScan(opts, activeTargets, targetNames, targetedPorts, results)
+	}
+
 	if opts.DeepInspect || opts.ProtocolTracing || opts.TimingAnalysis || opts.PayloadAnalysis {
 		fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
 		fmt.Printf("%s[*] Running Deep Packet Inspection...%s\n", config.Red, config.Reset)
@@ -587,6 +605,8 @@ func main() {
 					config.Gray, len(group.Hosts), strings.Join(parts, ", "), config.Reset)
 			}
 		}
+
+		reportUnknownServices(opts, results)
 
 		var vulnScanner vuln.Scanner
 		var err error
@@ -781,6 +801,10 @@ func main() {
 		}
 	}
 
+	if len(dualPairs) > 0 {
+		reportDualStackGaps(dualPairs, results)
+	}
+
 	duration := time.Since(t0)
 
 	openCount := 0
@@ -881,6 +905,9 @@ func main() {
 		} else {
 			fmt.Printf("%s[✓] Results exported to %s file: %s%s\n", config.White, export.format, export.path, config.Reset)
 		}
+	}
+	if opts.EvidenceOutput != "" {
+		writeEvidence(opts, results)
 	}
 	if baselineLoaded {
 		changes := compare.Compare(results, baseline)

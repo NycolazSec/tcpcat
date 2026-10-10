@@ -309,6 +309,75 @@ Point `-j` and `--baseline` at the same state file and run tcpcat on a schedule:
 
 The first run has no baseline yet and only records the state. The payload adapts to the destination: Discord webhooks receive a chat message, Slack incoming webhooks receive `{"text": ...}`, and any other URL receives a JSON body with the message plus the full structured comparison. No alert is sent when nothing changed. Treat the webhook URL as a secret, since anyone who has it can post to your channel.
 
+### Segmentation testing as code
+
+Describe which flows your network should allow, then let tcpcat check reality from each vantage point (a laptop on the guest Wi-Fi, a CI runner on the internet, a jump host in the office LAN):
+
+```yaml
+# segmentation.yaml
+version: 1
+name: PCI segmentation
+zones:
+  servers: [10.0.20.0/24]
+  shop: [shop.example.com]
+rules:
+  - name: guests reach no server
+    from: guest-wifi
+    to: servers
+    ports: top-1000          # or "22,80,443", "1-65535"; default top-1000
+  - name: only HTTPS is public
+    from: internet
+    to: shop
+    ports: "1-1024"
+    allow: [443/tcp, 80/tcp] # anything else reachable is a violation
+    require: [443]           # must stay reachable
+```
+
+```bash
+tcpcat policy check segmentation.yaml --from guest-wifi -j guest.json --sarif guest.sarif
+tcpcat policy matrix guest.json internet.json office.json   # merge the vantages into one table
+```
+
+`policy check` uses TCP connect probes (no root), runs only the rules whose `from` matches `--from`, and exits `0` when compliant, `1` on any violation, `2` on a usage or configuration error — so it can gate a CI pipeline after every firewall change. Unknown keys in the policy file are rejected, so a typo such as `alow:` can't silently turn a rule into "allow nothing". Add `--scope-file` to refuse probing anything outside an authorized scope. Segmentation tests of this kind are what PCI DSS requirement 11.4.5 asks for.
+
+### IPv6-only exposure (`--dual-stack`)
+
+A host published with both A and AAAA records is often firewalled for IPv4 only. tcpcat normally scans a name's IPv4 address, so a service open on the IPv6 side goes unseen. `--dual-stack` looks up the IPv6 address published for each IPv4 target (its name, or its reverse-DNS name for a bare IP), scans it on the same ports, and reports the differences:
+
+```bash
+tcpcat -sT -p 22,80,443,3306,5432 --dual-stack -j report.json --sarif report.sarif www.example.com
+# [!!] IPv6-only exposure: www.example.com port 22 open on 2001:db8::10, not on 192.0.2.10
+```
+
+IPv6-only ports get a `dual_stack` object in the JSON report, a finding, a `medium` risk (`high` for remote administration, database, cache and file-sharing ports) and a `DUAL-STACK-IPV6-ONLY` SARIF rule. The IPv6 leg always uses TCP connect, whatever scan type the IPv4 leg used. Only DNS-published addresses are compared.
+
+### Verifiable evidence and fix verification (`--evidence`, `tcpcat replay`)
+
+`--evidence <file>` writes a bundle of every open port: when, from which host and source address it was seen, how it answered (reason, latency, service, banner and its SHA-256, TLS certificate, CVE IDs), and the command line with secret values (API keys, webhook URLs) redacted. A `<file>.sha256` digest is always written next to it; `--evidence-key` adds an Ed25519 signature (`<file>.sig`):
+
+```bash
+tcpcat evidence keygen --out auditor                  # auditor.key (private, 0600) + auditor.pub
+tcpcat -sT -sV -p 1-1024 --evidence audit.json --evidence-key auditor.key 10.0.0.0/24
+tcpcat evidence verify audit.json --pub auditor.pub   # anyone holding the public key
+tcpcat replay audit.json --pub auditor.pub -j retest.json
+# [✓] FIXED      dcbfe83ea190 10.0.0.5:21 (vsftpd 2.3.4) -- port no longer accepts connections
+# [✗] STILL OPEN 6d4bf0b5ee34 10.0.0.7:23 -- port still accepts connections
+```
+
+`replay` refuses to run on a bundle whose signature or digest doesn't match, re-probes each recorded port (or one, with `--finding <id>`), and exits `0` only when every finding is fixed — a remediation ticket can be closed on that. A service still open but answering with a different banner is reported as `CHANGED`. The keys are standard PKCS#8/PKIX PEM, so `openssl` can verify the signature too.
+
+### Grouping unrecognized services
+
+With `-sV`, services that answer with a banner tcpcat can't name are grouped across hosts after normalizing volatile values (numbers, versions, hex IDs, addresses, host names). A group seen on several hosts is printed with a suggested signature for `internal/service/signatures.go`:
+
+```
+[?] Same unrecognized service on 2 hosts [6405ff6b7dd4]: "AcmeDB v<ver> session=<hex> ready"
+    10.0.0.4:7000, 10.0.0.9:7000
+    suggested signature: {"CHANGE-ME", regexp.MustCompile(`^AcmeDB\s+v([\d.]+[a-z]?\d*)\s+session=(?:0x)?[0-9a-fA-F]+\s+ready`), false},
+```
+
+`--fingerprints-out <file>` exports the groups with no address and no raw banner (template, ports, host count, suggested signature), so it can be attached to a GitHub issue to help grow the signature set.
+
 ---
 
 ## CLI Reference
@@ -360,6 +429,7 @@ pointed at an IPv6 target instead of silently misbehaving.
 --jarm                Active JARM TLS fingerprint on TLS ports (opt-in: 10 extra probes/target)
 --ot-probe            Read exact vendor/version from OT ports (Modbus...) via one read-only query (opt-in)
 --exploit-intel       Enrich correlated CVEs with CISA KEV + EPSS and prioritize by them (opt-in)
+--dual-stack          Also scan each target's DNS-published IPv6 address; flag ports open on IPv6 only
 ```
 On a `443`/`8443` port, `-sV` also runs an independent TLS/certificate
 probe and attaches the result as `tls` in JSON output: negotiated
@@ -473,6 +543,9 @@ control-port naming.
 --baseline <file>       Load a previous tcpcat JSON report for comparison
 --changes <file>        Write comparison results; requires --baseline
 --notify-webhook <url>  Alert a Discord/Slack/HTTP webhook when changes are found; requires --baseline
+--evidence <file>       Write a verifiable evidence bundle of open ports (re-check with `tcpcat replay`)
+--evidence-key <key>    Sign the evidence bundle with an Ed25519 key (`tcpcat evidence keygen`)
+--fingerprints-out <f>  With -sV, export unrecognized-service groups (no addresses, no raw banners)
 --update                Check the latest GitHub release and update this binary
 ```
 
@@ -485,6 +558,17 @@ security headers, exposed paths), and correlated CVEs — rather than just
 the port state.
 
 `--update` downloads the release archive matching the current OS and CPU architecture, verifies it against the release `checksums.txt`, and replaces the current executable atomically. It requires a published GitHub release with matching assets and may require elevated permissions when the binary is installed in a system directory. The option does not update source checkouts or package-manager installations.
+
+### Audit subcommands
+```
+tcpcat policy check <policy.yaml> --from <vantage> [-j f] [--sarif f] [--rate n] [-T n] [--scope-file f]
+tcpcat policy matrix <report.json>...
+tcpcat evidence keygen --out <prefix>
+tcpcat evidence verify <bundle.json> [--pub <key.pub>]
+tcpcat replay <bundle.json> [--pub <key.pub>] [--finding <id>] [-j f] [--timeout ms]
+```
+
+Exit status: `0` compliant / all fixed, `1` violation / still reproducing, `2` usage or configuration error.
 
 ### Enterprise Scan Controls
 ```
