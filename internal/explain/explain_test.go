@@ -1,6 +1,7 @@
 package explain
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -34,7 +35,7 @@ func r(port int, state string) scan.TargetResult {
 func sampleScan() []scan.TargetResult {
 	return []scan.TargetResult{
 		r(6379, scan.StateOpen), r(5000, scan.StateOpen), r(443, scan.StateOpen), r(80, scan.StateOpen),
-		r(5432, scan.StateFiltered), r(22, scan.StateClosed), r(8083, scan.StateClosed),
+		r(5432, scan.StateFiltered), r(22, scan.StateFiltered), r(8083, scan.StateClosed),
 		{IP: "198.51.100.1", Port: 22, State: scan.StateOpen}, // another host: ignored
 	}
 }
@@ -150,5 +151,62 @@ func TestKubeServiceTakesPrecedenceOverLocalListener(t *testing.T) {
 	e := byPort(Explain(inv, []scan.TargetResult{r(80, scan.StateOpen)}, target, nil))[80]
 	if e.Class != Forwarded || e.Kube == nil || !strings.Contains(e.Why, "nginx (pid 16) also listens") {
 		t.Errorf("80 = %+v", e)
+	}
+}
+
+// Seen on a real Pterodactyl host: Docker publishes the port, but nothing
+// listens behind it, so connections are refused -- not "firewall only".
+func TestRefusedDockerPublishedPort(t *testing.T) {
+	inv := sampleInventory()
+	inv.Listeners = append(inv.Listeners, inventory.Listener{Address: target, Port: 25567,
+		Owner: &inventory.Owner{PID: 20, Process: "docker-proxy", ContainerName: "old-app", ForwardsTo: "172.18.0.2:25567"}})
+	e := byPort(Explain(inv, []scan.TargetResult{r(25567, scan.StateClosed)}, target, nil))[25567]
+	if e.Class != Refused || !strings.Contains(e.Why, "nothing listens on 172.18.0.2:25567") {
+		t.Errorf("25567 = %+v", e)
+	}
+	ssh := byPort(Explain(sampleInventory(), []scan.TargetResult{r(22, scan.StateClosed)}, target, nil))[22]
+	if ssh.Class != Refused || !strings.Contains(ssh.Why, "REJECT") {
+		t.Errorf("22 closed = %+v", ssh)
+	}
+}
+
+func TestNodePortFix(t *testing.T) {
+	inv := sampleInventory() // traefik: LoadBalancer 443, NodePort 30443
+	e := byPort(Explain(inv, []scan.TargetResult{r(30443, scan.StateOpen)}, target, nil))[30443]
+	if e.Class != Forwarded || !strings.Contains(e.Fix, "allocateLoadBalancerNodePorts") {
+		t.Errorf("30443 = %+v", e)
+	}
+}
+
+func TestAutoHelpers(t *testing.T) {
+	inv := sampleInventory()
+	inv.Addresses = []string{"127.0.0.1", "10.42.0.1", "172.17.0.1", "203.0.113.5", "::1", "fe80::1", "2001:db8::5", "fd00::1"}
+	if got := strings.Join(PublicAddresses(inv), ","); got != "203.0.113.5,2001:db8::5" {
+		t.Errorf("PublicAddresses = %s", got)
+	}
+
+	ports := PortsToProbe(inv, []int{3306})
+	want := "22,80,443,3306,5000,5432,6379,9100,30443"
+	if got := strings.Trim(strings.Join(strings.Fields(fmt.Sprint(ports)), ","), "[]"); got != want {
+		t.Errorf("PortsToProbe = %s, want %s (loopback-only 8083 excluded)", got, want)
+	}
+
+	list, err := ParsePortList("22, 80/tcp,25565-25567")
+	if err != nil || fmt.Sprint(list) != "[22 80 25565 25566 25567]" {
+		t.Errorf("ParsePortList = %v, %v", list, err)
+	}
+	for _, bad := range []string{"0", "70000", "90-80", "x", "1-y"} {
+		if _, err := ParsePortList(bad); err == nil {
+			t.Errorf("ParsePortList(%q) should fail", bad)
+		}
+	}
+}
+
+func TestCanaryPortsAvoidKnownPorts(t *testing.T) {
+	inv := sampleInventory()
+	inv.Listeners = append(inv.Listeners, inventory.Listener{Address: "0.0.0.0", Port: 47231})
+	got := CanaryPorts(inv, []int{51873}, 3)
+	if fmt.Sprint(got) != "[58419 49157 53987]" {
+		t.Errorf("CanaryPorts = %v", got)
 	}
 }

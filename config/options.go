@@ -149,7 +149,10 @@ type Options struct {
 	EvidenceOutput string
 	EvidenceKey    string
 	FingerprintOut string
-	SmartBypass    bool
+	// Quiet suppresses the scan engine's per-port console lines (callers
+	// that render their own report, like `tcpcat explain`, set it).
+	Quiet       bool
+	SmartBypass bool
 
 	AWSRegion string
 	AWSTags   string

@@ -4,31 +4,38 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/NycolazSec/tcpcat/config"
 	"github.com/NycolazSec/tcpcat/internal/compare"
 	"github.com/NycolazSec/tcpcat/internal/explain"
 	"github.com/NycolazSec/tcpcat/internal/inventory"
+	"github.com/NycolazSec/tcpcat/internal/scan"
 )
 
-const explainUsage = `Usage:
-  tcpcat inventory [-o inventory.json]
-      On the host (Linux, as root): list every listening TCP port with the
-      process, systemd unit, container or pod that owns it. Sends nothing
-      on the network.
+const explainUsage = `Explain who is behind each reachable port of a Linux host, and how to fix it.
 
-  tcpcat explain <inventory.json> <scan.json> [--target <ip>] [--expect 80,443] [-j report.json]
-      Join that inventory with a scan of the same host taken from OUTSIDE
-      (tcpcat <host> -p 1-65535 -j scan.json, from another machine) and
-      explain every port: EXPOSED (who listens, how to fix), FORWARDED
-      (reachable with no local listener: NAT/Docker/Kubernetes), SHIELDED
-      (only the firewall protects it), LOCAL, UNTESTED.
-      --expect lists ports meant to be public. Exit status: 0 nothing
-      unexpected is reachable, 1 something is, 2 error.
+  1. On the host, as root:      tcpcat inventory
+                                (writes inventory.json; sends nothing on the network)
+  2. Copy inventory.json to ANOTHER machine (your laptop), then run there:
+                                tcpcat explain inventory.json --expect 22,80,443
+
+  explain finds the host's public address in the inventory, probes the ports
+  that matter from where it runs, and sorts every port into EXPOSED (who
+  listens, how to fix), FORWARDED (NAT/Docker/Kubernetes), SHIELDED (only the
+  firewall protects it), REFUSED, LOCAL.
+
+  --expect <ports>   ports meant to be public, e.g. 22,80,443,25565-25570
+  --target <ip>      address to probe (needed when the host has several public
+                     addresses, or sits behind NAT)
+  --ports <ports>    extra ports to probe
+  -j <file>          also write the result as JSON
+
+  Exit status: 0 nothing unexpected is reachable, 1 something is, 2 error.
+  Advanced: tcpcat explain inventory.json scan.json uses a scan you ran yourself.
 `
 
 func runInventory(args []string) int {
@@ -53,39 +60,12 @@ func runInventory(args []string) int {
 		}
 		return inv.Listeners[i].Address < inv.Listeners[j].Address
 	})
-	fmt.Printf("%s%-6s %-28s %s%s\n", config.Bold, "PORT", "BOUND TO", "OWNER", config.Reset)
-	for _, l := range inv.Listeners {
-		fmt.Printf("%-6d %-28s %s\n", l.Port, l.Address, ownerSummary(l.Owner))
-	}
 	if err := inv.Write(*out); err != nil {
 		fmt.Printf("%s[!] %v%s\n", config.Red, err, config.Reset)
 		return exitError
 	}
-	fmt.Printf("%s[✓] %d listening socket(s) on %s written to %s.%s\n", config.White, len(inv.Listeners), inv.Hostname, *out, config.Reset)
-	fmt.Printf("%s[*] Next: scan this host from another machine (tcpcat <address> -sT -Pn -p 1-65535 -j scan.json), then: tcpcat explain %s scan.json%s\n",
-		config.Gray, *out, config.Reset)
+	renderInventory(inv, *out)
 	return exitOK
-}
-
-func ownerSummary(o *inventory.Owner) string {
-	if o == nil {
-		return "?"
-	}
-	s := fmt.Sprintf("%s[%d]", o.Process, o.PID)
-	switch {
-	case o.ContainerName != "":
-		s += " container=" + o.ContainerName
-	case o.Pod != "":
-		s += " pod=" + o.Pod
-	case o.Container != "":
-		s += " container=" + o.Container[:12]
-	case o.Unit != "":
-		s += " unit=" + o.Unit
-	}
-	if o.ForwardsTo != "" {
-		s += " -> " + o.ForwardsTo
-	}
-	return s
 }
 
 func runExplain(args []string) int {
@@ -93,6 +73,8 @@ func runExplain(args []string) int {
 	targetIP := fs.String("target", "", "Scanned address that is this host (needed behind NAT)")
 	expectList := fs.String("expect", "", "Comma-separated ports meant to be public (e.g. 80,443)")
 	jsonOut := fs.String("j", "", "Write the explanation as JSON")
+	extraPorts := fs.String("ports", "", "Extra ports to probe besides the ones the inventory lists (e.g. 3306,8000-8010)")
+	verbose := fs.Bool("v", false, "Also detail expected and local-only ports")
 	fs.Usage = func() { fmt.Print(explainUsage) }
 
 	var positional, flags []string
@@ -100,7 +82,7 @@ func runExplain(args []string) int {
 		a := args[i]
 		if strings.HasPrefix(a, "-") {
 			flags = append(flags, a)
-			if !strings.Contains(a, "=") && i+1 < len(args) {
+			if !strings.Contains(a, "=") && a != "-v" && i+1 < len(args) {
 				flags = append(flags, args[i+1])
 				i++
 			}
@@ -111,21 +93,30 @@ func runExplain(args []string) int {
 	if err := fs.Parse(flags); err != nil {
 		return exitError
 	}
-	if len(positional) != 2 {
+	if len(positional) < 1 || len(positional) > 2 {
 		fmt.Print(explainUsage)
 		return exitError
 	}
 
 	expected := map[int]bool{}
 	if *expectList != "" {
-		for _, p := range strings.Split(*expectList, ",") {
-			port, err := strconv.Atoi(strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(p), "/tcp")))
-			if err != nil || port < 1 || port > 65535 {
-				fmt.Printf("%s[!] --expect: invalid port %q%s\n", config.Red, p, config.Reset)
-				return exitError
-			}
-			expected[port] = true
+		ports, err := explain.ParsePortList(*expectList)
+		if err != nil {
+			fmt.Printf("%s[!] --expect: %v%s\n", config.Red, err, config.Reset)
+			return exitError
 		}
+		for _, p := range ports {
+			expected[p] = true
+		}
+	}
+	var extra []int
+	if *extraPorts != "" {
+		ports, err := explain.ParsePortList(*extraPorts)
+		if err != nil {
+			fmt.Printf("%s[!] --ports: %v%s\n", config.Red, err, config.Reset)
+			return exitError
+		}
+		extra = ports
 	}
 
 	inv, err := inventory.Load(positional[0])
@@ -133,49 +124,30 @@ func runExplain(args []string) int {
 		fmt.Printf("%s[!] %v%s\n", config.Red, err, config.Reset)
 		return exitError
 	}
-	results, err := compare.LoadBaseline(positional[1])
-	if err != nil {
-		fmt.Printf("%s[!] scan report %s: %v%s\n", config.Red, positional[1], err, config.Reset)
-		return exitError
-	}
-	target, err := explain.SelectTarget(inv, results, *targetIP)
-	if err != nil {
-		fmt.Printf("%s[!] %v%s\n", config.Red, err, config.Reset)
-		return exitError
+
+	var results []scan.TargetResult
+	var target string
+	var probe probeSummary
+	if len(positional) == 2 {
+		probe.fromFile = positional[1]
+		// Advanced form: a scan report produced separately.
+		if results, err = compare.LoadBaseline(positional[1]); err != nil {
+			fmt.Printf("%s[!] scan report %s: %v%s\n", config.Red, positional[1], err, config.Reset)
+			return exitError
+		}
+		if target, err = explain.SelectTarget(inv, results, *targetIP); err != nil {
+			fmt.Printf("%s[!] %v%s\n", config.Red, err, config.Reset)
+			return exitError
+		}
+	} else {
+		if target, results, probe, err = scanFromHere(inv, *targetIP, extra, expected); err != nil {
+			fmt.Printf("%s[!] %v%s\n", config.Red, err, config.Reset)
+			return exitError
+		}
 	}
 
 	rep := explain.Explain(inv, results, target, expected)
-	fmt.Printf("%s[*] Explaining %s (scanned as %s): %d port(s) seen from inside and/or outside.%s\n",
-		config.Bold, inv.Hostname, target, len(rep.Entries), config.Reset)
-	fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
-	for _, e := range rep.Entries {
-		color, mark := config.Gray, "[i]"
-		switch {
-		case (e.Class == explain.Exposed || e.Class == explain.Forwarded) && !e.Expected:
-			color, mark = config.Red, "[!]"
-			if e.Severity == "high" {
-				mark = "[!!]"
-			}
-		case e.Class == explain.Shielded && e.Severity == "low":
-			color, mark = config.White, "[~]"
-		case e.Expected:
-			color, mark = config.White, "[✓]"
-		}
-		label := e.Class
-		if e.Expected {
-			label += " (expected)"
-		}
-		svc := ""
-		if e.Service != "" && e.Service != "unknown" {
-			svc = " " + e.Service
-		}
-		fmt.Printf("%s%-4s %-20s %5d/tcp%s%s\n", color, mark, label, e.Port, svc, config.Reset)
-		fmt.Printf("     %s%s%s\n", config.Gray, e.Why, config.Reset)
-		if e.Fix != "" && (!e.Expected || e.Class != explain.Exposed) {
-			fmt.Printf("     %sfix: %s%s\n", config.White, e.Fix, config.Reset)
-		}
-	}
-	fmt.Println(config.Bold + "────────────────────────────────────────────────────────────────────────────────" + config.Reset)
+	renderExplain(rep, inv, probe, *verbose)
 
 	if *jsonOut != "" {
 		data, _ := json.MarshalIndent(rep, "", "  ")
@@ -183,12 +155,126 @@ func runExplain(args []string) int {
 			fmt.Printf("%s[!] %v%s\n", config.Red, err, config.Reset)
 			return exitError
 		}
-		fmt.Printf("%s[✓] Explanation written to %s%s\n", config.White, *jsonOut, config.Reset)
+		fmt.Printf("  %sJSON report written to %s%s\n", config.Gray, *jsonOut, config.Reset)
 	}
-	if n := rep.Problems(); n > 0 {
-		fmt.Printf("%s[✗] %d port(s) reachable without being declared with --expect.%s\n", config.Red, n, config.Reset)
+	if rep.Problems() > 0 {
 		return exitViolation
 	}
-	fmt.Printf("%s[✓] Nothing unexpected is reachable on %s.%s\n", config.White, target, config.Reset)
 	return exitOK
+}
+
+// scanFromHere probes the host described by inv from this machine and
+// returns the address used, the results and a summary for the header. It
+// refuses to run on the host itself: connections to one's own address go
+// through the loopback path and skip most firewall rules, so everything
+// would look reachable.
+func scanFromHere(inv inventory.Inventory, given string, extra []int, expected map[int]bool) (string, []scan.TargetResult, probeSummary, error) {
+	var sum probeSummary
+	target := given
+	if target == "" {
+		public := explain.PublicAddresses(inv)
+		if len(public) == 0 {
+			return "", nil, sum, fmt.Errorf("%s has no public address in its inventory (behind NAT?): pass the address to probe with --target", inv.Hostname)
+		}
+		target = public[0]
+		if len(public) > 1 {
+			fmt.Printf("  %s%s also has %s; probing %s (--target to pick another).%s\n",
+				config.Gray, inv.Hostname, strings.Join(public[1:], ", "), target, config.Reset)
+		}
+	}
+	if net.ParseIP(target) == nil {
+		return "", nil, sum, fmt.Errorf("--target %q is not an IP address", target)
+	}
+	if isLocalAddress(target) {
+		return "", nil, sum, fmt.Errorf("this machine owns %s: run explain from ANOTHER machine (your laptop), so the probes cross the firewall like real visitors", target)
+	}
+
+	var expectedList []int
+	for p := range expected {
+		expectedList = append(expectedList, p)
+	}
+	ports := explain.PortsToProbe(inv, append(extra, expectedList...))
+
+	// A few slow, retried connect probes: the goal is a result that doesn't
+	// flicker between runs, not speed (the port list is short).
+	opts := auditScanOptions(20, 3)
+	opts.MaxWorkers = 5
+	opts.MaxRetries = 3
+	opts.OnlyOpen = false // explain needs closed/filtered results too (SHIELDED, REFUSED)
+	opts.Quiet = true
+	engine := scan.NewEngine(opts)
+
+	fmt.Printf("  %s●%s Probing %s%s%s on %d port(s) from this machine… ", config.Red, config.Reset, config.Bold+config.White, target, config.Reset, len(ports))
+	results := engine.Execute([]string{target}, ports)
+	for _, r := range results {
+		if r.State == scan.StateOpen {
+			sum.open++
+		}
+	}
+	sum.probed = len(ports)
+	fmt.Printf("%s%d open%s\n", config.White, sum.open, config.Reset)
+
+	canaries := explain.CanaryPorts(inv, ports, 3)
+	fmt.Printf("  %s●%s Checking the path with %d control port(s) where nothing listens… ", config.Red, config.Reset, len(canaries))
+	var answered []string
+	for _, r := range engine.Execute([]string{target}, canaries) {
+		if r.State == scan.StateOpen {
+			answered = append(answered, fmt.Sprint(r.Port))
+		}
+	}
+	if len(answered) > 0 {
+		fmt.Printf("%sFAILED%s\n", config.Bold+config.Red, config.Reset)
+		cause := "a device between this machine and the host (VPN, phone hotspot, proxy, antivirus web shield, or anti-DDoS mitigation) answers on the host's behalf"
+		if iface, addr := tunnelInterfaceFor(target); iface != "" {
+			cause = fmt.Sprintf("traffic to %s leaves through tunnel interface %s (%s): a VPN is connected and its server answers on every port", target, iface, addr)
+		}
+		return "", nil, sum, fmt.Errorf("control port(s) %s answered although nothing listens there on %s: %s, so no result can be trusted. Disconnect the VPN (or exclude %s from it) and run explain again",
+			strings.Join(answered, ", "), inv.Hostname, cause, target)
+	}
+	fmt.Printf("%sok%s\n", config.White, config.Reset)
+	sum.pathCheck = true
+	return target, results, sum, nil
+}
+
+func isLocalAddress(ip string) bool {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok && ipnet.IP.String() == ip {
+			return true
+		}
+	}
+	return false
+}
+
+// tunnelInterfaceFor reports the tunnel interface (utun/tun/wg/ppp/ipsec)
+// the kernel would route target through, if any. Connecting a UDP socket
+// only selects a route; nothing is sent.
+func tunnelInterfaceFor(target string) (string, string) {
+	conn, err := net.Dial("udp", net.JoinHostPort(target, "9"))
+	if err != nil {
+		return "", ""
+	}
+	local := conn.LocalAddr().(*net.UDPAddr).IP
+	_ = conn.Close()
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", ""
+	}
+	for _, ifc := range ifaces {
+		addrs, _ := ifc.Addrs()
+		for _, a := range addrs {
+			if ipnet, ok := a.(*net.IPNet); ok && ipnet.IP.Equal(local) {
+				for _, prefix := range []string{"utun", "tun", "wg", "ppp", "ipsec", "tap", "proton", "nordlynx"} {
+					if strings.HasPrefix(ifc.Name, prefix) {
+						return ifc.Name, local.String()
+					}
+				}
+				return "", ""
+			}
+		}
+	}
+	return "", ""
 }

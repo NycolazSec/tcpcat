@@ -42,6 +42,9 @@ func main() {
 	// flag parsing, which would otherwise read "policy" as a target name.
 	if len(os.Args) > 1 {
 		if run, ok := subcommands[os.Args[1]]; ok {
+			if !isHelpRequest(os.Args[2:]) {
+				fmt.Println(config.RenderBanner(""))
+			}
 			os.Exit(run(os.Args[2:]))
 		}
 	}
