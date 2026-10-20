@@ -89,7 +89,12 @@ jobs:
           # G703/G304 (path taint): tcpcat deliberately reads operator-specified
           # file paths (--config, --scope-file, --baseline, -iL). G304 was
           # already excluded for this; G703 is its taint-analysis sibling.
-          args: "-exclude=G104,G115,G304,G404,G703 -fmt sarif -out gosec-results.sarif ./..."
+          # exclude-dir testdata/examples: the WASM dissector sources there use
+          # //go:wasmimport (GOARCH=wasm only), so they don't type-check under
+          # the host toolchain gosec loads. The Go tool skips testdata/ on its
+          # own (go build/vet/test ./... ignore it); gosec does not, so it is
+          # excluded explicitly here.
+          args: "-exclude=G104,G115,G304,G404,G703 -exclude-dir=testdata -exclude-dir=examples -fmt sarif -out gosec-results.sarif ./..."
 
       - name: Upload gosec SARIF
         if: always()
