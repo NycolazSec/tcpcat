@@ -273,3 +273,14 @@ func TestParseTargetDashedHostname(t *testing.T) {
 		t.Error("isHostname should accept a dashed host name")
 	}
 }
+
+func TestSplitList(t *testing.T) {
+	got := SplitList("10.0.0.1,10.0.0.2  example.com,,192.168.1.0/30")
+	want := []string{"10.0.0.1", "10.0.0.2", "example.com", "192.168.1.0/30"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("SplitList = %v, want %v", got, want)
+	}
+	if len(SplitList("")) != 0 {
+		t.Error("an empty specification has no targets")
+	}
+}

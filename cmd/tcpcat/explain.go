@@ -32,6 +32,8 @@ const explainUsage = `Explain who is behind each reachable port of a Linux host,
   --target <ip>      address to probe (needed when the host has several public
                      addresses, or sits behind NAT)
   --ports <ports>    extra ports to probe
+  --remediate <file> also write the firewall/systemd/Kubernetes config that
+                     closes each unexpected exposure (- for stdout)
   -j <file>          also write the result as JSON
 
   Exit status: 0 nothing unexpected is reachable, 1 something is, 2 error.
@@ -74,6 +76,8 @@ func runExplain(args []string) int {
 	expectList := fs.String("expect", "", "Comma-separated ports meant to be public (e.g. 80,443)")
 	jsonOut := fs.String("j", "", "Write the explanation as JSON")
 	extraPorts := fs.String("ports", "", "Extra ports to probe besides the ones the inventory lists (e.g. 3306,8000-8010)")
+	remediateOut := fs.String("remediate", "", "Write, to this file, the firewall/systemd/Kubernetes config that closes each unexpected exposure (- for stdout)")
+	remediateKey := fs.String("remediate-key", "", "Ed25519 key (from `tcpcat evidence keygen`) to sign each remediation bundle")
 	verbose := fs.Bool("v", false, "Also detail expected and local-only ports")
 	fs.Usage = func() { fmt.Print(explainUsage) }
 
@@ -148,6 +152,13 @@ func runExplain(args []string) int {
 
 	rep := explain.Explain(inv, results, target, expected)
 	renderExplain(rep, inv, probe, *verbose)
+
+	if *remediateOut != "" {
+		if err := writeRemediation(rep, *remediateOut, *remediateKey); err != nil {
+			fmt.Printf("%s[!] %v%s\n", config.Red, err, config.Reset)
+			return exitError
+		}
+	}
 
 	if *jsonOut != "" {
 		data, _ := json.MarshalIndent(rep, "", "  ")

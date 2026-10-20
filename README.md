@@ -20,6 +20,7 @@
 [![License: AGPL-3.0 or Commercial](https://img.shields.io/badge/License-AGPL--3.0%20or%20Commercial-blue.svg)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/releases)
 [![Discord](https://img.shields.io/badge/Discord-Rejoindre-5865F2?logo=discord&logoColor=white)](https://discord.gg/syn)
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/NycolazSec/badge.svg)](https://hub.xerj.org/contributors/NycolazSec)
 </div>
 
 Fast network scanner in Go with an eBPF/AF_XDP engine, service and OS
@@ -107,7 +108,10 @@ tcpcat is a dual-licensed project (AGPL-3.0 or commercial) maintained by Nicolas
 
 **Programmable Intelligence**
 - WebAssembly (WASM) detection engine with sandboxed execution
-- Custom protocol dissectors in Rust, C, Go, or AssemblyScript
+- Custom protocol dissectors in TinyGo, Rust, C, or Zig: a dissector can only
+  talk to the port being scanned, through one host function. Start from the
+  30-line template in [examples/wasm-dissector](examples/wasm-dissector)
+  ([SDK and ABI](docs/WASM_SDK.md))
 - Concurrent detection rules without memory overhead
 
 ---
@@ -467,7 +471,7 @@ pointed at an IPv6 target instead of silently misbehaving.
 -sV                   Probe response fingerprinting + version correlation
 -O                    Remote OS detection via TTL/MSS/window analysis
                       (needs -sS or --ebpf on Linux, as root, to read a raw SYN/ACK)
---scripts <dir>       Load WASM detection modules
+--scripts <dir>       Load WASM detection modules (*.wasm); write one: docs/WASM_SDK.md
 --jarm                Active JARM TLS fingerprint on TLS ports (opt-in: 10 extra probes/target)
 --ot-probe            Read exact vendor/version from OT ports (Modbus...) via one read-only query (opt-in)
 --exploit-intel       Enrich correlated CVEs with CISA KEV + EPSS and prioritize by them (opt-in)
@@ -678,20 +682,25 @@ Packet variation, fragmentation, and decoy traffic can help an authorized team a
 
 **Performance vs. Nmap and naabu (full port range):**
 
-```
-hyperfine --warmup 0 --runs 3 \
-  -n "tcpcat-ebpf" "./tcpcat -i eth0 -p 1-65535 -sS --ebpf --open -T 5 --rate 25000 <host1> <host2>" \
-  -n "naabu"       "naabu -interface eth0 -p 1-65535 -rate 25000 -host <host1>,<host2> -silent" \
-  -n "nmap"        "nmap -e eth0 -p 1-65535 -sS -n -T4 --min-rate 25000 --max-retries 1 <host1> <host2>"
+A speed figure is only worth something next to the conditions it was measured
+in and proof that nothing was missed, so the benchmark is a script rather than
+a table:
+
+```bash
+./benchmarks/run.sh        # needs Docker, about 5 minutes
 ```
 
-| Tool | Mean Time | Range (min … max) |
-|------|-----------|--------------------|
-| **tcpcat (eBPF/XDP)** | **4.466 s ± 0.744 s** | 3.623 s … 5.028 s |
-| nmap | 11.723 s ± 0.503 s | 11.150 s … 12.094 s |
-| naabu | 20.945 s ± 0.181 s | 20.739 s … 21.077 s |
+It builds tcpcat from your checkout, starts targets with a known set of open
+ports, and runs tcpcat (`--ebpf` and plain `-sS`), Nmap and naabu on the same
+interface under the same rate ceiling. The report records the kernel, the NIC,
+every tool's version, timings, CPU time and packets dropped, and marks a tool
+invalid if one of its runs missed a single open port.
+[benchmarks/README.md](benchmarks/README.md) describes the protocol, how to run
+it through a real NIC, and a sample report.
 
-- **2.62× faster than nmap**, **4.69× faster than naabu** — full 1-65535 SYN scan across 2 hosts, 25K pps rate limit, 3 runs each.
+> The figures shown here until v1.5.0 (2.62× faster than Nmap, 4.69× faster
+> than naabu) are withdrawn. A bug made tcpcat scan only the first of the two
+> targets in that run, and the run did not check which ports were found.
 
 ---
 

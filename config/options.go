@@ -456,7 +456,7 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.GrepableOutput, "oG", "", "Export results in grepable format")
 	flag.StringVar(&opts.NormalOutput, "oN", "", "Export results as a plain-text report")
 	flag.StringVar(&opts.KiddieOutput, "oS", "", "Export results in leetspeak (script kiddie format)")
-	flag.StringVar(&opts.ScriptPath, "scripts", "", "Path to directory containing Go scripts")
+	flag.StringVar(&opts.ScriptPath, "scripts", "", "Directory of WebAssembly detection modules (*.wasm); see docs/WASM_SDK.md")
 	flag.StringVar(&opts.VulnersAPIKey, "vulners-apikey", "", "Vulners.com API key for CVE lookup")
 	flag.BoolVar(&opts.ExploitIntel, "exploit-intel", false, "Enrich CVEs with CISA KEV (known-exploited) + EPSS scores and prioritize by them")
 	flag.BoolVar(&opts.DualStack, "dual-stack", false, "Also scan the IPv6 address published (DNS AAAA) for each IPv4 target and report ports open on IPv6 only")
@@ -616,9 +616,11 @@ func ParseFlags() (*Options, error) {
 		return nil, err
 	}
 
-	if len(flag.Args()) > 0 {
-		opts.Target = flag.Arg(0)
-	}
+	// Every positional argument is a target ("tcpcat 10.0.0.1 10.0.0.2"), and
+	// each may itself be a comma-separated list. Only the first one used to
+	// be kept, the rest silently dropped -- so a scan (or a benchmark) of two
+	// hosts quietly covered one.
+	opts.Target = strings.Join(flag.Args(), ",")
 
 	if !opts.Update && !opts.Web && !opts.ShowVersion && !opts.ShowLicense && opts.Target == "" && opts.InputFile == "" && opts.AWSTags == "" {
 		flag.Usage()

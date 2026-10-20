@@ -52,3 +52,6 @@ bench_lab.sh
 
 # Website + client portal: kept out of this public repository (login code, customer data)
 public/
+
+# Benchmark runs (benchmarks/run.sh); publish a report by copying it out
+benchmarks/results/

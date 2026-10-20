@@ -44,3 +44,30 @@ func TestCountRXQueueDirsMissingPath(t *testing.T) {
 		t.Errorf("countRXQueueDirs(missing path) = %d, want 1 (fallback)", got)
 	}
 }
+
+func TestXDPSocketOptions(t *testing.T) {
+	for _, queues := range []int{1, 2, 4, 8, 16, 32, 64} {
+		o := xdpSocketOptions(queues)
+		rings := map[string]int{
+			"fill": o.FillRingNumDescs, "rx": o.RxRingNumDescs,
+			"tx": o.TxRingNumDescs, "completion": o.CompletionRingNumDescs,
+		}
+		for name, n := range rings {
+			// The kernel only accepts power-of-two rings.
+			if n < 256 || n&(n-1) != 0 {
+				t.Errorf("%d queue(s): %s ring = %d, want a power of two >= 256", queues, name, n)
+			}
+		}
+		// Receiving can hold the fill ring plus the RX ring; transmit must
+		// still have a full ring of frames of its own.
+		if o.NumFrames < o.FillRingNumDescs+o.RxRingNumDescs+o.TxRingNumDescs {
+			t.Errorf("%d queue(s): %d frames can't cover fill+rx+tx rings", queues, o.NumFrames)
+		}
+		if umem := queues * o.NumFrames * o.FrameSize; queues <= 32 && umem > 64<<20 {
+			t.Errorf("%d queue(s): %d MiB of UMEM, want <= 64", queues, umem>>20)
+		}
+	}
+	if got := xdpSocketOptions(1).RxRingNumDescs; got != 2048 {
+		t.Errorf("single-queue RX ring = %d, want 2048", got)
+	}
+}

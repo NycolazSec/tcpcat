@@ -8,6 +8,7 @@ var subcommands = map[string]func([]string) int{
 	"replay":    runReplay,
 	"inventory": runInventory,
 	"explain":   runExplain,
+	"drift":     runDrift,
 }
 
 // isHelpRequest: usage text is printed without the banner, so it reads as

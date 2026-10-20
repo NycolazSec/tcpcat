@@ -101,12 +101,16 @@ EtherNet/IP) via a single read-only query. See the main README for the risks.
 
 ## WASM detection scripts
 
-Load a directory of sandboxed WASM detection modules written in Rust, C, Go,
-or AssemblyScript:
+Load a directory of sandboxed WebAssembly detection modules (`*.wasm`):
 
 ```bash
-sudo tcpcat -sV --scripts ./my-detections/ -p 1-1000 target
+tcpcat -sT --scripts ./my-detections/ -p 1-1000 target
 ```
+
+[wasm-dissector/](wasm-dissector) is a ready-to-build one (TinyGo, ~30 lines:
+it recognises Redis and reads its version). Build it with `./build.sh` and use
+it as the template for your own; the sandbox rules and the ABI for other
+languages are in [docs/WASM_SDK.md](../docs/WASM_SDK.md).
 
 ## AWS EC2 tag-based discovery
 

@@ -6,13 +6,54 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/api"
 )
+
+// The script ABI (see docs/WASM_SDK.md and examples/wasm-dissector/).
+//
+// A module exports:
+//
+//	allocate(size i32) -> ptr i32
+//	deallocate(ptr i32, size i32)
+//	run(port i32, ip_ptr i32, ip_len i32) -> i64   // (ptr << 32) | len of a JSON object, or 0
+//
+// and may import one host function, the script's only way to reach the
+// network:
+//
+//	tcpcat.probe(req_ptr, req_len, resp_ptr, resp_cap i32) -> i32
+//
+// probe opens a TCP connection to the port being scanned -- that host and
+// port only, the script cannot choose another -- sends the request bytes (an
+// empty request just reads the banner), and writes up to resp_cap bytes of
+// the answer at resp_ptr. It returns the byte count, or a negative
+// probeErr* code. Each run is limited to maxProbesPerRun probes and
+// maxProbeResponse bytes per answer, so a script can neither hammer a
+// fragile service nor be used to move bulk data.
+const (
+	HostModule       = "tcpcat"
+	maxProbesPerRun  = 4
+	maxProbeResponse = 64 * 1024
+	probeIdle        = 300 * time.Millisecond // quiet time that ends a response
+
+	probeErrConnect = -1 // could not connect, or the write failed
+	probeErrBudget  = -2 // more than maxProbesPerRun probes in one run
+	probeErrArgs    = -3 // request or response buffer outside the module's memory
+)
+
+type runState struct {
+	addr   string
+	probes int
+}
+
+type runStateKey struct{}
 
 type ScriptExecutionResult struct {
 	ScriptName string
@@ -24,6 +65,8 @@ type ScriptingEngine struct {
 	runtime wazero.Runtime
 	scripts map[string]wazero.CompiledModule
 	timeout time.Duration
+	// dial opens the connection behind tcpcat.probe; swapped in tests.
+	dial func(ctx context.Context, addr string) (net.Conn, error)
 }
 
 func New(scriptPath string, timeout time.Duration) (*ScriptingEngine, error) {
@@ -34,6 +77,16 @@ func New(scriptPath string, timeout time.Duration) (*ScriptingEngine, error) {
 		runtime: runtime,
 		scripts: make(map[string]wazero.CompiledModule),
 		timeout: timeout,
+		dial: func(ctx context.Context, addr string) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, "tcp", addr)
+		},
+	}
+	if _, err := runtime.NewHostModuleBuilder(HostModule).
+		NewFunctionBuilder().WithFunc(engine.hostProbe).Export("probe").
+		Instantiate(ctx); err != nil {
+		engine.Close()
+		return nil, fmt.Errorf("could not register the %s host module: %w", HostModule, err)
 	}
 
 	if scriptPath != "" {
@@ -132,8 +185,13 @@ func (e *ScriptingEngine) RunAll(ip string, port int) []ScriptExecutionResult {
 func (e *ScriptingEngine) executeWasmScript(name string, compiledMod wazero.CompiledModule, ip string, port int) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
+	ctx = context.WithValue(ctx, runStateKey{}, &runState{addr: net.JoinHostPort(ip, strconv.Itoa(port))})
 
-	instance, err := e.runtime.InstantiateModule(ctx, compiledMod, wazero.NewModuleConfig().WithName(name))
+	// An anonymous instance per run: scripts run concurrently, one instance
+	// per open port, and two instances can't share a module name. TinyGo
+	// (and other "reactor" modules) initialise in _initialize, not _start.
+	instance, err := e.runtime.InstantiateModule(ctx, compiledMod,
+		wazero.NewModuleConfig().WithName("").WithStartFunctions("_initialize", "_start"))
 	if err != nil {
 		return nil, fmt.Errorf("instantiation failed: %w", err)
 	}
@@ -184,4 +242,65 @@ func (e *ScriptingEngine) executeWasmScript(name string, compiledMod wazero.Comp
 	}
 
 	return output, nil
+}
+
+// hostProbe implements tcpcat.probe (see the ABI comment at the top).
+func (e *ScriptingEngine) hostProbe(ctx context.Context, m api.Module, reqPtr, reqLen, respPtr, respCap uint32) int32 {
+	state, _ := ctx.Value(runStateKey{}).(*runState)
+	if state == nil {
+		return probeErrConnect
+	}
+	if state.probes >= maxProbesPerRun {
+		return probeErrBudget
+	}
+	state.probes++
+
+	if respCap > maxProbeResponse {
+		respCap = maxProbeResponse
+	}
+	req, ok := m.Memory().Read(reqPtr, reqLen)
+	if !ok || !validRange(m.Memory(), respPtr, respCap) {
+		return probeErrArgs
+	}
+
+	conn, err := e.dial(ctx, state.addr)
+	if err != nil {
+		return probeErrConnect
+	}
+	defer func() { _ = conn.Close() }()
+	deadline, hasDeadline := ctx.Deadline()
+	if hasDeadline {
+		_ = conn.SetDeadline(deadline)
+	}
+	if len(req) > 0 {
+		if _, err := conn.Write(req); err != nil {
+			return probeErrConnect
+		}
+	}
+
+	// Read until the buffer is full, the peer closes, or it goes quiet for
+	// probeIdle after having said something.
+	buf := make([]byte, respCap)
+	n := 0
+	for n < len(buf) {
+		if n > 0 {
+			idle := time.Now().Add(probeIdle)
+			if !hasDeadline || idle.Before(deadline) {
+				_ = conn.SetReadDeadline(idle)
+			}
+		}
+		read, err := conn.Read(buf[n:])
+		n += read
+		if err != nil {
+			break
+		}
+	}
+	if !m.Memory().Write(respPtr, buf[:n]) {
+		return probeErrArgs
+	}
+	return int32(n) // #nosec G115 -- n <= maxProbeResponse
+}
+
+func validRange(mem api.Memory, ptr, size uint32) bool {
+	return uint64(ptr)+uint64(size) <= uint64(mem.Size())
 }

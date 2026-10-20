@@ -52,6 +52,12 @@ func ParseTarget(target string) ([]string, error) {
 	return nil, fmt.Errorf("no address found for '%s'", target)
 }
 
+// SplitList splits a command-line target specification into its targets:
+// commas and whitespace both separate them ("10.0.0.1,10.0.0.2 example.com").
+func SplitList(spec string) []string {
+	return strings.FieldsFunc(spec, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' || r == '\n' })
+}
+
 func ParseTargets(targets []string) ([]string, error) {
 	ips, _, err := ParseTargetsWithNames(targets)
 	return ips, err

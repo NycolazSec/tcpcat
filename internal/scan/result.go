@@ -37,6 +37,9 @@ type TargetResult struct {
 	Vulnerabilities []vuln.Vulnerability     `json:"vulnerabilities,omitempty"`
 	Assessment      VulnerabilityAssessment  `json:"vulnerability_assessment,omitempty"`
 	DualStack       *DualStackInfo           `json:"dual_stack,omitempty"`
+	// Scripts holds what each WASM detection module (--scripts) reported for
+	// this port, keyed by module name.
+	Scripts map[string]map[string]string `json:"scripts,omitempty"`
 }
 
 // DualStackInfo marks an IPv6 result whose port is open on IPv6 but not on
