@@ -78,6 +78,10 @@ func LoadSigner(path string) (*Signer, error) {
 	return &Signer{key: priv}, nil
 }
 
+// Key exposes the loaded private key so other signers (e.g. the remediation
+// attestation) can reuse the same `tcpcat evidence keygen` key pair.
+func (s *Signer) Key() ed25519.PrivateKey { return s.key }
+
 func LoadPublicKey(path string) (ed25519.PublicKey, error) {
 	block, err := readPEM(path, "PUBLIC KEY")
 	if err != nil {
