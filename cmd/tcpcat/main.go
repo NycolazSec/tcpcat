@@ -135,7 +135,7 @@ func main() {
 		if opts.Interface != "" {
 			ifaceDesc = fmt.Sprintf("interface '%s'", opts.Interface)
 		}
-		fmt.Printf("%s[!] Warning: --ebpf attaches an XDP hook (generic/SKB mode -- no zero-copy on most virtualized NICs) to %s. That may be the SAME interface carrying your own SSH/management connection.%s\n", config.Red, ifaceDesc, config.Reset)
+		fmt.Printf("%s[!] Warning: --ebpf attaches an XDP hook (native driver mode where the NIC supports it, generic/SKB otherwise) to %s. That may be the SAME interface carrying your own SSH/management connection.%s\n", config.Red, ifaceDesc, config.Reset)
 		fmt.Printf("%s[*] Tip: a large or fast scan can saturate that interface's own RX path -- including the session you're connected through. Test from console/out-of-band access first, or start with a conservative --rate, before scanning at scale from a remote box you administer over the same link.%s\n", config.Gray, config.Reset)
 	}
 
@@ -183,9 +183,7 @@ func main() {
 
 	var rawTargets []string
 
-	if opts.Target != "" {
-		rawTargets = append(rawTargets, opts.Target)
-	}
+	rawTargets = append(rawTargets, target.SplitList(opts.Target)...)
 
 	if opts.InputFile != "" {
 		fileTargets, err := target.LoadFromFile(opts.InputFile)

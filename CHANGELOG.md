@@ -10,6 +10,66 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Added
+- `tcpcat drift <before.json> <after.json>`: compare two `tcpcat inventory`
+  snapshots of the same host and report what changed in its exposure -- a port
+  that started listening, one that stopped, one that widened from loopback to
+  every interface (the usual sign of a service rebinding after an update), and
+  the program behind a port changing. Ports newly reachable from outside are
+  listed first; a plain restart (same program, new PID) is not flagged. `-j`
+  writes the diff as JSON and the exit code is 1 when anything became
+  externally reachable, so it gates a CI job between audits.
+- `tcpcat explain --remediate <file>`: for every port classified EXPOSED or
+  FORWARDED that no `--expect`/policy allowed, generate the defensive config
+  that closes it -- an nftables rule (the live line drops the port off
+  loopback, a commented line is the allow-list template to edit), a systemd
+  drop-in that confines the unit with `IPAddressDeny=any`/`IPAddressAllow`,
+  and a Kubernetes default-deny-ingress NetworkPolicy when the owner is a pod.
+  Everything written is inert text to review and apply by hand; tcpcat runs
+  none of it. `--remediate-key` signs each bundle with an Ed25519 key from
+  `tcpcat evidence keygen`.
+- WebAssembly dissector SDK. A dissector can now talk to the port it is run
+  against through one sandboxed host function, `tcpcat.probe`: it reaches only
+  the host and port being scanned, at most 4 probes of 64 KiB per run.
+  `examples/wasm-dissector/` is a TinyGo template (a Redis dissector in about
+  30 lines) that `./build.sh` compiles to a `.wasm` file `--scripts` loads as
+  is; [docs/WASM_SDK.md](docs/WASM_SDK.md) documents the ABI for other
+  languages.
+- Dissector results are stored in the JSON report, per port, under `scripts`.
+- `benchmarks/`: a reproducible benchmark. `./benchmarks/run.sh` builds tcpcat
+  from the checkout, starts targets with a known set of open ports, runs
+  tcpcat, Nmap and naabu under the same rate ceiling, and writes a report with
+  the kernel, NIC, versions, timings, CPU time, packets dropped and, for every
+  run, whether each open port was found. A run that misses a port is marked
+  invalid whatever its speed.
+- `--debug` with `--ebpf` prints, per queue, the frames received and sent and
+  the replies the kernel dropped.
+
+### Fixed
+- Only the first target given on the command line was scanned:
+  `tcpcat <host1> <host2>` silently ignored `<host2>`. All targets are scanned
+  now, separated by spaces or commas.
+- `--ebpf` found nothing on hosts of the scanner's own network: every frame was
+  addressed to the first entry of the ARP table instead of the target's own MAC
+  address (or the gateway's, for routed targets).
+- `--ebpf` missed open ports and slowed down sharply from a few thousand
+  packets per second: its AF_XDP sockets used 64-slot rings, so probes were
+  dropped before being sent and replies before being read, and the receive
+  loop and the senders shared the socket's frame table without a lock. Rings
+  are now sized for a scan and that table is locked.
+- SYN scans (`-sS` without `--ebpf`) missed open ports at high rates: the raw
+  receive socket kept the kernel's default buffer, which overflowed under the
+  burst of replies.
+- A crafted ICMP "port unreachable" reply could make the `--ebpf` engine read
+  past the end of the frame.
+
+### Changed
+- The speed figures published so far (2.62x faster than Nmap, 4.69x faster
+  than naabu) were measured while only the first of the two targets was being
+  scanned, and without checking that every open port was found. They are
+  withdrawn; see [benchmarks/README.md](benchmarks/README.md) for the protocol
+  that replaces them.
+
 ## [1.5.0] - 2026-10-10
 
 ### Added

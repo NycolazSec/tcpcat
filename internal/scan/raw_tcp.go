@@ -99,6 +99,7 @@ func ensureRawRxLoop(ifaceName string) error {
 		// whichever -i the first scan job passes in wins for the process's
 		// lifetime -- fine for a single CLI invocation, which has exactly
 		// one -i value throughout.
+		tuneRawRxBuffer(fd)
 		if ifaceName != "" {
 			if err := netiface.BindToDevice(fd, ifaceName); err != nil {
 				fmt.Printf("%s[!] Warning: could not bind raw receive socket to interface %q: %v%s\n", config.Red, ifaceName, err, config.Reset)

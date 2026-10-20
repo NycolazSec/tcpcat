@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NycolazSec/tcpcat/config"
+	"github.com/NycolazSec/tcpcat/internal/discovery"
 	"github.com/NycolazSec/tcpcat/internal/evasion"
 	"github.com/NycolazSec/tcpcat/internal/netiface"
 	"github.com/NycolazSec/tcpcat/internal/osdetect"
@@ -54,11 +55,42 @@ var localSubnet *net.IPNet // the interface's own network, for deciding when ARP
 // port -- shared here so the two can't drift apart.
 const xdpDiscoverySrcPort = 54322
 
-var xdpTxLock sync.Mutex
+// xdpSockLock guards the AF_XDP sockets' frame bookkeeping. The xdp library
+// keeps, per socket, a table of which UMEM frames are free plus scratch
+// slices, with no locking of its own; the scan goroutines (transmit) and the
+// RX loops (refill, receive, reclaim sent frames) all go through it. Unlocked,
+// the same frame can be handed to the kernel for receiving and to a probe for
+// sending at once, which loses one of the two.
+var xdpSockLock sync.Mutex
 var xdpDiscovery sync.Map // IP string -> true, populated by xdpRxLoop for host discovery
 var xdpRunning bool
 var xdpDebug bool            // gates informational (non-error) engine/eBPF diagnostics behind --debug
 var xdpSockets []*xdp.Socket // one per bound RX queue; xdpSockets[0] is also GlobalXsk, the sole TX path
+
+// xdpSocketOptions sizes one queue's AF_XDP socket. The library's defaults
+// (64-slot rings over 128 frames) are sized for a demo: a scan gets one reply
+// per probe, so at a few thousand probes/s the TX ring fills and probes are
+// never sent, and the fill ring runs dry and the kernel drops replies -- both
+// of which read as filtered ports.
+//
+// Rings are 2048 slots, halved as queues are added so that all queues
+// together stay around 8192 receive slots and 64 MiB of UMEM whatever the
+// NIC. A socket gets four rings' worth of frames: the fill and RX rings can
+// never hold more than half of them, so transmit always has frames left.
+func xdpSocketOptions(queues int) *xdp.SocketOptions {
+	ring := 2048
+	for ring > 256 && queues*ring > 8192 {
+		ring /= 2
+	}
+	return &xdp.SocketOptions{
+		NumFrames:              4 * ring,
+		FrameSize:              2048,
+		FillRingNumDescs:       ring,
+		CompletionRingNumDescs: ring,
+		RxRingNumDescs:         ring,
+		TxRingNumDescs:         ring,
+	}
+}
 
 // getInterfaceRXQueueCount reads the number of RX queues an interface
 // exposes from sysfs. A NIC with RSS enabled spreads inbound traffic
@@ -144,22 +176,53 @@ func getDefaultNetworkInfo() (string, net.IP, *net.IPNet, error) {
 	return "", nil, nil, fmt.Errorf("failed to detect default network interface")
 }
 
-func getGatewayMAC(ifaceName string) (net.HardwareAddr, error) {
-	data, err := os.ReadFile("/proc/net/arp")
-	if err != nil {
-		return nil, err
+var (
+	xdpIfaceName string
+	xdpGatewayIP net.IP   // default gateway on xdpIfaceName, nil if it has none
+	nextHopMACs  sync.Map // next-hop IP string -> *nextHopEntry
+)
+
+var broadcastMAC = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+
+type nextHopEntry struct {
+	once sync.Once
+	mac  net.HardwareAddr
+}
+
+// dstMACFor returns the hardware address a frame for target must carry: the
+// target's own on its local network, the default gateway's otherwise (see
+// nexthop.go). Each next hop is resolved once -- from the kernel's ARP
+// table, else by asking on the wire -- and cached, concurrent probes for
+// the same hop waiting on a single resolution. An unresolvable hop falls
+// back to broadcast, which most stacks ignore for TCP: the probe then reads
+// as filtered, which is the truth for a host that doesn't answer ARP.
+func dstMACFor(target net.IP) net.HardwareAddr {
+	hop := nextHopIP(target, localSubnet, xdpGatewayIP)
+	if hop == nil {
+		return gatewayMAC
 	}
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines[1:] {
-		fields := strings.Fields(line)
-		if len(fields) >= 6 && fields[5] == ifaceName {
-			macAddr := fields[3]
-			if macAddr != "00:00:00:00:00:00" {
-				return net.ParseMAC(macAddr)
-			}
+	v, _ := nextHopMACs.LoadOrStore(hop.String(), &nextHopEntry{})
+	entry := v.(*nextHopEntry)
+	entry.once.Do(func() {
+		entry.mac = resolveMAC(hop.String())
+		if entry.mac == nil {
+			entry.mac = broadcastMAC
+		}
+	})
+	return entry.mac
+}
+
+func resolveMAC(ip string) net.HardwareAddr {
+	if data, err := os.ReadFile("/proc/net/arp"); err == nil {
+		if mac := lookupARPTable(string(data), xdpIfaceName, ip); mac != nil {
+			return mac
 		}
 	}
-	return net.ParseMAC("ff:ff:ff:ff:ff:ff")
+	macs, err := discovery.ARPResolve([]string{ip}, xdpIfaceName, 400*time.Millisecond)
+	if err != nil {
+		return nil
+	}
+	return macs[ip]
 }
 
 // InitXDPEngine boots the AF_XDP engine on ifaceName, or on the
@@ -199,17 +262,22 @@ func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 	localIP = ip
 	localSubnet = ipNet
 
-	mac, err := getGatewayMAC(ifaceName)
-	if err == nil {
-		gatewayMAC = mac
-		if xdpDebug {
-			log.Printf("[*] Auto-detection: Interface '%s' (IP: %s) | Gateway MAC: %s", ifaceName, localIP.String(), gatewayMAC.String())
+	xdpIfaceName = ifaceName
+	gatewayMAC = broadcastMAC
+	if routes, err := os.ReadFile("/proc/net/route"); err == nil {
+		xdpGatewayIP = parseDefaultGateway(string(routes), ifaceName)
+	}
+	if xdpGatewayIP != nil {
+		if mac := resolveMAC(xdpGatewayIP.String()); mac != nil {
+			gatewayMAC = mac
 		}
-	} else {
-		gatewayMAC, _ = net.ParseMAC("ff:ff:ff:ff:ff:ff")
-		if xdpDebug {
-			log.Printf("[*] Auto-detection: Interface '%s' (IP: %s) | Gateway MAC: Not found (broadcast fallback)", ifaceName, localIP.String())
+	}
+	if xdpDebug {
+		gw := "none on this interface (on-link targets only)"
+		if xdpGatewayIP != nil {
+			gw = fmt.Sprintf("%s (%s)", xdpGatewayIP, gatewayMAC)
 		}
+		log.Printf("[*] Auto-detection: Interface '%s' (IP: %s) | Default gateway: %s", ifaceName, localIP.String(), gw)
 	}
 
 	spec, err := generateXDPCollection(getSrcPort(opts))
@@ -263,10 +331,11 @@ func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 	}
 
 	numQueues := getInterfaceRXQueueCount(ifaceName)
+	sockOpts := xdpSocketOptions(numQueues)
 
 	xdpSockets = make([]*xdp.Socket, 0, numQueues)
 	for q := 0; q < numQueues; q++ {
-		xsk, err := xdp.NewSocket(iface.Index, q, nil)
+		xsk, err := xdp.NewSocket(iface.Index, q, sockOpts)
 		if err != nil {
 			if q == 0 {
 				_ = l.Close()
@@ -339,6 +408,10 @@ func ShutdownXDPEngine() {
 		}
 	}
 
+	if xdpDebug {
+		logXDPSocketStats()
+	}
+
 	t0 := time.Now()
 	for _, xsk := range xdpSockets {
 		_ = xsk.Close()
@@ -368,6 +441,22 @@ func ShutdownXDPEngine() {
 	}
 }
 
+// logXDPSocketStats prints, per queue, how many replies reached user space
+// and how many the kernel had to drop before they did. A reply dropped here
+// never reaches its probe, so the port is retried or reported filtered: these
+// counters are the engine's own packet-loss figure for a run.
+func logXDPSocketStats() {
+	for q, xsk := range xdpSockets {
+		st, err := xsk.Stats()
+		if err != nil {
+			continue
+		}
+		k := st.KernelStats
+		log.Printf("[*] AF_XDP queue %d: %d frames received, %d sent; dropped by the kernel: %d (RX ring full: %d, no free buffer: %d)",
+			q, st.Received, st.Transmitted, k.Rx_dropped+k.Rx_ring_full, k.Rx_ring_full, k.Rx_fill_ring_empty_descs)
+	}
+}
+
 // xdpRxLoop drains one AF_XDP socket's RX ring. On a multi-queue NIC,
 // InitXDPEngine starts one of these per queue (each bound to its own
 // xsks_map slot) since a NIC's RSS hashing can steer replies to any queue,
@@ -378,118 +467,145 @@ func xdpRxLoop(xsk *xdp.Socket, cpu int) {
 	// pinToCPU). Best-effort: an unpinned loop still works.
 	pinToCPU(cpu)
 
-	for xdpRunning {
-		freeFill := xsk.NumFreeFillSlots()
-		if freeFill > 0 {
-			fillDescs := xsk.GetDescs(freeFill)
-			xsk.Fill(fillDescs)
-		}
+	pfd := []unix.PollFd{{Fd: int32(xsk.FD()), Events: unix.POLLIN}}
+	var batch []byte // this pass's frames, copied out back to back
+	var ends []int   // end offset of each frame in batch
 
-		numRx, _, err := xsk.Poll(50)
-		if err != nil || numRx == 0 {
+	for xdpRunning {
+		xdpSockLock.Lock()
+		xdpReclaimSent(xsk)
+		if freeFill := xsk.NumFreeFillSlots(); freeFill > 0 {
+			xsk.Fill(xsk.GetDescs(freeFill))
+		}
+		xdpSockLock.Unlock()
+
+		// Wait for replies only (POLLIN). Asking for POLLOUT as well, as the
+		// library's own Poll does, returns at once whenever the TX ring has
+		// room, turning this loop into a spin for the whole scan.
+		if _, err := unix.Poll(pfd, 50); err != nil {
 			continue
 		}
 
-		rxDescs := xsk.Receive(numRx)
-		for _, desc := range rxDescs {
-			frame := xsk.GetFrame(desc)
-			if len(frame) < 14 {
-				continue
+		// Receive marks a frame free again, so a probe may reuse it for its
+		// own SYN the moment the lock is released: copy the replies out
+		// (they are ~60 bytes each) and parse the copies.
+		batch, ends = batch[:0], ends[:0]
+		xdpSockLock.Lock()
+		for _, desc := range xsk.Receive(xsk.NumReceived()) {
+			batch = append(batch, xsk.GetFrame(desc)...)
+			ends = append(ends, len(batch))
+		}
+		xdpSockLock.Unlock()
+
+		start := 0
+		for _, end := range ends {
+			handleXDPFrame(xsk, batch[start:end])
+			start = end
+		}
+	}
+}
+
+// handleXDPFrame parses one frame the eBPF classifier redirected to us and
+// delivers what it says to the probe (or discovery sweep) waiting for it.
+func handleXDPFrame(xsk *xdp.Socket, frame []byte) {
+	if len(frame) < 14 {
+		return
+	}
+	etherType := binary.BigEndian.Uint16(frame[12:14])
+
+	if etherType == 0x0806 { // ARP
+		if len(frame) < 14+28 {
+			return
+		}
+		arpStart := 14
+		op := binary.BigEndian.Uint16(frame[arpStart+6 : arpStart+8])
+		if op == 2 { // reply
+			senderIP := net.IP(frame[arpStart+14 : arpStart+18])
+			xdpDiscovery.Store(senderIP.String(), true)
+		}
+		return
+	}
+
+	if etherType != 0x0800 || len(frame) < 14+20 {
+		return
+	}
+
+	ipStart := 14
+	ipHeaderLen := int(frame[ipStart]&0x0F) * 4
+	protocol := frame[ipStart+9]
+	srcIP := net.IP(frame[ipStart+12 : ipStart+16])
+
+	switch protocol {
+	case 6:
+		tcpStart := ipStart + ipHeaderLen
+		if len(frame) < tcpStart+14 {
+			return
+		}
+		pktSrcPort := binary.BigEndian.Uint16(frame[tcpStart : tcpStart+2])
+		tcpFlags := frame[tcpStart+13]
+		key := fmt.Sprintf("%s:%d", srcIP.String(), pktSrcPort)
+
+		xdpDiscovery.Store(srcIP.String(), true) // any TCP reply proves the host is alive
+
+		if (tcpFlags & 0x12) == 0x12 {
+			osSig := osdetect.GenerateSignature(frame, ipStart, tcpStart)
+			osName, osConfidence := osdetect.ClassifyOS(frame, ipStart, tcpStart)
+			deliverXDPResult(key, xdpResponse{
+				state:        StateOpen,
+				osSig:        osSig,
+				osName:       osName,
+				osConfidence: osConfidence,
+				// A SYN/ACK echoing MP_CAPABLE (kind 30) marks a
+				// Multipath-TCP-capable target. Only meaningful when
+				// --mptcp put the option in our SYN in the first place,
+				// but reading it is free and never false-positives:
+				// a stack that didn't negotiate MPTCP won't echo it.
+				mptcp: osdetect.HasTCPOptionKind(frame, ipStart, tcpStart, mpCapableKind),
+			})
+
+			ourIP := net.IP(frame[ipStart+16 : ipStart+20])
+			ourPort := binary.BigEndian.Uint16(frame[tcpStart+2 : tcpStart+4])
+			ackSeq := binary.BigEndian.Uint32(frame[tcpStart+8 : tcpStart+12])
+			sendRST(xsk, ourIP, srcIP, ourPort, pktSrcPort, ackSeq)
+		} else if (tcpFlags & 0x04) != 0 {
+			deliverXDPResult(key, xdpResponse{state: StateClosed})
+		}
+
+	case 17:
+		udpStart := ipStart + ipHeaderLen
+		if len(frame) < udpStart+8 {
+			return
+		}
+		pktSrcPort := binary.BigEndian.Uint16(frame[udpStart : udpStart+2])
+		key := fmt.Sprintf("%s:%d", srcIP.String(), pktSrcPort)
+		deliverXDPResult(key, xdpResponse{state: StateOpen})
+
+	case 1:
+		icmpStart := ipStart + ipHeaderLen
+		if len(frame) < icmpStart+8 {
+			return
+		}
+		icmpType := frame[icmpStart]
+		icmpCode := frame[icmpStart+1]
+
+		if icmpType == 0 { // Echo Reply: host is alive
+			xdpDiscovery.Store(srcIP.String(), true)
+		} else if icmpType == 3 && icmpCode == 3 {
+			originalIPStart := icmpStart + 8
+			if len(frame) < originalIPStart+20+8 {
+				return
 			}
-			etherType := binary.BigEndian.Uint16(frame[12:14])
-
-			if etherType == 0x0806 { // ARP
-				if len(frame) < 14+28 {
-					continue
-				}
-				arpStart := 14
-				op := binary.BigEndian.Uint16(frame[arpStart+6 : arpStart+8])
-				if op == 2 { // reply
-					senderIP := net.IP(frame[arpStart+14 : arpStart+18])
-					xdpDiscovery.Store(senderIP.String(), true)
-				}
-				continue
+			originalIPHdrLen := int(frame[originalIPStart]&0x0F) * 4
+			originalUDPStart := originalIPStart + originalIPHdrLen
+			if len(frame) < originalUDPStart+4 {
+				return // the quoted header claims options this frame doesn't carry
 			}
 
-			if etherType != 0x0800 || len(frame) < 14+20 {
-				continue
-			}
+			originalDstIP := net.IP(frame[originalIPStart+16 : originalIPStart+20])
+			originalDstPort := binary.BigEndian.Uint16(frame[originalUDPStart+2 : originalUDPStart+4])
 
-			ipStart := 14
-			ipHeaderLen := int(frame[ipStart]&0x0F) * 4
-			protocol := frame[ipStart+9]
-			srcIP := net.IP(frame[ipStart+12 : ipStart+16])
-
-			switch protocol {
-			case 6:
-				tcpStart := ipStart + ipHeaderLen
-				if len(frame) < tcpStart+14 {
-					continue
-				}
-				pktSrcPort := binary.BigEndian.Uint16(frame[tcpStart : tcpStart+2])
-				tcpFlags := frame[tcpStart+13]
-				key := fmt.Sprintf("%s:%d", srcIP.String(), pktSrcPort)
-
-				xdpDiscovery.Store(srcIP.String(), true) // any TCP reply proves the host is alive
-
-				if (tcpFlags & 0x12) == 0x12 {
-					osSig := osdetect.GenerateSignature(frame, ipStart, tcpStart)
-					osName, osConfidence := osdetect.ClassifyOS(frame, ipStart, tcpStart)
-					deliverXDPResult(key, xdpResponse{
-						state:        StateOpen,
-						osSig:        osSig,
-						osName:       osName,
-						osConfidence: osConfidence,
-						// A SYN/ACK echoing MP_CAPABLE (kind 30) marks a
-						// Multipath-TCP-capable target. Only meaningful when
-						// --mptcp put the option in our SYN in the first place,
-						// but reading it is free and never false-positives:
-						// a stack that didn't negotiate MPTCP won't echo it.
-						mptcp: osdetect.HasTCPOptionKind(frame, ipStart, tcpStart, mpCapableKind),
-					})
-
-					ourIP := net.IP(frame[ipStart+16 : ipStart+20])
-					ourPort := binary.BigEndian.Uint16(frame[tcpStart+2 : tcpStart+4])
-					ackSeq := binary.BigEndian.Uint32(frame[tcpStart+8 : tcpStart+12])
-					sendRST(xsk, ourIP, srcIP, ourPort, pktSrcPort, ackSeq)
-				} else if (tcpFlags & 0x04) != 0 {
-					deliverXDPResult(key, xdpResponse{state: StateClosed})
-				}
-
-			case 17:
-				udpStart := ipStart + ipHeaderLen
-				if len(frame) < udpStart+8 {
-					continue
-				}
-				pktSrcPort := binary.BigEndian.Uint16(frame[udpStart : udpStart+2])
-				key := fmt.Sprintf("%s:%d", srcIP.String(), pktSrcPort)
-				deliverXDPResult(key, xdpResponse{state: StateOpen})
-
-			case 1:
-				icmpStart := ipStart + ipHeaderLen
-				if len(frame) < icmpStart+8 {
-					continue
-				}
-				icmpType := frame[icmpStart]
-				icmpCode := frame[icmpStart+1]
-
-				if icmpType == 0 { // Echo Reply: host is alive
-					xdpDiscovery.Store(srcIP.String(), true)
-				} else if icmpType == 3 && icmpCode == 3 {
-					originalIPStart := icmpStart + 8
-					if len(frame) < originalIPStart+20+8 {
-						continue
-					}
-					originalIPHdrLen := int(frame[originalIPStart]&0x0F) * 4
-					originalUDPStart := originalIPStart + originalIPHdrLen
-
-					originalDstIP := net.IP(frame[originalIPStart+16 : originalIPStart+20])
-					originalDstPort := binary.BigEndian.Uint16(frame[originalUDPStart+2 : originalUDPStart+4])
-
-					key := fmt.Sprintf("%s:%d", originalDstIP.String(), originalDstPort)
-					deliverXDPResult(key, xdpResponse{state: StateClosed})
-				}
-			}
+			key := fmt.Sprintf("%s:%d", originalDstIP.String(), originalDstPort)
+			deliverXDPResult(key, xdpResponse{state: StateClosed})
 		}
 	}
 }
@@ -511,18 +627,38 @@ func sendRST(xsk *xdp.Socket, srcIP, dstIP net.IP, srcPort, dstPort uint16, seq 
 	if xsk == nil {
 		return
 	}
-	frame := constructRSTFrame(localMAC, gatewayMAC, srcIP, dstIP, srcPort, dstPort, seq)
+	frame := constructRSTFrame(localMAC, dstMACFor(dstIP), srcIP, dstIP, srcPort, dstPort, seq)
 
-	xdpTxLock.Lock()
-	defer xdpTxLock.Unlock()
+	// If the TX ring is momentarily full the RST is skipped: the target's
+	// own SYN/ACK retransmit will get a fresh chance.
+	xdpSockLock.Lock()
+	xdpSendLocked(xsk, frame)
+	xdpSockLock.Unlock()
+}
 
+// xdpReclaimSent takes back the frames the kernel has finished sending; until
+// then they sit in the completion ring and can't carry another probe. The
+// caller holds xdpSockLock.
+func xdpReclaimSent(xsk *xdp.Socket) {
+	if n := xsk.NumCompleted(); n > 0 {
+		xsk.Complete(n)
+	}
+}
+
+// xdpSendLocked queues one frame for transmission and reports whether the
+// kernel took it: false means no free frame or a full TX ring, i.e. the
+// frame was NOT sent. The caller holds xdpSockLock.
+func xdpSendLocked(xsk *xdp.Socket, frame []byte) bool {
 	descs := xsk.GetDescs(1)
 	if len(descs) == 0 {
-		return // TX ring is momentarily full; the target's own SYN/ACK retransmit will get a fresh chance
+		xdpReclaimSent(xsk)
+		if descs = xsk.GetDescs(1); len(descs) == 0 {
+			return false
+		}
 	}
 	copy(xsk.GetFrame(descs[0]), frame)
 	descs[0].Len = uint32(len(frame))
-	xsk.Transmit(descs)
+	return xsk.Transmit(descs) == 1
 }
 
 func getSrcPort(opts *config.Options) uint16 {
@@ -537,26 +673,20 @@ func getSrcPort(opts *config.Options) uint16 {
 // remaining frames) if a slot never frees up, which the caller reports as
 // TX congestion rather than silently dropping the probe.
 func transmitXDPFrames(xsk *xdp.Socket, frames [][]byte) bool {
-	xdpTxLock.Lock()
-	defer xdpTxLock.Unlock()
-
-	for _, frameBytes := range frames {
-		const maxRetries = 5
-		var descs []xdp.Desc
-		for attempt := 0; attempt < maxRetries; attempt++ {
-			descs = xsk.GetDescs(1)
-			if len(descs) > 0 {
-				break
+	const maxRetries = 5
+	for _, frame := range frames {
+		sent := false
+		for attempt := 0; attempt < maxRetries && !sent; attempt++ {
+			if attempt > 0 {
+				time.Sleep(50 * time.Microsecond) // outside the lock, so the RX loop keeps draining
 			}
-			time.Sleep(time.Microsecond * 50)
+			xdpSockLock.Lock()
+			sent = xdpSendLocked(xsk, frame)
+			xdpSockLock.Unlock()
 		}
-		if len(descs) == 0 {
+		if !sent {
 			return false
 		}
-
-		copy(xsk.GetFrame(descs[0]), frameBytes)
-		descs[0].Len = uint32(len(frameBytes))
-		xsk.Transmit(descs)
 	}
 	return true
 }
@@ -574,17 +704,11 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 			srcPort := getSrcPort(opts)
 			for _, decoyIP := range decoys {
 				go func(decoyIP net.IP) {
-					frame := constructSYNFrame(localMAC, gatewayMAC, decoyIP.To4(), targetIP.To4(), srcPort, uint16(port), false)
+					frame := constructSYNFrame(localMAC, dstMACFor(targetIP), decoyIP.To4(), targetIP.To4(), srcPort, uint16(port), false)
 
-					xdpTxLock.Lock()
-					defer xdpTxLock.Unlock()
-
-					descs := xsk.GetDescs(1)
-					if len(descs) > 0 {
-						copy(xsk.GetFrame(descs[0]), frame)
-						descs[0].Len = uint32(len(frame))
-						xsk.Transmit(descs)
-					}
+					xdpSockLock.Lock()
+					xdpSendLocked(xsk, frame)
+					xdpSockLock.Unlock()
 				}(decoyIP)
 			}
 		}
@@ -606,7 +730,7 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 	if relayIP != nil {
 		log.Printf("[*] Using relay server %s for IP-in-IP encapsulation.", relayIP.String())
 	}
-	rawFrame := constructSYNFrame(localMAC, gatewayMAC, effectiveSrcIP, targetIP, srcPort, uint16(port), opts != nil && opts.MPTCP)
+	rawFrame := constructSYNFrame(localMAC, dstMACFor(targetIP), effectiveSrcIP, targetIP, srcPort, uint16(port), opts != nil && opts.MPTCP)
 
 	var framesToSend [][]byte
 	if opts != nil && opts.Fragment {
@@ -614,7 +738,7 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 		framesToSend = evasion.FragmentPacket(rawFrame, mtu)
 	} else if relayIP != nil {
 
-		framesToSend = [][]byte{constructIPinIPEthernetFrame(localMAC, gatewayMAC, localIP.To4(), relayIP.To4(), rawFrame)}
+		framesToSend = [][]byte{constructIPinIPEthernetFrame(localMAC, dstMACFor(relayIP), localIP.To4(), relayIP.To4(), rawFrame)}
 	} else {
 		framesToSend = [][]byte{rawFrame}
 	}
@@ -704,17 +828,11 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 			for _, decoyIP := range decoys {
 				go func(decoyIP net.IP) {
 					var payload []byte
-					frame := constructUDPFrame(localMAC, gatewayMAC, decoyIP.To4(), targetIP.To4(), srcPort, uint16(port), payload)
+					frame := constructUDPFrame(localMAC, dstMACFor(targetIP), decoyIP.To4(), targetIP.To4(), srcPort, uint16(port), payload)
 
-					xdpTxLock.Lock()
-					defer xdpTxLock.Unlock()
-
-					descs := xsk.GetDescs(1)
-					if len(descs) > 0 {
-						copy(xsk.GetFrame(descs[0]), frame)
-						descs[0].Len = uint32(len(frame))
-						xsk.Transmit(descs)
-					}
+					xdpSockLock.Lock()
+					xdpSendLocked(xsk, frame)
+					xdpSockLock.Unlock()
 				}(decoyIP)
 			}
 		}
@@ -754,7 +872,7 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 		}
 	}
 
-	rawFrame := constructUDPFrame(localMAC, gatewayMAC, effectiveSrcIP, targetIP, srcPort, uint16(port), payload)
+	rawFrame := constructUDPFrame(localMAC, dstMACFor(targetIP), effectiveSrcIP, targetIP, srcPort, uint16(port), payload)
 
 	var framesToSend [][]byte
 	if opts != nil && opts.Fragment {
@@ -762,7 +880,7 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 		framesToSend = evasion.FragmentPacket(rawFrame, mtu)
 	} else if relayIP != nil {
 
-		framesToSend = [][]byte{constructIPinIPEthernetFrame(localMAC, gatewayMAC, localIP.To4(), relayIP.To4(), rawFrame)}
+		framesToSend = [][]byte{constructIPinIPEthernetFrame(localMAC, dstMACFor(relayIP), localIP.To4(), relayIP.To4(), rawFrame)}
 	} else {
 		framesToSend = [][]byte{rawFrame}
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -372,8 +373,18 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 
 		if e.scriptEngine != nil && res.State == StateOpen {
 			scriptResults := e.scriptEngine.RunAll(res.IP, res.Port)
+			sort.Slice(scriptResults, func(i, j int) bool { return scriptResults[i].ScriptName < scriptResults[j].ScriptName })
 			for _, sr := range scriptResults {
-				fmt.Printf("    |_ %s: %v\n", sr.ScriptName, sr.Output)
+				if len(sr.Output) == 0 {
+					continue
+				}
+				fmt.Printf("    |_ %s: %s\n", sr.ScriptName, formatScriptOutput(sr.Output))
+				// Kept on the result too, so every export (JSON, ...) carries it.
+				last := &finalResults[len(finalResults)-1]
+				if last.Scripts == nil {
+					last.Scripts = map[string]map[string]string{}
+				}
+				last.Scripts[sr.ScriptName] = sr.Output
 			}
 		}
 	}
@@ -508,4 +519,19 @@ func (e *Engine) runScanWithOptions(ip string, port int, opts *config.Options) T
 	}
 
 	return ScanConnectPooled(ip, port, opts, e.timeout, opts.SpoofedSrcIP, net.ParseIP(opts.RelayServer), e.connPool)
+}
+
+// formatScriptOutput renders a script's key/value output on one line, keys
+// sorted so the same scan prints the same way twice.
+func formatScriptOutput(out map[string]string) string {
+	keys := make([]string, 0, len(out))
+	for k := range out {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+out[k])
+	}
+	return strings.Join(parts, " ")
 }

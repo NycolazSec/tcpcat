@@ -45,9 +45,9 @@ func DiscoverHostsXDP(ips []string, timeout time.Duration, limiter *AdaptiveRate
 		}
 
 		frames := [][]byte{
-			constructICMPEchoFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, icmpID, uint16(i)),
-			constructSYNFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, xdpDiscoverySrcPort, 443, false),
-			constructACKFrame(localMAC, gatewayMAC, localIP.To4(), targetIP, xdpDiscoverySrcPort, 80),
+			constructICMPEchoFrame(localMAC, dstMACFor(targetIP), localIP.To4(), targetIP, icmpID, uint16(i)),
+			constructSYNFrame(localMAC, dstMACFor(targetIP), localIP.To4(), targetIP, xdpDiscoverySrcPort, 443, false),
+			constructACKFrame(localMAC, dstMACFor(targetIP), localIP.To4(), targetIP, xdpDiscoverySrcPort, 80),
 		}
 		if localSubnet != nil && localSubnet.Contains(targetIP) {
 			frames = append(frames, constructARPRequestFrame(localMAC, localIP.To4(), targetIP))
@@ -61,17 +61,13 @@ func DiscoverHostsXDP(ips []string, timeout time.Duration, limiter *AdaptiveRate
 			limiter.WaitN(len(frames))
 		}
 
-		xdpTxLock.Lock()
+		xdpSockLock.Lock()
 		for _, frame := range frames {
-			descs := xsk.GetDescs(1)
-			if len(descs) == 0 {
-				continue // TX ring momentarily full; this host just gets fewer probe types
-			}
-			copy(xsk.GetFrame(descs[0]), frame)
-			descs[0].Len = uint32(len(frame))
-			xsk.Transmit(descs)
+			// A frame the TX ring has no room for is skipped: this host
+			// just gets fewer probe types.
+			xdpSendLocked(xsk, frame)
 		}
-		xdpTxLock.Unlock()
+		xdpSockLock.Unlock()
 	}
 
 	time.Sleep(timeout)

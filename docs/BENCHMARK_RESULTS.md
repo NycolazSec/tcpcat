@@ -1,5 +1,15 @@
 # 🏆 tcpcat Performance Benchmarks
 
+> **Withdrawn (October 2026).** The results below must not be quoted. In the
+> "current" run, tcpcat was given two targets and scanned only the first one
+> (a bug fixed since): at 25,000 packets/s, the 131,070 probes of two hosts
+> cannot take less than 5.2 s, and tcpcat is listed at 4.466 s. None of these
+> runs checked which open ports each tool actually found either.
+>
+> They are replaced by a reproducible protocol that checks every run against
+> a known set of open ports: see [benchmarks/README.md](../benchmarks/README.md).
+> This page is kept for history only.
+
 ## Current: full port range vs. Nmap and naabu (September 2026)
 
 ### Benchmark Configuration

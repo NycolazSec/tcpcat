@@ -59,9 +59,30 @@ func buildARPRequest(srcMAC net.HardwareAddr, srcIP, dstIP net.IP) []byte {
 // caller should fall back to the regular ping-based path for every IP,
 // not treat the empty result as "all down".
 func ARPScan(ips []string, ifaceName string, timeout time.Duration) (map[string]bool, error) {
-	alive := make(map[string]bool)
+	macs, err := arpSweep(ips, ifaceName, timeout, false)
+	alive := make(map[string]bool, len(macs))
+	for ip := range macs {
+		alive[ip] = true
+	}
+	return alive, err
+}
+
+// ARPResolve returns the hardware address of each IP that answers an ARP
+// request on ifaceName. Unlike ARPScan it returns as soon as every address
+// has answered, since its callers (the AF_XDP engine picking a frame's
+// destination MAC) wait on it per target.
+func ARPResolve(ips []string, ifaceName string, timeout time.Duration) (map[string]net.HardwareAddr, error) {
+	return arpSweep(ips, ifaceName, timeout, true)
+}
+
+func arpSweep(ips []string, ifaceName string, timeout time.Duration, stopWhenComplete bool) (map[string]net.HardwareAddr, error) {
+	alive := make(map[string]net.HardwareAddr)
 	if len(ips) == 0 {
 		return alive, nil
+	}
+	wanted := make(map[string]bool, len(ips))
+	for _, ip := range ips {
+		wanted[ip] = true
 	}
 	if ifaceName == "" {
 		return alive, fmt.Errorf("ARP scan needs a known interface")
@@ -119,9 +140,16 @@ func ARPScan(ips []string, ifaceName string, timeout time.Duration) (map[string]
 				continue
 			}
 			senderIP := net.IP(append([]byte(nil), buf[14+14:14+18]...)).String()
+			senderMAC := net.HardwareAddr(append([]byte(nil), buf[14+8:14+14]...))
 			mu.Lock()
-			alive[senderIP] = true
+			if wanted[senderIP] {
+				alive[senderIP] = senderMAC
+			}
+			complete := len(alive) == len(wanted)
 			mu.Unlock()
+			if stopWhenComplete && complete {
+				return
+			}
 		}
 	}()
 
@@ -139,7 +167,7 @@ func ARPScan(ips []string, ifaceName string, timeout time.Duration) (map[string]
 
 	mu.Lock()
 	defer mu.Unlock()
-	result := make(map[string]bool, len(alive))
+	result := make(map[string]net.HardwareAddr, len(alive))
 	for k, v := range alive {
 		result[k] = v
 	}
