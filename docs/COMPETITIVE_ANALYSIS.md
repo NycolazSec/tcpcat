@@ -1,8 +1,11 @@
 # 📊 Comparaison Complète: tcpcat vs Concurrents
 
+> **Note (October 2026): the speed figures in this document are withdrawn.** The "23.82×" and "2.62×" claims below came from flawed measurements: a single-host 1-1024 port run whose standard deviation exceeded its mean (statistically meaningless), and a two-host run that in fact scanned only one host. For current, reproducible numbers and the exact method, see [../benchmarks/README.md](../benchmarks/README.md). The text below is kept for history only.
+
+
 > **Note (September 2026):** the "23.8×" figure cited in this document comes from a 1–1024-port
 > `-sT` benchmark whose uncertainty (±68×) exceeds the result itself. It is superseded by
-> [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md): **2.62× faster than Nmap** and **4.69× faster than naabu**
+> **Benchmark figures withdrawn.** The old "2.62× / 4.69× faster" numbers were measured while only one of two target hosts was actually scanned (and the 4.47 s reported for tcpcat is below the theoretical floor of its own 25,000 pps rate). See [../benchmarks/README.md](../benchmarks/README.md) for the reproducible protocol and current, verified numbers.
 > on a full 65,535-port SYN scan of 2 hosts.
 
 ## 🏆 Concurrents Analysés
