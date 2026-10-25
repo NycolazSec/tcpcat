@@ -75,6 +75,11 @@ Full diffs for every release are available via GitHub's
   past the end of the frame.
 
 ### Changed
+- `--ebpf` batches transmitted frames: AF_XDP has a single TX ring, so a
+  dedicated flusher coalesces up to 64 probe frames into one Transmit (one
+  sendto) instead of one syscall per probe. In copy mode on a loaded or
+  virtualized host, the per-probe sendto under the socket lock was the main
+  wall-time cost.
 - `--ebpf` receive is now interrupt-driven and unpinned in copy mode;
   busy-poll and CPU-pinning are kept only for the zero-copy path where
   they help. In copy mode (virtual NICs, generic attach, drivers without
