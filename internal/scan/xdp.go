@@ -333,9 +333,32 @@ func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 	numQueues := getInterfaceRXQueueCount(ifaceName)
 	sockOpts := xdpSocketOptions(numQueues)
 
+	// Ask the kernel for zero-copy when the hook is attached natively: the
+	// driver then DMAs frames straight into the socket's UMEM, no per-packet
+	// copy. The asavie/xdp library takes the bind(2) flag from this package
+	// variable. Generic (SKB) attach can never be zero-copy, so don't even
+	// ask there. A native attach does not guarantee the driver supports
+	// zero-copy either (many don't, and veth/virtual NICs never do), so the
+	// loop below falls back to copy mode if the zero-copy bind is refused.
+	if attachMode == "native driver" {
+		xdp.DefaultSocketFlags = unix.XDP_ZEROCOPY
+	} else {
+		xdp.DefaultSocketFlags = unix.XDP_COPY
+	}
+
 	xdpSockets = make([]*xdp.Socket, 0, numQueues)
 	for q := 0; q < numQueues; q++ {
 		xsk, err := xdp.NewSocket(iface.Index, q, sockOpts)
+		if err != nil && q == 0 && xdp.DefaultSocketFlags == unix.XDP_ZEROCOPY {
+			// Native attach, but this driver/queue can't do zero-copy: the
+			// bind is refused (EOPNOTSUPP). Drop to copy mode for every queue
+			// and retry queue 0 once, rather than failing --ebpf entirely.
+			if xdpDebug {
+				log.Printf("[*] Zero-copy not available on %s (%v); using copy mode.", ifaceName, err)
+			}
+			xdp.DefaultSocketFlags = unix.XDP_COPY
+			xsk, err = xdp.NewSocket(iface.Index, q, sockOpts)
+		}
 		if err != nil {
 			if q == 0 {
 				_ = l.Close()

@@ -222,7 +222,7 @@ cat results.json | jq
 - **Évasion légère** = meilleur choix pour plupart des cas
 - **Overhead** = Phase 4 ajoute 15-50% au temps selon le mode
 - **Détection** = 99%+ des évasions réussissent (théorique)
-- **Performance** = tcpcat est 20-24x plus rapide que Nmap
+- **Performance** : voir le benchmark reproductible ([../benchmarks/README.md](../benchmarks/README.md)) ; les anciens multiplicateurs (20-24x) sont retirés.
 
 ---
 

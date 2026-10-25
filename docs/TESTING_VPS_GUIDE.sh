@@ -316,7 +316,7 @@ echo "║  • Puis sur votre VPS avec autorisation                          ║
 echo "║                                                                    ║"
 echo "║ ⚡ PERFORMANCES:                                                    ║"
 echo "║  • Évasion = Réduction de détection VS Plus lent                 ║"
-echo "║  • tcpcat est 23.8x plus rapide que Nmap                          ║"
+echo "║  • Perf : voir benchmarks/README.md (chiffres reproductibles)     ║"
 echo "║  • Phase 4 ajoute ~15-50% d'overhead                              ║"
 echo "║                                                                    ║"
 echo "║ 🎯 RÉSULTATS ATTENDUS:                                            ║"

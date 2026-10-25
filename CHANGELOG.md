@@ -11,6 +11,17 @@ Full diffs for every release are available via GitHub's
 ## [Unreleased]
 
 ### Added
+- `--profile ot` runs a per-target latency circuit breaker: it learns each
+  target's baseline round-trip time and aborts the scan on a target whose
+  latency rises in a sustained way (over +15%) or that stops answering after
+  it had answered, so a fragile industrial/OT device (PLC, camera, building
+  controller) is not pushed over by the scan. Skipped ports carry the reason
+  and every trip is logged at the end of the run.
+- `--ebpf` now asks the kernel for AF_XDP **zero-copy** when the hook is
+  attached in the driver's native path, so the NIC can DMA frames straight
+  into the socket's UMEM. It falls back to copy mode when the driver or
+  interface does not support zero-copy (generic attach, veth, many cloud
+  NICs); `--debug` reports which mode is in use.
 - `tcpcat drift <before.json> <after.json>`: compare two `tcpcat inventory`
   snapshots of the same host and report what changed in its exposure -- a port
   that started listening, one that stopped, one that widened from loopback to

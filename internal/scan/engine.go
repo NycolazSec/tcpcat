@@ -11,6 +11,7 @@ import (
 	"github.com/NycolazSec/tcpcat/config"
 	"github.com/NycolazSec/tcpcat/internal/connpool"
 	"github.com/NycolazSec/tcpcat/internal/evasion"
+	"github.com/NycolazSec/tcpcat/internal/otguard"
 	"github.com/NycolazSec/tcpcat/internal/scripting"
 )
 
@@ -64,6 +65,9 @@ type Engine struct {
 	connPool     *connpool.Pool
 	rtt          *RTTEstimator
 	limiter      *AdaptiveRateLimiter
+	// otGuard aborts scanning a target whose latency degrades, for fragile
+	// industrial/OT equipment. nil unless --profile ot is set.
+	otGuard *otguard.Guard
 }
 
 func NewEngine(opts *config.Options) *Engine {
@@ -89,6 +93,14 @@ func NewEngine(opts *config.Options) *Engine {
 	}
 	pool := connpool.New(poolSize, 30*time.Second, timeout)
 
+	var guard *otguard.Guard
+	if opts != nil && opts.Profile == "ot" {
+		// Industrial/OT gear can fall over under a scan a server shrugs off.
+		// Watch each target's RTT and abort on a sustained +15% rise or a
+		// device that stops answering after answering.
+		guard = otguard.New(1.15, 8, 5)
+	}
+
 	return &Engine{
 		opts:         opts,
 		timeout:      timeout,
@@ -96,6 +108,7 @@ func NewEngine(opts *config.Options) *Engine {
 		connPool:     pool,
 		rtt:          NewRTTEstimator(),
 		limiter:      NewLimiterFromOptions(opts),
+		otGuard:      guard,
 	}
 }
 
@@ -181,6 +194,13 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 				// the XDP hook is left attached, redirecting traffic on the
 				// interface indefinitely. Recovering here confines the
 				// damage to this one job's result.
+				// OT circuit breaker: once a target has tripped, stop
+				// probing it. Skipped ports are reported as such rather than
+				// as a scan result, and no packet is sent.
+				if e.otGuard != nil && e.otGuard.Tripped(job.IP) {
+					resultsChan <- TargetResult{IP: job.IP, Port: job.Port, State: StateFiltered, Reason: "OT circuit breaker: scan aborted (target health degraded)"}
+					continue
+				}
 				res := func() (r TargetResult) {
 					defer func() {
 						if p := recover(); p != nil {
@@ -192,6 +212,9 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 				lost := res.State == StateFiltered || res.State == StateOpenFiltered
 				if !lost && res.Latency > 0 {
 					e.rtt.Sample(res.Latency)
+				}
+				if e.otGuard != nil {
+					e.otGuard.Observe(res.IP, res.Latency, lost)
 				}
 				if adaptive && limiter != nil {
 					limiter.Report(lost)
@@ -292,6 +315,13 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	if adaptive && limiter != nil && !e.opts.Quiet {
 		fmt.Printf("%s[*] Adaptive timing: final rate %d pps, SRTT %v%s\n",
 			config.White, limiter.CurrentRate(), e.rtt.SRTT(), config.Reset)
+	}
+
+	if e.otGuard != nil {
+		for _, t := range e.otGuard.Trips() {
+			fmt.Printf("%s[!] OT circuit breaker: aborted %s at %s -- %s%s\n",
+				config.Red, t.Target, t.At.Format("15:04:05"), t.Reason, config.Reset)
+		}
 	}
 
 	sort.Slice(allResults, func(i, j int) bool {
