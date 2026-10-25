@@ -7,6 +7,7 @@ them found every open port. It needs only Docker.
 ./benchmarks/run.sh                 # ports 1-65535, 2 hosts, ceiling 25 000 packets/s, 3 runs per tool
 RATE=1000000 ./benchmarks/run.sh    # same, with the rate ceiling out of the way
 PORTS=1-10000 RUNS=1 ./benchmarks/run.sh   # one-minute check that the harness works
+SUBNET_PREFIX=10.211.55 ./benchmarks/run.sh # use another /24 if 10.200.0.x is taken
 ```
 
 The report is written to `benchmarks/results/<timestamp>/report.md`, next to
