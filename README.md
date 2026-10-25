@@ -698,9 +698,27 @@ invalid if one of its runs missed a single open port.
 [benchmarks/README.md](benchmarks/README.md) describes the protocol, how to run
 it through a real NIC, and a sample report.
 
-> The figures shown here until v1.5.0 (2.62× faster than Nmap, 4.69× faster
-> than naabu) are withdrawn. A bug made tcpcat scan only the first of the two
-> targets in that run, and the run did not check which ports were found.
+A run on an x86_64 server (kernel 6.12, 8 cores, copy mode over a veth
+interface), SYN scan of all 65,535 ports on 2 hosts, 25,000 packets/s ceiling,
+3 runs each:
+
+| Tool | Mean ± σ | CPU | Open ports found |
+|------|----------|-----|------------------|
+| tcpcat `-sS` | 5.51 s ± 0.06 | 25.8 s | 80/80 |
+| nmap | 5.56 s ± 0.04 | 5.0 s | 80/80 |
+| tcpcat `--ebpf` | 5.65 s ± 0.13 | 8.7 s | 80/80 |
+| naabu | 18.05 s ± 0.04 | 51.5 s | 80/80 |
+
+At this rate tcpcat (eBPF or SYN) and nmap finish in the same time, but the
+eBPF engine does it with about 3× less CPU than the raw SYN scan and 6× less
+than naabu. Flat out (no rate ceiling) the SYN scan is fastest, and every
+tcpcat mode still finds 80/80 where naabu drops to 79/80. The eBPF engine's
+speed upside needs a multi-queue NIC with zero-copy, which this copy-mode
+measurement does not exercise.
+
+> The figures shown until v1.5.0 (2.62× faster than Nmap, 4.69× faster than
+> naabu) are withdrawn: a bug made tcpcat scan only the first of the two
+> targets, and the run did not check which ports were found.
 
 ---
 
