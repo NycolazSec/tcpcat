@@ -75,6 +75,18 @@ Full diffs for every release are available via GitHub's
   past the end of the frame.
 
 ### Changed
+- `--ebpf` batches transmitted frames: AF_XDP has a single TX ring, so a
+  dedicated flusher coalesces up to 64 probe frames into one Transmit (one
+  sendto) instead of one syscall per probe. In copy mode on a loaded or
+  virtualized host, the per-probe sendto under the socket lock was the main
+  wall-time cost.
+- `--ebpf` receive is now interrupt-driven and unpinned in copy mode;
+  busy-poll and CPU-pinning are kept only for the zero-copy path where
+  they help. In copy mode (virtual NICs, generic attach, drivers without
+  zero-copy) the spinning pinned RX thread only burned a core and, on a
+  busy or virtualized host, slowed the scan by stealing a vCPU and
+  serializing transmit (a loaded server ran the copy-mode scan at ~15k pps
+  against ~25k on an idle one). `--debug` reports the RX mode.
 - The speed figures published so far (2.62x faster than Nmap, 4.69x faster
   than naabu) were measured while only the first of the two targets was being
   scanned, and without checking that every open port was found. They are

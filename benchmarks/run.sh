@@ -27,8 +27,13 @@ TOOLS="${TOOLS:-tcpcat-ebpf tcpcat-syn nmap naabu}"
 OPEN_PORTS="${OPEN_PORTS:-40}"
 SEED="${SEED:-1337}"
 NET=tcpcat-bench
-SUBNET=10.200.0.0/24
-SCANNER_IP=10.200.0.2
+# SUBNET_PREFIX is the first three octets of the lab's private /24. Override
+# it when 10.200.0.x collides with an existing Docker/k3s/CNI network on the
+# host ("Pool overlaps with other one on this address space"), e.g.
+# SUBNET_PREFIX=10.211.55 ./benchmarks/run.sh
+SUBNET_PREFIX="${SUBNET_PREFIX:-10.200.0}"
+SUBNET="${SUBNET_PREFIX}.0/24"
+SCANNER_IP="${SUBNET_PREFIX}.2"
 OUT="benchmarks/results/$(date +%Y%m%d-%H%M%S)"
 # BENCH_TARGETS set: the targets are other machines, each already running
 # lab/target.py, and the scanner uses the host's own interface $IF.
@@ -37,7 +42,7 @@ if [ -n "$EXTERNAL" ]; then
   read -r -a TARGET_IPS <<< "$EXTERNAL"
   : "${IF:?set IF to the interface that reaches the targets (e.g. IF=eno1)}"
 else
-  TARGET_IPS=(10.200.0.20 10.200.0.21)
+  TARGET_IPS=("${SUBNET_PREFIX}.20" "${SUBNET_PREFIX}.21")
 fi
 
 cleanup() {

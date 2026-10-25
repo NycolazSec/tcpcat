@@ -373,10 +373,6 @@ func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 			break
 		}
 
-		// Switch this queue's socket into busy-poll before it is mapped in
-		// and the RX loop starts draining it.
-		enableBusyPoll(xsk.FD())
-
 		key := uint32(q)
 		val := uint32(xsk.FD())
 		if err := xskMap.Put(&key, &val); err != nil {
@@ -393,22 +389,46 @@ func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 		xdpSockets = append(xdpSockets, xsk)
 	}
 
-	if xdpDebug {
-		dataPath := "copy mode"
-		if len(xdpSockets) > 0 && xdpSocketZeroCopy(xdpSockets[0]) {
-			dataPath = "zero-copy"
+	zeroCopy := len(xdpSockets) > 0 && xdpSocketZeroCopy(xdpSockets[0])
+
+	// Busy-poll and CPU-pinning only pay off on the zero-copy path (a capable
+	// NIC attached natively): there they keep the RX ring drained with low
+	// latency and off the softirq path. In copy mode -- a virtual NIC, generic
+	// attach, or a driver without zero-copy -- there is no DMA to win, so a
+	// spinning pinned RX thread just burns a core and, on a busy or
+	// virtualized host, steals a vCPU and serializes transmit through the
+	// socket lock (measured: a loaded server ran the copy-mode scan at ~15k
+	// pps against ~25k on an idle one). So in copy mode the RX loops run
+	// interrupt-driven -- poll() blocks until replies arrive -- and unpinned,
+	// which wakes the loop far less often and leaves transmit the lock.
+	if zeroCopy {
+		for _, xsk := range xdpSockets {
+			enableBusyPoll(xsk.FD())
 		}
-		log.Printf("[+] AF_XDP engine ready: %s attach, %s, on %d RX queue(s).", attachMode, dataPath, len(xdpSockets))
-		logNAPITuningHint(ifaceName)
+	}
+
+	if xdpDebug {
+		dataPath, rxMode := "copy mode", "interrupt-driven RX"
+		if zeroCopy {
+			dataPath, rxMode = "zero-copy", "busy-poll RX"
+		}
+		log.Printf("[+] AF_XDP engine ready: %s attach, %s, %s, on %d RX queue(s).", attachMode, dataPath, rxMode, len(xdpSockets))
+		if zeroCopy {
+			logNAPITuningHint(ifaceName)
+		}
 	}
 
 	xdpRunning = true
 	for i, xsk := range xdpSockets {
-		// One RX goroutine per queue, each pinned to its own core (queue i
-		// -> CPU i, wrapping if there are more queues than cores) so a
-		// queue's replies drain on a stable core instead of migrating.
-		go xdpRxLoop(xsk, i)
+		// One RX goroutine per queue. On the zero-copy path each is pinned to
+		// its own core (queue i -> CPU i, wrapping) so a queue's replies drain
+		// on a stable core; in copy mode it runs unpinned (see above).
+		go xdpRxLoop(xsk, i, zeroCopy)
 	}
+
+	// One flusher batches every probe's frame onto the single TX ring.
+	xdpTxQueue = make(chan []byte, 8192)
+	go xdpTxFlusher(xdpSockets[0])
 
 	xdpColl = coll
 	return xdpSockets[0], nil
@@ -485,10 +505,13 @@ func logXDPSocketStats() {
 // xsks_map slot) since a NIC's RSS hashing can steer replies to any queue,
 // not just the one the scan's own probes happen to transmit from; all of
 // them deliver into the same shared xdpWaiters channels and xdpDiscovery map.
-func xdpRxLoop(xsk *xdp.Socket, cpu int) {
-	// Pin this loop to a stable core before draining anything (see
-	// pinToCPU). Best-effort: an unpinned loop still works.
-	pinToCPU(cpu)
+func xdpRxLoop(xsk *xdp.Socket, cpu int, busyPoll bool) {
+	// Only pin to a stable core on the busy-poll (zero-copy) path. In copy
+	// mode pinning to one (possibly contended) core hurts more than it helps,
+	// so let the scheduler place this goroutine (see InitXDPEngine).
+	if busyPoll {
+		pinToCPU(cpu)
+	}
 
 	pfd := []unix.PollFd{{Fd: int32(xsk.FD()), Events: unix.POLLIN}}
 	var batch []byte // this pass's frames, copied out back to back
@@ -695,23 +718,84 @@ func getSrcPort(opts *config.Options) uint16 {
 // space if it's momentarily full. Returns false (without sending the
 // remaining frames) if a slot never frees up, which the caller reports as
 // TX congestion rather than silently dropping the probe.
-func transmitXDPFrames(xsk *xdp.Socket, frames [][]byte) bool {
-	const maxRetries = 5
+// txBatchSize is how many probe frames the flusher coalesces into a single
+// Transmit (one sendto). AF_XDP has one TX ring, so every probe's frame is
+// serialized through it; sending them one at a time is one sendto syscall per
+// probe, which dominates the wall time in copy mode on a loaded or virtualized
+// host. Batching amortizes the syscall over up to txBatchSize frames.
+const txBatchSize = 64
+
+// xdpTxQueue carries probe frames from the scanning goroutines to the single
+// flusher that owns the TX ring. Buffered so paced bursts don't block.
+var xdpTxQueue chan []byte
+
+// transmitXDPFrames hands a probe's frames to the TX flusher. It returns false
+// only when the queue is saturated (the flusher can't keep up), which the
+// caller reports as congestion so the probe retries or times out. The frames
+// must not be mutated afterwards: the flusher copies them into the UMEM when
+// it sends. The socket argument is ignored (the flusher owns the one socket).
+func transmitXDPFrames(_ *xdp.Socket, frames [][]byte) bool {
 	for _, frame := range frames {
-		sent := false
-		for attempt := 0; attempt < maxRetries && !sent; attempt++ {
-			if attempt > 0 {
-				time.Sleep(50 * time.Microsecond) // outside the lock, so the RX loop keeps draining
-			}
-			xdpSockLock.Lock()
-			sent = xdpSendLocked(xsk, frame)
-			xdpSockLock.Unlock()
-		}
-		if !sent {
+		select {
+		case xdpTxQueue <- frame:
+		default:
 			return false
 		}
 	}
 	return true
+}
+
+// xdpTxFlusher owns the TX ring: it drains xdpTxQueue, coalescing up to
+// txBatchSize frames into one Transmit (one sendto). One flusher runs for the
+// life of the engine, on xdpSockets[0] (the sole TX socket).
+func xdpTxFlusher(xsk *xdp.Socket) {
+	batch := make([][]byte, 0, txBatchSize)
+	for xdpRunning {
+		// Block for the first frame, with a timeout so the loop can exit.
+		select {
+		case f := <-xdpTxQueue:
+			batch = append(batch, f)
+		case <-time.After(2 * time.Millisecond):
+			continue
+		}
+		// Take whatever else is already queued, up to the batch size.
+	drain:
+		for len(batch) < txBatchSize {
+			select {
+			case f := <-xdpTxQueue:
+				batch = append(batch, f)
+			default:
+				break drain
+			}
+		}
+		xdpFlushBatch(xsk, batch)
+		batch = batch[:0]
+	}
+}
+
+// xdpFlushBatch writes a batch of frames into the TX ring and kicks the kernel
+// once for the whole batch. Frames that don't fit (ring momentarily full) are
+// left unsent; their probes retry or time out.
+func xdpFlushBatch(xsk *xdp.Socket, frames [][]byte) {
+	if len(frames) == 0 {
+		return
+	}
+	xdpSockLock.Lock()
+	defer xdpSockLock.Unlock()
+
+	descs := xsk.GetDescs(len(frames))
+	if len(descs) < len(frames) {
+		xdpReclaimSent(xsk) // free completed frames, then try for more
+		descs = xsk.GetDescs(len(frames))
+	}
+	n := 0
+	for ; n < len(descs) && n < len(frames); n++ {
+		copy(xsk.GetFrame(descs[n]), frames[n])
+		descs[n].Len = uint32(len(frames[n]))
+	}
+	if n > 0 {
+		xsk.Transmit(descs[:n]) // one sendto for the whole batch
+	}
 }
 
 func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, rtt *RTTEstimator, limiter *AdaptiveRateLimiter) TargetResult {
