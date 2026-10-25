@@ -441,7 +441,7 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.ScopeFile, "scope-file", "", "Authorized scope file (CIDRs, IPs, or domains)")
 	flag.StringVar(&opts.Resume, "resume", "", "Checkpoint file: skip target/ports already recorded there and append new results (re-run the same command to resume)")
 	flag.StringVar(&opts.ExcludeHost, "exclude", "", "Comma-separated hosts, CIDRs, or names to exclude from the scan")
-	flag.StringVar(&opts.Profile, "profile", "", "Scan profile: safe-production | ot (industrial/OT)")
+	flag.StringVar(&opts.Profile, "profile", "", "Scan profile: safe-production | ot (industrial/OT: slow + per-target latency circuit breaker)")
 	flag.StringVar(&opts.AuditLog, "audit-log", "", "Append one audit record per scan to a JSONL file")
 	flag.StringVar(&opts.BaselineFile, "baseline", "", "Prior JSON report used as a comparison baseline")
 	flag.StringVar(&opts.ConfigFile, "config", "", "Load flag defaults from a config file (key: value); command-line flags override it")
