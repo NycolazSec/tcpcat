@@ -66,8 +66,23 @@ if [ -n "$EXTERNAL" ]; then
   echo "==> Using ${#TARGET_IPS[@]} external target(s) through $IF: ${TARGET_IPS[*]}"
   NETWORK_ARGS=(--network host -e IF="$IF")
 else
+  # Create the lab network, trying the chosen prefix first and then a few
+  # fallbacks, so a host whose Docker/k3s/CNI networks already use 10.200.0.x
+  # ("Pool overlaps with other one on this address space") needs no manual
+  # tuning. An explicit SUBNET_PREFIX is simply tried first.
+  created=""
+  for p in "$SUBNET_PREFIX" 10.211.55 10.123.45 172.30.199 10.88.77 192.168.221; do
+    if docker network create --subnet "${p}.0/24" "$NET" >/dev/null 2>&1; then
+      SUBNET="${p}.0/24"; SCANNER_IP="${p}.2"; TARGET_IPS=("${p}.20" "${p}.21")
+      created=1; break
+    fi
+  done
+  if [ -z "$created" ]; then
+    echo "could not create a lab network: every candidate /24 overlaps an existing one." >&2
+    echo "set SUBNET_PREFIX to a free /24, e.g. SUBNET_PREFIX=10.99.88 ./benchmarks/run.sh" >&2
+    exit 1
+  fi
   echo "==> Starting the lab: network $SUBNET, ${#TARGET_IPS[@]} targets with $OPEN_PORTS open ports each"
-  docker network create --subnet "$SUBNET" "$NET" >/dev/null
   for i in "${!TARGET_IPS[@]}"; do
     docker run -d --name "tcpcat-bench-t$i" --network "$NET" --ip "${TARGET_IPS[$i]}" \
       --ulimit nofile=65536:65536 -e SEED="$((SEED + i))" -e COUNT="$OPEN_PORTS" \
