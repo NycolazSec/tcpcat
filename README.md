@@ -16,7 +16,6 @@
 
 [![CI](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml/badge.svg)](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14561/badge)](https://www.bestpractices.dev/projects/14561)
-[![Go Report Card](https://goreportcard.com/badge/github.com/NycolazSec/tcpcat)](https://goreportcard.com/report/github.com/NycolazSec/tcpcat)
 [![License: AGPL-3.0 or Commercial](https://img.shields.io/badge/License-AGPL--3.0%20or%20Commercial-blue.svg)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/releases)
 [![WASM dissector hub](https://img.shields.io/badge/WASM%20dissectors-hub-3ddc84?logo=webassembly&logoColor=white)](https://github.com/NycolazSec/tcpcat-scripts)
