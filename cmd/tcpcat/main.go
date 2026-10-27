@@ -37,6 +37,44 @@ var (
 	date    = "unknown"
 )
 
+// maxCVEShown caps how many CVEs the console prints per port. A host running an
+// old OpenSSH can match 60+ CVEs; dumping all of them buries the rest of the
+// scan. The full list is always kept in the JSON/SARIF report (-j / --sarif).
+const maxCVEShown = 8
+
+// condenseList shortens a "label: a, b, c, d, ..." finding for the console so a
+// long enumerated list (e.g. every weak cipher a server offers) doesn't wrap
+// across several lines and drown out the rest of the output. It emits as many
+// items as fit in budget characters, then "(+N more)". Because item names vary
+// a lot in length (a 3-char cipher vs a 30-char MAC), a character budget keeps
+// the printed line a consistent width where a fixed item count could not. The
+// full, unabbreviated finding is unaffected in the JSON and XML reports, which
+// read the strings directly.
+func condenseList(s string, budget int) string {
+	i := strings.Index(s, ": ")
+	if i < 0 {
+		return s
+	}
+	head, rest := s[:i+2], s[i+2:]
+	items := strings.Split(rest, ", ")
+	shown, width := 0, 0
+	for shown < len(items) {
+		w := len(items[shown])
+		if shown > 0 {
+			w += 2 // ", "
+		}
+		if shown > 0 && width+w > budget {
+			break
+		}
+		width += w
+		shown++
+	}
+	if shown >= len(items) {
+		return s
+	}
+	return fmt.Sprintf("%s%s (+%d more)", head, strings.Join(items[:shown], ", "), len(items)-shown)
+}
+
 func main() {
 	// Audit subcommands have their own flags and run before the scanner's
 	// flag parsing, which would otherwise read "policy" as a target name.
@@ -536,7 +574,7 @@ func main() {
 					config.Bold, results[i].IP, results[i].Port, config.Bold, svc.Name, svc.Version, osDisp, config.Reset, bannerDisp)
 
 				for _, finding := range svc.Findings {
-					fmt.Printf("    %s[!] %s%s\n", config.Red, finding, config.Reset)
+					fmt.Printf("    %s[!] %s%s\n", config.Red, condenseList(finding, 56), config.Reset)
 				}
 
 				if svc.TLS != nil {
@@ -582,13 +620,13 @@ func main() {
 
 				if svc.HTTPPosture != nil {
 					for _, warning := range svc.HTTPPosture.Warnings {
-						fmt.Printf("    %s[!] http: %s%s\n", config.Red, warning, config.Reset)
+						fmt.Printf("    %s[!] http: %s%s\n", config.Red, condenseList(warning, 56), config.Reset)
 					}
 				}
 
 				if svc.SSHPosture != nil {
 					for _, warning := range svc.SSHPosture.Warnings {
-						fmt.Printf("    %s[!] ssh: %s%s\n", config.Red, warning, config.Reset)
+						fmt.Printf("    %s[!] ssh: %s%s\n", config.Red, condenseList(warning, 56), config.Reset)
 					}
 				}
 			}
@@ -762,7 +800,12 @@ func main() {
 					// reader experiences as the same kind of result line.
 					if len(vulnerabilities) > 0 {
 						fmt.Printf("%s[!] %s:%-5d - %d vulnerabilities found for %s %s%s\n", config.Red, r.IP, r.Port, len(vulnerabilities), r.Service, r.Version, config.Reset)
-						for _, v := range vulnerabilities {
+						for idx, v := range vulnerabilities {
+							// Console shows the highest-CVSS few (already sorted);
+							// the rest stay in the JSON/SARIF report.
+							if idx >= maxCVEShown {
+								break
+							}
 							var cvssColor string
 							switch {
 							case v.CVSS >= 9.0:
@@ -790,7 +833,11 @@ func main() {
 							if v.EPSS > 0 {
 								note += fmt.Sprintf(" %s[EPSS %.1f%%]%s", config.Gray, v.EPSS*100, config.Reset)
 							}
-							fmt.Printf("    |_ %s (%sCVSS: %.1f%s) - %s%s\n", v.ID, cvssColor, v.CVSS, config.Reset, v.Title, note)
+							fmt.Printf("    |_ %s (%sCVSS: %.1f%s) - %s%s\n", v.ID, cvssColor, v.CVSS, config.Reset, truncate(v.Title, 76), note)
+						}
+						if len(vulnerabilities) > maxCVEShown {
+							fmt.Printf("    %s|_ … and %d more (full list in the JSON report: -j report.json)%s\n",
+								config.Gray, len(vulnerabilities)-maxCVEShown, config.Reset)
 						}
 						if filteredCount > 0 {
 							fmt.Printf("    %s[~] %d additional vulnerabilities excluded (not applicable to %s)%s\n", config.Red, filteredCount, r.OS, config.Reset)
@@ -835,7 +882,7 @@ func main() {
 			default:
 				color = config.White
 			}
-			fmt.Printf("    %s%-9s%s %d  (%s)\n", color, entry.Severity, config.Reset, entry.Count, strings.Join(entry.Hosts, ", "))
+			fmt.Printf("    %s%-9s%s %4d  (%s)\n", color, entry.Severity, config.Reset, entry.Count, strings.Join(entry.Hosts, ", "))
 		}
 	}
 

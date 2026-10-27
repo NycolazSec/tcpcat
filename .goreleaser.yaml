@@ -48,6 +48,98 @@ nfpms:
       - rpm
     bindir: /usr/bin
 
+# ---------------------------------------------------------------------------
+# Container images -> GitHub Container Registry (ghcr.io).
+# Works with the built-in GITHUB_TOKEN; the release workflow logs in to ghcr
+# and sets up QEMU/buildx so the arm64 image can be built on an amd64 runner.
+# After the first release, flip the package to public once in the repo's
+# Packages settings so `docker pull` needs no auth.
+# ---------------------------------------------------------------------------
+dockers:
+  - id: tcpcat-amd64
+    goos: linux
+    goarch: amd64
+    dockerfile: packaging/docker/Dockerfile
+    use: buildx
+    image_templates:
+      - "ghcr.io/nycolazsec/tcpcat:{{ .Version }}-amd64"
+      - "ghcr.io/nycolazsec/tcpcat:latest-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.source=https://github.com/NycolazSec/tcpcat"
+      - "--label=org.opencontainers.image.url=https://tcpcat.io"
+      - "--label=org.opencontainers.image.licenses=AGPL-3.0-only"
+  - id: tcpcat-arm64
+    goos: linux
+    goarch: arm64
+    dockerfile: packaging/docker/Dockerfile
+    use: buildx
+    image_templates:
+      - "ghcr.io/nycolazsec/tcpcat:{{ .Version }}-arm64"
+      - "ghcr.io/nycolazsec/tcpcat:latest-arm64"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.source=https://github.com/NycolazSec/tcpcat"
+      - "--label=org.opencontainers.image.url=https://tcpcat.io"
+      - "--label=org.opencontainers.image.licenses=AGPL-3.0-only"
+
+docker_manifests:
+  - name_template: "ghcr.io/nycolazsec/tcpcat:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/nycolazsec/tcpcat:{{ .Version }}-amd64"
+      - "ghcr.io/nycolazsec/tcpcat:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/nycolazsec/tcpcat:latest"
+    image_templates:
+      - "ghcr.io/nycolazsec/tcpcat:latest-amd64"
+      - "ghcr.io/nycolazsec/tcpcat:latest-arm64"
+
+# ---------------------------------------------------------------------------
+# Homebrew tap  ->  `brew install nycolazsec/tap/tcpcat`
+# Prerequisites (one-time), see docs/DISTRIBUTION.md:
+#   1. Create a PUBLIC repo  NycolazSec/homebrew-tap
+#   2. Create a fine-grained PAT with Contents:write on that repo and add it to
+#      THIS repo as the secret HOMEBREW_TAP_GITHUB_TOKEN
+#      (the default GITHUB_TOKEN cannot push to another repo)
+#   3. Uncomment this block and the matching step in .github/workflows/release.yml
+# brews:
+#   - name: tcpcat
+#     repository:
+#       owner: NycolazSec
+#       name: homebrew-tap
+#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+#     homepage: "https://tcpcat.io"
+#     description: "Fast network scanner in Go with an eBPF/AF_XDP engine, service/OS detection and CVE correlation"
+#     license: "AGPL-3.0-only"
+#     commit_author:
+#       name: NycolazSec
+#       email: support@tcpcat.io
+#     test: |
+#       system "#{bin}/tcpcat", "--help"
+
+# ---------------------------------------------------------------------------
+# Arch User Repository  ->  `yay -S tcpcat-bin`
+# Prerequisites (one-time), see docs/DISTRIBUTION.md:
+#   1. Register the tcpcat-bin package name on aur.archlinux.org
+#   2. Add your AUR SSH private key as the secret AUR_KEY in this repo
+#   3. Uncomment this block and the matching step in .github/workflows/release.yml
+# aurs:
+#   - name: tcpcat-bin
+#     homepage: "https://tcpcat.io"
+#     description: "Fast network scanner in Go with an eBPF/AF_XDP engine, service/OS detection and CVE correlation"
+#     maintainers:
+#       - "NycolazSec <support@tcpcat.io>"
+#     license: "AGPL-3.0-only"
+#     private_key: "{{ .Env.AUR_KEY }}"
+#     git_url: "ssh://aur@aur.archlinux.org/tcpcat-bin.git"
+#     depends:
+#       - iputils
+
 release:
   # "auto" marks the GitHub release as a pre-release whenever the tag has a
   # semver pre-release suffix (e.g. v1.1.0-beta.1), and as a full release

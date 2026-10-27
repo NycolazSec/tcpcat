@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!--
+  Source for the GitHub social-preview image (docs/assets/social-card.png).
+  Regenerate the PNG with headless Chrome:
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+      --headless=new --disable-gpu --hide-scrollbars \
+      --force-device-scale-factor=2 --window-size=1280,640 \
+      --screenshot="docs/assets/social-card.png" \
+      "docs/assets/social-card.html"
+
+  Then upload it at: repo → Settings → General → Social preview.
+  GitHub recommends 1280×640 (shown ~2:1); keep the file under 1 MB.
+-->
+<style>
+  :root{
+    --bg0:#070b10; --bg1:#0d141c; --ink:#e6edf3; --dim:#8b98a9;
+    --green:#3ddc84; --cyan:#35d0e0; --accent:#5eead4; --line:#1b2733;
+    --amber:#f0b429;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1280px;height:640px;overflow:hidden}
+  body{
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    background:
+      radial-gradient(1100px 520px at 78% -12%, rgba(53,208,224,.16), transparent 60%),
+      radial-gradient(900px 500px at 8% 118%, rgba(61,220,132,.14), transparent 60%),
+      linear-gradient(160deg,var(--bg1),var(--bg0));
+    color:var(--ink);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .wrap{width:1152px;height:512px;display:flex;flex-direction:column;justify-content:space-between}
+  .top{display:flex;align-items:center;gap:14px}
+  .dots{display:flex;gap:9px}
+  .dots i{width:14px;height:14px;border-radius:50%;display:block}
+  .dots .r{background:#ff5f57}.dots .y{background:#febc2e}.dots .g{background:#28c840}
+  .path{color:var(--dim);font-size:19px;letter-spacing:.5px}
+  .path b{color:var(--accent);font-weight:600}
+
+  .hero{margin-top:6px}
+  .name{font-size:132px;line-height:1;font-weight:800;letter-spacing:-3px;
+    background:linear-gradient(92deg,var(--green),var(--cyan));
+    -webkit-background-clip:text;background-clip:text;color:transparent;}
+  .name .blink{color:var(--green);-webkit-text-fill-color:var(--green)}
+  .tag{margin-top:18px;font-size:30px;color:var(--ink);font-weight:600;letter-spacing:-.2px}
+  .tag b{color:var(--accent)}
+
+  .term{margin-top:22px;font-size:23px;color:var(--dim)}
+  .term .p{color:var(--green)}
+  .term .flag{color:var(--cyan)}
+  .term .arg{color:var(--ink)}
+  .term .cmt{color:#5a6b7b}
+
+  .chips{display:flex;flex-wrap:wrap;gap:12px}
+  .chip{border:1px solid var(--line);background:rgba(255,255,255,.03);
+    border-radius:999px;padding:9px 18px;font-size:19px;color:var(--ink)}
+  .chip .d{color:var(--green)}
+
+  .foot{display:flex;align-items:center;justify-content:space-between;
+    border-top:1px solid var(--line);padding-top:18px;color:var(--dim);font-size:21px}
+  .foot b{color:var(--ink)}
+  .foot .site{color:var(--cyan)}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div>
+      <div class="top">
+        <span class="dots"><i class="r"></i><i class="y"></i><i class="g"></i></span>
+        <span class="path">~/ <b>tcpcat</b> — network reconnaissance engine</span>
+      </div>
+      <div class="hero">
+        <div class="name">tcpcat<span class="blink">_</span></div>
+        <div class="tag">Fast network scanner in Go with an <b>eBPF/AF_XDP</b> engine</div>
+      </div>
+      <div class="term">
+        <span class="p">$</span> sudo tcpcat <span class="flag">-sV</span> <span class="flag">-p</span> <span class="arg">22,80,443</span> <span class="arg">target</span>
+        &nbsp;&nbsp;<span class="cmt"># service + OS detection · CVE correlation</span>
+      </div>
+    </div>
+
+    <div class="chips">
+      <span class="chip"><span class="d">▸</span> eBPF / AF&#8209;XDP</span>
+      <span class="chip"><span class="d">▸</span> WASM detection scripting</span>
+      <span class="chip"><span class="d">▸</span> service &amp; OS detection</span>
+      <span class="chip"><span class="d">▸</span> CVE correlation</span>
+      <span class="chip"><span class="d">▸</span> JSON / SARIF reports</span>
+    </div>
+
+    <div class="foot">
+      <span>by <b>NycolazSec</b> · AGPL&#8209;3.0 or Commercial</span>
+      <span class="site">tcpcat.io</span>
+    </div>
+  </div>
+</body>
+</html>

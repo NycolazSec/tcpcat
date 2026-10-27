@@ -27,12 +27,13 @@ Fast network scanner in Go with an eBPF/AF_XDP engine, service and OS
 detection, CVE correlation, and JSON/SARIF reports. Built for **authorized**
 security assessments.
 
-<!--
-  DEMO: record a short terminal GIF of a real scan and drop it at docs/demo.gif,
-  then uncomment the line below. A ~10s asciinema/vhs capture of the Quick start
-  command works well.
-  ![tcpcat demo](docs/demo.gif)
--->
+<div align="center">
+
+![tcpcat scanning scanme.nmap.org — open ports, service and version detection, weak-crypto findings, and CVE correlation](docs/demo.gif)
+
+</div>
+
+<!-- Regenerate this demo with: vhs docs/demo.tape  (see docs/demo.tape) -->
 
 ## Quick start
 
@@ -44,9 +45,19 @@ go install github.com/NycolazSec/tcpcat/cmd/tcpcat@latest
 sudo tcpcat -sV -p 22,80,443 scanme.nmap.org
 ```
 
-Prefer a prebuilt binary or a `.deb`/`.dmg`? Grab one from the
-[releases page](https://github.com/NycolazSec/tcpcat/releases). To build from
-source, see [Installation](#installation--prerequisites).
+Prefer a container, a prebuilt binary, or a `.deb`/`.dmg`?
+
+```bash
+# Container (raw sockets need the extra capabilities)
+docker run --rm --cap-add=NET_RAW --cap-add=NET_ADMIN \
+  ghcr.io/nycolazsec/tcpcat:latest -sV -p 22,80,443 scanme.nmap.org
+```
+
+Binaries and packages are on the
+[releases page](https://github.com/NycolazSec/tcpcat/releases); other channels
+(Homebrew, AUR, BlackArch) are tracked in
+[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md). To build from source, see
+[Installation](#installation--prerequisites).
 
 ```text
 [*] Target loaded: scanme.nmap.org (1 IP(s) resolved)
@@ -113,6 +124,38 @@ tcpcat is a dual-licensed project (AGPL-3.0 or commercial) maintained by Nicolas
   30-line template in [examples/wasm-dissector](examples/wasm-dissector)
   ([SDK and ABI](docs/WASM_SDK.md))
 - Concurrent detection rules without memory overhead
+
+---
+
+## How tcpcat compares
+
+Where tcpcat fits next to the tools people already reach for. This is meant to
+be honest about where the others are strong, not a scoreboard.
+
+| | tcpcat | Nmap | RustScan | naabu | Masscan |
+|---|:---:|:---:|:---:|:---:|:---:|
+| TCP SYN / connect scan | ✅ | ✅ | ✅ | ✅ | ✅ (SYN) |
+| Kernel-bypass data path | ✅ eBPF/AF_XDP | ❌ | ❌ | ❌ | ✅ PF_RING |
+| Service + version detection | ✅ | ✅ | ↪ via Nmap | ❌ | ❌ |
+| OS detection | ✅ | ✅ | ❌ | ❌ | ❌ |
+| CVE correlation built in | ✅ OSV/Vulners/offline | ↪ vulners NSE | ❌ | ❌ | ❌ |
+| Custom detection scripts | ✅ **sandboxed WASM** | ✅ Lua (NSE) | ❌ | ❌ | ❌ |
+| SARIF output (CI/DevSecOps) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Signed releases + SBOM | ✅ cosign + CycloneDX | — | — | — | — |
+| License | AGPL-3.0 / commercial | NPSL | GPL/MIT | MIT | AGPL-3.0 |
+
+**On speed:** masscan and ZMap remain the reference for internet-wide
+blasting; Nmap is superbly tuned for a single network. tcpcat's goal isn't to
+beat them at raw packets-per-second — it's to pair a kernel-bypass engine with
+real detection and reporting. In the [reproducible lab](benchmarks/README.md),
+on a laptop's virtual interface the eBPF engine is within ~1.1× of Nmap while
+using a fraction of the CPU of a raw-socket SYN scan; its advantage grows on a
+real NIC in native/zero-copy mode. **We publish only numbers you can reproduce
+with one command** — see [benchmarks/](benchmarks/).
+
+**What's genuinely unique:** writing detection logic in **sandboxed
+WebAssembly** (Rust/Zig/TinyGo/C) that can only talk to the port being scanned.
+See [docs/WASM_SDK.md](docs/WASM_SDK.md).
 
 ---
 

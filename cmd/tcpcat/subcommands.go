@@ -9,6 +9,7 @@ var subcommands = map[string]func([]string) int{
 	"inventory": runInventory,
 	"explain":   runExplain,
 	"drift":     runDrift,
+	"passive":   runPassive,
 	"scripts":   runScripts,
 }
 
