@@ -41,19 +41,19 @@ func Watch(ctx context.Context) ([]Flow, error) {
 	if err != nil {
 		return nil, fmt.Errorf("attaching sock:inet_sock_set_state tracepoint: %w", err)
 	}
-	defer tp.Close()
+	defer func() { _ = tp.Close() }()
 
 	rd, err := ringbuf.NewReader(coll.Maps["tcpcat_flows"])
 	if err != nil {
 		return nil, fmt.Errorf("opening ring buffer: %w", err)
 	}
-	defer rd.Close()
+	defer func() { _ = rd.Close() }()
 
 	// Unblock Read when the caller's context is cancelled (duration elapsed or
 	// Ctrl-C): a closed reader makes an in-flight Read return os.ErrClosed.
 	go func() {
 		<-ctx.Done()
-		rd.Close()
+		_ = rd.Close()
 	}()
 
 	counts := make(map[key]int)
