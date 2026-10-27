@@ -1,315 +1,71 @@
-# 🏆 tcpcat Performance Benchmarks
+# Benchmark results
 
-> **Withdrawn (October 2026).** The results below must not be quoted. In the
-> "current" run, tcpcat was given two targets and scanned only the first one
-> (a bug fixed since): at 25,000 packets/s, the 131,070 probes of two hosts
-> cannot take less than 5.2 s, and tcpcat is listed at 4.466 s. None of these
-> runs checked which open ports each tool actually found either.
->
-> They are replaced by a reproducible protocol that checks every run against
-> a known set of open ports: see [benchmarks/README.md](../benchmarks/README.md).
-> This page is kept for history only.
+tcpcat's performance claims are **only ever numbers you can reproduce with one
+command**. The earlier version of this page quoted large speedups ("23.8×",
+"2.62×") that came from broken measurements — a single-host run whose standard
+deviation exceeded its mean, and a two-host run that in fact scanned only one
+host. Those numbers are withdrawn and are not quoted anywhere anymore.
 
-## Current: full port range vs. Nmap and naabu (September 2026)
+## Reproduce it yourself
 
-### Benchmark Configuration
+Everything lives in [`benchmarks/`](../benchmarks/). One command measures
+tcpcat against Nmap and naabu **and verifies every tool found every open port**
+against a known ground truth — a fast run that missed a port is not counted:
+
 ```bash
-hyperfine --warmup 0 --runs 3 --export-markdown bench_65k.md \
-  -n "tcpcat-ebpf" "./tcpcat -i $REAL_IF -p 1-65535 -sS --ebpf --open -T 5 --rate 25000 10.200.0.20 10.200.0.21" \
-  -n "naabu"       "naabu -interface $REAL_IF -p 1-65535 -rate 25000 -host 10.200.0.20,10.200.0.21 -silent" \
-  -n "nmap"        "nmap -e $REAL_IF -p 1-65535 -sS -n -T4 --min-rate 25000 --max-retries 1 10.200.0.20 10.200.0.21"
+./benchmarks/run.sh                 # 1-65535, 2 hosts, 25 000 pps ceiling, 3 runs/tool
+RATE=1000000 ./benchmarks/run.sh    # each tool as fast as it will go
 ```
 
-SYN scan of all 65,535 ports on 2 hosts, same interface and same 25,000 packets/s target rate for all three tools, 3 runs each.
-
-### Results
-
-| Tool | Mean ± σ | Range (min … max) | User CPU | System CPU |
-|------|----------|-------------------|----------|------------|
-| **tcpcat (eBPF/XDP)** | **4.466 s ± 0.744 s** | 3.623 s … 5.028 s | 2.493 s | 5.658 s |
-| nmap | 11.723 s ± 0.503 s | 11.150 s … 12.094 s | 5.928 s | 5.504 s |
-| naabu | 20.945 s ± 0.181 s | 20.739 s … 21.077 s | 21.497 s | 31.335 s |
-
-```
-tcpcat-ebpf ran
-    2.62 ± 0.45 times faster than nmap
-    4.69 ± 0.78 times faster than naabu
-```
-
----
-
-## Historical: 1–1024 ports, TCP connect, single host (superseded)
-
-> **Superseded by the section above.** This earlier run measured a `-sT`
-> connect scan of ports 1–1024 against a single host. Its tcpcat timings had
-> a standard deviation (223.6 ms) nearly three times their mean (79.9 ms),
-> which is why hyperfine reports the ratio as **23.82 ± 68.13×**: the
-> uncertainty is larger than the result itself, so the "23.8×" figure below
-> should not be quoted as tcpcat's speedup. It is kept here for history only.
-
-
-## Real-World Performance: tcpcat vs Nmap
-
-### Benchmark Configuration
-```bash
-hyperfine --warmup 3 --runs 20 \
-  'nmap -Pn -sT -p 1-1024 192.168.1.10 >/dev/null' \
-  './tcpcat -Pn -sT --rate 0 -w 64 -p 1-1024 192.168.1.10 >/dev/null'
-```
-
-### Results
-
-#### Benchmark 1: Nmap
-```
-Time (mean ± σ): 1.903 s ± 1.123 s
-  User: 0.071 s
-  System: 0.072 s
-Range (min … max): 1.643 s … 6.672 s
-Runs: 20
-```
-
-#### Benchmark 2: tcpcat
-```
-Time (mean ± σ): 79.9 ms ± 223.6 ms
-  User: 13.5 ms
-  System: 148.7 ms
-Range (min … max): 25.0 ms … 1029.4 ms
-Runs: 20
-```
-
-### Summary
-```
-✅ tcpcat ran 23.82 ± 68.13 times faster than nmap
-```
-
----
-
-## 📊 Performance Analysis
-
-### Absolute Performance
-
-| Metric | Nmap | tcpcat | Advantage |
-|--------|------|--------|-----------|
-| **Mean Time** | 1,903 ms | 79.9 ms | **23.82x faster** ⚡ |
-| **Min Time** | 1,643 ms | 25.0 ms | **65.7x faster** 🚀 |
-| **Max Time** | 6,672 ms | 1,029.4 ms | **6.48x faster** |
-| **Std Dev** | 1.123 s | 223.6 ms | **5x more stable** ✅ |
-
-### Test Parameters
-- **Target**: Single host (192.168.1.10)
-- **Ports**: 1-1024 (1024 total ports)
-- **Scan Type**: TCP Connect Scan (-sT)
-- **Workers (tcpcat)**: 64 parallel threads
-- **Rate Limit (tcpcat)**: 0 (unlimited)
-- **Runs**: 20 iterations each
-
----
-
-## 🎯 What This Means
-
-### tcpcat Achieves
-- **24x throughput advantage** over industry-standard Nmap
-- **Consistent performance** across 20 runs (5x more stable)
-- **Better CPU efficiency** (13.5ms user vs 0.071ms for nmap - kernel-space focus)
-- **Optimized syscall overhead** (148.7ms system for 1024 ports in parallel)
-
-### Breakdown
-```
-Scan Duration: 1024 ports in 79.9 ms
-Ports per millisecond: 12.8 pps
-Ports per second: 12,816 pps (12.8K pps)
-
-For comparison:
-- Phase 2 Target: 300K pps (batch processing)
-- Phase 3 Target: 1M+ pps (WASM scripting)
-```
-
----
-
-## 🔧 Configuration Used
-
-### tcpcat Options
-```
--Pn           → Skip ping discovery (assume host alive)
--sT           → TCP Connect scan (same as nmap)
---rate 0      → No rate limiting
--w 64         → 64 parallel workers (CPU affinity)
--p 1-1024     → Scan ports 1 to 1024
-```
-
-### Why These Options Show tcpcat's Strength
-- **-w 64**: Leverages Phase 2 CPU affinity optimization
-- **--rate 0**: Removes artificial bottlenecks
-- **-sT**: Same scan type as nmap for fair comparison
-- **192.168.1.10**: Real network (not localhost)
-
----
-
-## 📈 Performance Optimization Sources
-
-### Phase 2 Optimizations Active
-1. **Batch Processing** (25% gain)
-   - Groups 100-1000 ports per batch
-   - Reduces syscall overhead
-
-2. **CPU Affinity** (10-15% gain)
-   - 64 workers bound to specific cores
-   - Reduces context switches
-
-3. **NUMA-Aware Buffering** (5-20% gain)
-   - Per-node memory allocation
-   - Reduces cross-socket traffic
-
-4. **eBPF Hash Map Tuning** (15% gain)
-   - Kernel-space port state tracking
-   - Optimized for 1024 ports
-
-5. **Performance Metrics**
-   - Real-time throughput tracking
-   - Latency calculation
-
-### Total Performance Gain: **55-75%** (conservative estimate)
-- Actual measurement: **2,382%** (23.82x)
-- **Suggests additional kernel-space optimizations working**
-
----
-
-## 🚀 Scalability Expectations
-
-### Linear Scaling Test
-Based on 1024-port scan = 79.9 ms:
-
-| Port Count | Est. Time | Ports/sec |
-|-----------|-----------|-----------|
-| 100 | ~7.8 ms | 12,816 pps |
-| 1,024 | 79.9 ms | 12,816 pps |
-| 10,000 | ~780 ms | 12,816 pps |
-| 65,536 | ~5.1 s | 12,816 pps |
-
-### For 1M Ports-Per-Second Target
-```
-At current 12.8K pps: Need 78x more optimization
-- Phase 3 WASM: 2-3x
-- XDP Ring Buffer: 20-30x
-- Additional kernel tuning: 3-5x
-- Total potential: 120-180x → 1.5M-2.3M pps ✅
-```
-
----
-
-## ⚠️ Caveats & Notes
-
-### System Conditions
-- Target host: 192.168.1.10 (internal LAN)
-- Both tools limited by network latency (RTT per port)
-- Nmap had statistical outliers (quiet system recommended)
-- tcpcat more stable (better goroutine scheduling)
-
-### Fair Comparison Factors
-✅ Same scan type (-sT = TCP Connect)
-✅ Same target (single host)
-✅ Same port range (1-1024)
-✅ Same output redirection (>/dev/null)
-✅ Real network (not localhost)
-❌ Different implementations (Go vs C/Lua)
-❌ Different feature sets
-
-### What Could Affect Results
-- Network latency (primary factor for TCP Connect scan)
-- Router/firewall processing speed
-- Target system response rate
-- OS TCP stack tuning (backlog, timeouts)
-
----
-
-## 🎓 Implications for Security Scanning
-
-### Speed Advantage Enables
-1. **Broader Coverage**: Scan entire networks in seconds
-2. **Real-time Monitoring**: Continuous compliance checking
-3. **Cloud-Scale**: Scan 1000s of EC2 instances
-4. **Forensic Analysis**: Replay attacks at high speed
-
-### Example Use Cases
-```bash
-# Cloud infrastructure scanning (EC2, GCP, Azure)
-./tcpcat -p 1-1024 192.168.0.0/16 --workers 256
-
-# Continuous compliance: Run hourly
-while true; do
-  ./tcpcat --targets cloud-instances.txt -p 1-1024
-  sleep 3600
-done
-
-# Vulnerability scanning: Fast re-scan
-./tcpcat --targets vulnerable.txt -sV --scripts exploit/
-
-# Forensic timeline: 1000s of IPs
-time ./tcpcat -iL network.txt -p 1-65535 --workers 512
-```
-
----
-
-## 📝 Benchmark Reproducibility
-
-### To Reproduce This Benchmark
-```bash
-# 1. Install hyperfine
-brew install hyperfine  # macOS
-# or
-apt-get install hyperfine  # Linux
-
-# 2. Build tcpcat
-cd tcpcat
-go build -o tcpcat cmd/tcpcat/main.go
-
-# 3. Update target IP (192.168.1.10 → your LAN host)
-# Must be same host for fair comparison!
-
-# 4. Run benchmark
-hyperfine --warmup 3 --runs 20 \
-  'nmap -Pn -sT -p 1-1024 192.168.1.10 >/dev/null' \
-  './tcpcat -Pn -sT --rate 0 -w 64 -p 1-1024 192.168.1.10 >/dev/null'
-```
-
-### To Test Different Scenarios
-```bash
-# Larger port range
-hyperfine --runs 10 \
-  'nmap -Pn -sT -p 1-10000 192.168.1.10' \
-  './tcpcat -Pn -sT -w 64 -p 1-10000 192.168.1.10'
-
-# UDP scanning
-hyperfine --runs 10 \
-  'nmap -Pn -sU -p 1-1024 192.168.1.10' \
-  './tcpcat -Pn -sU -w 64 -p 1-1024 192.168.1.10'
-
-# With service detection
-hyperfine --runs 5 \
-  'nmap -Pn -sT -sV -p 1-1024 192.168.1.10' \
-  './tcpcat -Pn -sT -sV -w 64 -p 1-1024 192.168.1.10'
-```
-
----
-
-## 🏁 Conclusion
-
-tcpcat demonstrates **23.82x performance advantage over Nmap** on real-world TCP scanning, validating:
-
-✅ **Phase 2 Performance Optimizations** are working effectively
-✅ **Batch processing, CPU affinity, NUMA buffering** providing measurable gains
-✅ **Scalability to large-scale scanning** workloads
-✅ **Production-ready performance** for enterprise security
-
-### Next Milestones
-- [ ] Phase 3 WASM scripting integration (+2-3x)
-- [ ] XDP Ring Buffer migration (+20-30x)
-- [ ] 1M pps target validation
-- [ ] Masscan comparison benchmarks
-
----
-
-**Benchmark Date**: 2026-08-28
-**Branch**: feature/improve-quality
-**Commits**: Phase 2 & 3 complete
-**Status**: ✅ PRODUCTION VALIDATED
+It needs only Docker. The report, raw output and full environment (kernel, CPU,
+NIC, driver, how AF_XDP attached) are written under `benchmarks/results/`. See
+[benchmarks/README.md](../benchmarks/README.md) for the method, the exact
+commands compared, and the limits of each run.
+
+## Sample report (virtual interface, laptop)
+
+Docker Desktop on an Apple-silicon Mac, kernel 6.12 (aarch64), 10 cores, a
+veth interface with AF_XDP in **copy mode**. 131 070 probes per run, 80 open
+ports. This is a *correctness and reproducibility* example, **not** tcpcat's
+performance on a real network card.
+
+Rate ceiling 25 000 packets/s (no run can physically take less than ~5.24 s):
+
+| Tool | Mean ± σ | CPU (user+sys) | Open ports | Valid |
+|---|---|---|---|---|
+| nmap | 5.383 s ± 0.031 | 2.7 s | 80/80 | yes |
+| tcpcat-ebpf | 5.808 s ± 0.722 | 6.3 s | 80/80 | yes |
+| tcpcat-syn | 6.325 s ± 0.102 | 42.3 s | 80/80 | yes |
+| naabu | 18.939 s ± 0.390 | 51.5 s | 80/80 | yes |
+
+Rate ceiling 1 000 000 packets/s (uncapped):
+
+| Tool | Mean ± σ | CPU (user+sys) | Open ports | Valid |
+|---|---|---|---|---|
+| nmap | 0.942 s ± 0.082 | 0.9 s | 80/80 | yes |
+| tcpcat-ebpf | 2.128 s ± 0.218 | 3.4 s | 80/80 | yes |
+| tcpcat-syn | 6.560 s ± 0.167 | 43.2 s | 80/80 | yes |
+| naabu | 9.410 s ± 0.101 | 55.0 s | 68/80 | **no** |
+
+### Reading this honestly
+
+- **On a laptop's veth interface, Nmap is the fastest tool here.** AF_XDP runs
+  in copy mode over virtual interfaces, so the kernel-bypass advantage is
+  largely neutralised; Nmap is extremely well tuned for a single host.
+- Where tcpcat's engine already shows is **CPU efficiency**: `tcpcat-ebpf`
+  does the same work as its own raw-socket SYN scan (`tcpcat-syn`) in a small
+  fraction of the CPU time, and beats naabu on both time and accuracy.
+- The kernel-bypass advantage is expected to grow on a **physical NIC** in
+  native / zero-copy mode. That result has to be measured on real hardware you
+  own — see "Through a real NIC" in
+  [benchmarks/README.md](../benchmarks/README.md) — and will be published here
+  only once reproduced, never estimated.
+
+## What tcpcat does not claim
+
+- No "X× faster than Nmap" headline. On the numbers we can reproduce today,
+  that claim would be false on a laptop and unmeasured on real hardware.
+- masscan and ZMap remain the reference for internet-wide, raw packets-per-
+  second scanning. tcpcat's aim is a kernel-bypass engine **paired with**
+  service/OS detection, CVE correlation, WASM scripting and SARIF reporting —
+  not to win a pps drag race.
