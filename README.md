@@ -27,12 +27,13 @@ Fast network scanner in Go with an eBPF/AF_XDP engine, service and OS
 detection, CVE correlation, and JSON/SARIF reports. Built for **authorized**
 security assessments.
 
-<!--
-  DEMO: a ready-to-run vhs tape lives at docs/demo.tape. Generate the GIF with:
-      vhs docs/demo.tape          # writes docs/demo.gif
-  then uncomment the line below and commit docs/demo.gif.
-  ![tcpcat demo](docs/demo.gif)
--->
+<div align="center">
+
+![tcpcat scanning scanme.nmap.org — open ports, service and version detection, weak-crypto findings, and CVE correlation](docs/demo.gif)
+
+</div>
+
+<!-- Regenerate this demo with: vhs docs/demo.tape  (see docs/demo.tape) -->
 
 ## Quick start
 

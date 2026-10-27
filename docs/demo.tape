@@ -1,36 +1,33 @@
 # Terminal demo for the README, recorded with vhs (https://github.com/charmbracelet/vhs).
 #
-#   go install github.com/charmbracelet/vhs@latest   # or: brew install vhs
-#   vhs docs/demo.tape                                # writes docs/demo.gif
-#   # then uncomment the ![tcpcat demo] line in README.md and commit the gif
+#   brew install vhs          # (or: go install github.com/charmbracelet/vhs@latest)
+#   vhs docs/demo.tape        # writes docs/demo.gif
 #
-# Keep it short (~10-12s) and scan ONLY an authorized host. scanme.nmap.org is
-# the public target Nmap provides for scan testing. Run this where you already
-# have sudo cached, or swap in a lab host so no password prompt is recorded.
+# Uses a TCP connect scan (-sT) so it runs WITHOUT root -- no sudo password
+# prompt gets recorded, and anyone can reproduce it verbatim. scanme.nmap.org
+# is the public host Nmap provides for scan testing. The PATH export below lets
+# the command read as a clean `tcpcat ...`; it assumes you ran `go build -o
+# tcpcat ./cmd/tcpcat` (or have the release binary) in the repo root.
 
 Output docs/demo.gif
 
 Set Shell "bash"
-Set FontSize 18
+Set FontSize 16
 Set Width 1200
-Set Height 640
-Set Padding 24
+Set Height 720
+Set Padding 22
 Set Theme "Dracula"
-Set TypingSpeed 60ms
-Set PlaybackSpeed 1.0
+Set TypingSpeed 55ms
 
 Hide
+Type "export PATH=$PWD:$PATH" Enter
 Type "clear" Enter
 Show
 
-Type "sudo tcpcat -sV -p 22,80,443 scanme.nmap.org"
-Sleep 800ms
+Type "tcpcat -sT -sV -p 22,80,443 scanme.nmap.org"
+Sleep 700ms
 Enter
 
-# Let the SYN + service-detection + CVE-lookup output stream in.
-Sleep 9s
-
-Type "# full JSON report:  add  -j report.json   |   SARIF:  --sarif report.sarif"
-Sleep 2s
-Enter
-Sleep 1500ms
+# Host discovery -> open ports -> service/version + weak-crypto findings ->
+# CVE correlation via the OSV API. The real scan takes ~11s.
+Sleep 13s
