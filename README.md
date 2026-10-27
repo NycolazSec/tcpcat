@@ -19,6 +19,7 @@
 [![License: AGPL-3.0 or Commercial](https://img.shields.io/badge/License-AGPL--3.0%20or%20Commercial-blue.svg)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/releases)
 [![WASM dissector hub](https://img.shields.io/badge/WASM%20dissectors-hub-3ddc84?logo=webassembly&logoColor=white)](https://github.com/NycolazSec/tcpcat-scripts)
+[![BlackArch](https://img.shields.io/badge/BlackArch-packaged-1793d1?logo=archlinux&logoColor=white)](https://blackarch.org/scanner.html)
 [![Discord](https://img.shields.io/badge/Discord-Rejoindre-5865F2?logo=discord&logoColor=white)](https://discord.gg/syn)
 [![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/NycolazSec/badge.svg)](https://hub.xerj.org/contributors/NycolazSec)
 </div>
@@ -45,9 +46,12 @@ go install github.com/NycolazSec/tcpcat/cmd/tcpcat@latest
 sudo tcpcat -sV -p 22,80,443 scanme.nmap.org
 ```
 
-Prefer a container, a prebuilt binary, or a `.deb`/`.dmg`?
+Prefer a package, a container, or a prebuilt binary?
 
 ```bash
+# BlackArch Linux
+sudo pacman -S tcpcat
+
 # Container (raw sockets need the extra capabilities)
 docker run --rm --cap-add=NET_RAW --cap-add=NET_ADMIN \
   ghcr.io/nycolazsec/tcpcat:latest -sV -p 22,80,443 scanme.nmap.org
