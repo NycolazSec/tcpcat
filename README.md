@@ -126,6 +126,38 @@ tcpcat is a dual-licensed project (AGPL-3.0 or commercial) maintained by Nicolas
 
 ---
 
+## How tcpcat compares
+
+Where tcpcat fits next to the tools people already reach for. This is meant to
+be honest about where the others are strong, not a scoreboard.
+
+| | tcpcat | Nmap | RustScan | naabu | Masscan |
+|---|:---:|:---:|:---:|:---:|:---:|
+| TCP SYN / connect scan | ✅ | ✅ | ✅ | ✅ | ✅ (SYN) |
+| Kernel-bypass data path | ✅ eBPF/AF_XDP | ❌ | ❌ | ❌ | ✅ PF_RING |
+| Service + version detection | ✅ | ✅ | ↪ via Nmap | ❌ | ❌ |
+| OS detection | ✅ | ✅ | ❌ | ❌ | ❌ |
+| CVE correlation built in | ✅ OSV/Vulners/offline | ↪ vulners NSE | ❌ | ❌ | ❌ |
+| Custom detection scripts | ✅ **sandboxed WASM** | ✅ Lua (NSE) | ❌ | ❌ | ❌ |
+| SARIF output (CI/DevSecOps) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Signed releases + SBOM | ✅ cosign + CycloneDX | — | — | — | — |
+| License | AGPL-3.0 / commercial | NPSL | GPL/MIT | MIT | AGPL-3.0 |
+
+**On speed:** masscan and ZMap remain the reference for internet-wide
+blasting; Nmap is superbly tuned for a single network. tcpcat's goal isn't to
+beat them at raw packets-per-second — it's to pair a kernel-bypass engine with
+real detection and reporting. In the [reproducible lab](benchmarks/README.md),
+on a laptop's virtual interface the eBPF engine is within ~1.1× of Nmap while
+using a fraction of the CPU of a raw-socket SYN scan; its advantage grows on a
+real NIC in native/zero-copy mode. **We publish only numbers you can reproduce
+with one command** — see [benchmarks/](benchmarks/).
+
+**What's genuinely unique:** writing detection logic in **sandboxed
+WebAssembly** (Rust/Zig/TinyGo/C) that can only talk to the port being scanned.
+See [docs/WASM_SDK.md](docs/WASM_SDK.md).
+
+---
+
 ## Architecture
 
 ### Kernel-Space Operations (eBPF/AF_XDP)
