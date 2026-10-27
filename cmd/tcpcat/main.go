@@ -80,7 +80,11 @@ func main() {
 	// flag parsing, which would otherwise read "policy" as a target name.
 	if len(os.Args) > 1 {
 		if run, ok := subcommands[os.Args[1]]; ok {
-			if !isHelpRequest(os.Args[2:]) {
+			// `scripts` writes machine-facing output to stdout -- JSON, and a
+			// bare path from `scripts dir` meant for --scripts "$(...)" -- so it
+			// must not be preceded by the banner. Other subcommands print a
+			// human report (their JSON goes to a -j file), so they keep it.
+			if !isHelpRequest(os.Args[2:]) && os.Args[1] != "scripts" {
 				fmt.Println(config.RenderBanner(""))
 			}
 			os.Exit(run(os.Args[2:]))

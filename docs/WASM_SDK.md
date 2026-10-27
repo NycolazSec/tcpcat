@@ -6,6 +6,21 @@ it recognised: a product, a version, a misconfiguration. Where Nmap has Lua
 scripts (NSE), tcpcat has sandboxed WebAssembly, so a dissector can be written
 in any language that compiles to it.
 
+## Installing shared dissectors (the hub)
+
+You don't have to build every dissector yourself. `tcpcat scripts` installs
+them from a hub — a catalog that pins each module's SHA-256, so an install is
+verified before the module ever reaches the scanner:
+
+```bash
+tcpcat scripts search                       # browse the hub
+tcpcat scripts install redis                # download + verify into the scripts dir
+tcpcat -sV -p 6379 --scripts "$(tcpcat scripts dir)" <target>
+```
+
+The hub's format, and how to publish or contribute dissectors, is in
+[examples/scripts-hub](../examples/scripts-hub). To write your own, read on.
+
 ## Quick start (TinyGo)
 
 ```bash
