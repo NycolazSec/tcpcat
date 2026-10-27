@@ -1,0 +1,10 @@
+# GitHub reads this file (on the default branch) to render the repo's "Sponsor"
+# button. Buy Me a Coffee expects the USERNAME only -- not a full URL. The old
+# repo-level funding entry stored a doubled URL
+# (https://buymeacoffee.com/https://buymeacoffee.com/tcpcat), which rendered a
+# dead button; this file overrides it with the correct handle.
+buy_me_a_coffee: tcpcat
+
+# Enable more once they exist:
+# github: NycolazSec          # requires GitHub Sponsors to be set up
+# custom: ["https://tcpcat.io"]
