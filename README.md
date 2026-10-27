@@ -28,9 +28,9 @@ detection, CVE correlation, and JSON/SARIF reports. Built for **authorized**
 security assessments.
 
 <!--
-  DEMO: record a short terminal GIF of a real scan and drop it at docs/demo.gif,
-  then uncomment the line below. A ~10s asciinema/vhs capture of the Quick start
-  command works well.
+  DEMO: a ready-to-run vhs tape lives at docs/demo.tape. Generate the GIF with:
+      vhs docs/demo.tape          # writes docs/demo.gif
+  then uncomment the line below and commit docs/demo.gif.
   ![tcpcat demo](docs/demo.gif)
 -->
 
@@ -44,9 +44,19 @@ go install github.com/NycolazSec/tcpcat/cmd/tcpcat@latest
 sudo tcpcat -sV -p 22,80,443 scanme.nmap.org
 ```
 
-Prefer a prebuilt binary or a `.deb`/`.dmg`? Grab one from the
-[releases page](https://github.com/NycolazSec/tcpcat/releases). To build from
-source, see [Installation](#installation--prerequisites).
+Prefer a container, a prebuilt binary, or a `.deb`/`.dmg`?
+
+```bash
+# Container (raw sockets need the extra capabilities)
+docker run --rm --cap-add=NET_RAW --cap-add=NET_ADMIN \
+  ghcr.io/nycolazsec/tcpcat:latest -sV -p 22,80,443 scanme.nmap.org
+```
+
+Binaries and packages are on the
+[releases page](https://github.com/NycolazSec/tcpcat/releases); other channels
+(Homebrew, AUR, BlackArch) are tracked in
+[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md). To build from source, see
+[Installation](#installation--prerequisites).
 
 ```text
 [*] Target loaded: scanme.nmap.org (1 IP(s) resolved)
