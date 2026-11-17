@@ -99,3 +99,43 @@ func TestNewRawTCPScannerRejectsUnparsableTarget(t *testing.T) {
 		t.Errorf("error = %q, should not blame IPv6 for a target that isn't an IP at all", err.Error())
 	}
 }
+
+// tcpChecksum sums the pseudo-header in place; it must give exactly what the
+// pseudo-header buffer did, for even and odd segment lengths.
+func TestTCPChecksumMatchesPseudoHeaderBuffer(t *testing.T) {
+	src, dst := net.IPv4(192, 0, 2, 7), net.IPv4(198, 51, 100, 23)
+	reference := func(seg []byte) uint16 {
+		pseudo := make([]byte, 12+len(seg))
+		copy(pseudo[0:4], src.To4())
+		copy(pseudo[4:8], dst.To4())
+		pseudo[9] = 6
+		binary.BigEndian.PutUint16(pseudo[10:12], uint16(len(seg)))
+		copy(pseudo[12:], seg)
+		return xdpChecksum(pseudo)
+	}
+	for _, n := range []int{20, 21, 40, 52, 53} {
+		seg := make([]byte, n)
+		for i := range seg {
+			seg[i] = byte(i*37 + n)
+		}
+		if got, want := tcpChecksum(src, dst, seg), reference(seg); got != want {
+			t.Errorf("len %d: tcpChecksum = %#04x, pseudo-header buffer gives %#04x", n, got, want)
+		}
+		if got, want := calcTCPChecksum(src, dst, seg), reference(seg); got != want {
+			t.Errorf("len %d: calcTCPChecksum = %#04x, want %#04x", n, got, want)
+		}
+	}
+}
+
+// putIPv4Header writes the header constructIPv4Header always returned.
+func TestPutIPv4HeaderMatchesConstruct(t *testing.T) {
+	src, dst := net.IPv4(10, 0, 0, 1), net.IPv4(10, 0, 0, 2)
+	var h [20]byte
+	putIPv4Header(h[:], src, dst, 6, 40)
+	if want := constructIPv4Header(src, dst, 6, 40); string(h[:]) != string(want) {
+		t.Errorf("putIPv4Header = % x\nconstruct      = % x", h[:], want)
+	}
+	if calcIPChecksum(h[:]) != 0 {
+		t.Error("header checksum does not verify (sum over a valid header must be 0)")
+	}
+}
