@@ -2,15 +2,10 @@
 
 <div align="center">
 
-```
-  [eth0]====-._     _,-'""'-._        _____ ____ ____   ____    _  _____ 
-         (,-.'._,'(       |\'-/|      |_   _/ ___|  _ \ / ___|  / \|_   _|
-             '-.-' \ )-'( , o o)        | || |   | |_) | |     / _ \ | |  
-                   '-    \'_'"'-        | || |___|  __/| |___ / ___ \| |  
-    <--[SYN]--(sniffing)--[ACK]-->      |_| \____|_|    \____/_/   \_\_|  
-                                        Modular Security & Network Engine
-                                         [ eBPF / AF_XDP ] by NycolazSec
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/tcpcat-logo-white.png">
+  <img src="docs/assets/brand/tcpcat-logo.png" alt="tcpcat" width="300">
+</picture>
 
 *eBPF/AF_XDP kernel-space I/O · service & OS detection · CVE correlation · WASM detection scripting*
 
