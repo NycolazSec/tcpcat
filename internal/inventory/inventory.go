@@ -52,6 +52,9 @@ type Owner struct {
 	ContainerName string `json:"container_name,omitempty"`
 	PodUID        string `json:"pod_uid,omitempty"`
 	Pod           string `json:"pod,omitempty"` // namespace/name, via kubectl when available
+	// PodLabels are the pod's labels, via kubectl when available. remediate
+	// builds a NetworkPolicy selector from them.
+	PodLabels map[string]string `json:"pod_labels,omitempty"`
 	// ForwardsTo is set for docker-proxy: the container address it relays to.
 	ForwardsTo string `json:"forwards_to,omitempty"`
 }

@@ -86,6 +86,24 @@ func TestParseKubeServices(t *testing.T) {
 	}
 }
 
+func TestParseKubePods(t *testing.T) {
+	out := "uid-1\tpayments/web-7c9\t{\"app\":\"web\",\"pod-template-hash\":\"7c9\"}\n" +
+		"uid-2\tkube-system/coredns-1\t\n" + // no labels: kubectl prints nothing
+		"uid-3\tdefault/old\tmap[app:old]\n" + // older kubectl: Go map syntax, not JSON
+		"uid-4\tdefault/two-columns\n" + // the pre-labels format
+		"\n"
+	got := ParseKubePods(out)
+	want := map[string]KubePod{
+		"uid-1": {Name: "payments/web-7c9", Labels: map[string]string{"app": "web", "pod-template-hash": "7c9"}},
+		"uid-2": {Name: "kube-system/coredns-1"},
+		"uid-3": {Name: "default/old"},
+		"uid-4": {Name: "default/two-columns"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ParseKubePods = %+v", got)
+	}
+}
+
 func TestWriteLoad(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "inv.json")
 	inv := Inventory{Format: Format, Hostname: "h", Listeners: []Listener{{Address: "0.0.0.0", Port: 22, Owner: &Owner{PID: 1, Process: "sshd"}}}}

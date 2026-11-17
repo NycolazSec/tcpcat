@@ -169,19 +169,15 @@ func enrichKubernetes(inv *Inventory) {
 		_ = os.Setenv("KUBECONFIG", "/etc/rancher/k3s/k3s.yaml")
 	}
 	pods, ok := run("kubectl", "get", "pods", "-A", "-o",
-		`jsonpath={range .items[*]}{.metadata.uid}{"\t"}{.metadata.namespace}/{.metadata.name}{"\n"}{end}`)
+		`jsonpath={range .items[*]}{.metadata.uid}{"\t"}{.metadata.namespace}/{.metadata.name}{"\t"}{.metadata.labels}{"\n"}{end}`)
 	if !ok {
 		return
 	}
-	byUID := map[string]string{}
-	for _, line := range strings.Split(pods, "\n") {
-		if uid, name, ok := strings.Cut(line, "\t"); ok {
-			byUID[uid] = name
-		}
-	}
+	byUID := ParseKubePods(pods)
 	for i := range inv.Listeners {
 		if o := inv.Listeners[i].Owner; o != nil && o.PodUID != "" {
-			o.Pod = byUID[o.PodUID]
+			p := byUID[o.PodUID]
+			o.Pod, o.PodLabels = p.Name, p.Labels
 		}
 	}
 	svcs, ok := run("kubectl", "get", "svc", "-A", "-o",
