@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NycolazSec/tcpcat/config"
@@ -66,6 +67,14 @@ var xdpDiscovery sync.Map // IP string -> true, populated by xdpRxLoop for host 
 var xdpRunning bool
 var xdpDebug bool            // gates informational (non-error) engine/eBPF diagnostics behind --debug
 var xdpSockets []*xdp.Socket // one per bound RX queue; xdpSockets[0] is also GlobalXsk, the sole TX path
+
+// xdpTxRingSize is the TX ring's size in descriptors, and xdpCopyMode is
+// true when the sockets run in copy mode (see xdpKickTx). Both are set by
+// InitXDPEngine.
+var (
+	xdpTxRingSize int
+	xdpCopyMode   bool
+)
 
 // xdpSocketOptions sizes one queue's AF_XDP socket. The library's defaults
 // (64-slot rings over 128 frames) are sized for a demo: a scan gets one reply
@@ -390,6 +399,8 @@ func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 	}
 
 	zeroCopy := len(xdpSockets) > 0 && xdpSocketZeroCopy(xdpSockets[0])
+	xdpCopyMode = !zeroCopy
+	xdpTxRingSize = sockOpts.TxRingNumDescs
 
 	// Busy-poll and CPU-pinning only pay off on the zero-copy path (a capable
 	// NIC attached natively): there they keep the RX ring drained with low
@@ -427,7 +438,8 @@ func InitXDPEngine(ifaceName string, opts *config.Options) (any, error) {
 	}
 
 	// One flusher batches every probe's frame onto the single TX ring.
-	xdpTxQueue = make(chan []byte, 8192)
+	xdpTxQueue = make(chan xdpTxItem, xdpTxQueueLen)
+	xdpTxUnsent.Store(0)
 	go xdpTxFlusher(xdpSockets[0])
 
 	xdpColl = coll
@@ -439,6 +451,12 @@ func ShutdownXDPEngine() {
 		return
 	}
 	xdpRunning = false
+
+	if n := xdpTxUnsent.Load(); n > 0 {
+		log.Printf("[!] %d probe(s) were never sent: the AF_XDP transmit queue stayed full for %s on every attempt. "+
+			"Their ports are reported with reason %q, not as scanned. Lower -w or --rate and scan them again.",
+			n, xdpTxEnqueueWait, xdpNotProbedReason)
+	}
 
 	if xdpLink != nil {
 		t0 := time.Now()
@@ -725,76 +743,179 @@ func getSrcPort(opts *config.Options) uint16 {
 // host. Batching amortizes the syscall over up to txBatchSize frames.
 const txBatchSize = 64
 
-// xdpTxQueue carries probe frames from the scanning goroutines to the single
-// flusher that owns the TX ring. Buffered so paced bursts don't block.
-var xdpTxQueue chan []byte
+// xdpTxItem is one frame on its way to the TX ring. When sent is not nil,
+// the flusher reports on it whether the frame made it onto the ring (true)
+// or was dropped for lack of a free frame (false).
+type xdpTxItem struct {
+	frame []byte
+	sent  chan bool
+}
 
-// transmitXDPFrames hands a probe's frames to the TX flusher. It returns false
-// only when the queue is saturated (the flusher can't keep up), which the
-// caller reports as congestion so the probe retries or times out. The frames
-// must not be mutated afterwards: the flusher copies them into the UMEM when
-// it sends. The socket argument is ignored (the flusher owns the one socket).
+// xdpTxQueue carries probe frames from the scanning goroutines to the single
+// flusher that owns the TX ring.
+var xdpTxQueue chan xdpTxItem
+
+// xdpTxQueueLen is xdpTxQueue's capacity: a few batches, so paced bursts don't
+// block, but short enough that a frame never waits long in it. A probe's
+// timeout starts once its frame is queued, and the queue used to hold 8192
+// frames: with many workers (-w 4096) it filled faster than the flusher
+// drained it, queued probes timed out before leaving, their retries filled it
+// further, and 91 % of a lab scan's probes were reported FILTERED without
+// ever being sent (3 of 80 open ports found).
+const xdpTxQueueLen = 8 * txBatchSize
+
+// xdpTxEnqueueWait is how long a probe waits for room in a full xdpTxQueue
+// before giving up on that attempt. Waiting slows the workers down to what
+// the flusher can send, which is the point: a slower scan, not a wrong one.
+var xdpTxEnqueueWait = 2 * time.Second
+
+// xdpTxUnsent counts probes that gave up on every attempt because the queue
+// stayed full: their ports were never probed. ShutdownXDPEngine reports it.
+var xdpTxUnsent atomic.Int64
+
+// xdpNotProbedReason is the Reason of a port whose probe never left tcpcat.
+const xdpNotProbedReason = "Not probed: AF_XDP transmit queue saturated"
+
+// transmitXDPFrames hands a probe's frames to the TX flusher, waiting up to
+// xdpTxEnqueueWait for room when the queue is full, then waits for the flusher
+// to put the last of them on the TX ring. It returns false when they were not
+// all sent, and the caller then retries the attempt or reports the port as
+// not probed.
+//
+// Returning only once the frame is on the ring is what keeps local queueing
+// out of the probe's timeout: the caller starts the attempt's clock on
+// return. Started at enqueue, it ran while the frame waited behind thousands
+// of others (53 ms median, 115 ms max for a reply on a veth with -w 4096),
+// probes timed out before they had left, and open ports were lost.
+//
+// The frames must not be mutated afterwards: the flusher copies them into the
+// UMEM when it sends. The socket argument is ignored (the flusher owns it).
 func transmitXDPFrames(_ *xdp.Socket, frames [][]byte) bool {
-	for _, frame := range frames {
+	if len(frames) == 0 {
+		return true
+	}
+	deadline := time.NewTimer(xdpTxEnqueueWait)
+	defer deadline.Stop()
+
+	sent := make(chan bool, 1)
+	for i, frame := range frames {
+		item := xdpTxItem{frame: frame}
+		if i == len(frames)-1 {
+			item.sent = sent // frames leave in order: the last one marks the probe sent
+		}
 		select {
-		case xdpTxQueue <- frame:
-		default:
+		case xdpTxQueue <- item:
+		case <-deadline.C:
 			return false
 		}
 	}
-	return true
+	select {
+	case ok := <-sent:
+		return ok
+	case <-deadline.C:
+		return false
+	}
 }
 
 // xdpTxFlusher owns the TX ring: it drains xdpTxQueue, coalescing up to
 // txBatchSize frames into one Transmit (one sendto). One flusher runs for the
 // life of the engine, on xdpSockets[0] (the sole TX socket).
 func xdpTxFlusher(xsk *xdp.Socket) {
-	batch := make([][]byte, 0, txBatchSize)
+	batch := make([]xdpTxItem, 0, txBatchSize)
+	idle := time.NewTimer(time.Hour)
+	defer idle.Stop()
 	for xdpRunning {
 		// Block for the first frame, with a timeout so the loop can exit.
+		idle.Reset(2 * time.Millisecond)
 		select {
-		case f := <-xdpTxQueue:
-			batch = append(batch, f)
-		case <-time.After(2 * time.Millisecond):
+		case it := <-xdpTxQueue:
+			batch = append(batch, it)
+		case <-idle.C:
 			continue
 		}
 		// Take whatever else is already queued, up to the batch size.
 	drain:
 		for len(batch) < txBatchSize {
 			select {
-			case f := <-xdpTxQueue:
-				batch = append(batch, f)
+			case it := <-xdpTxQueue:
+				batch = append(batch, it)
 			default:
 				break drain
 			}
 		}
-		xdpFlushBatch(xsk, batch)
+		n := xdpFlushBatch(xsk, batch)
+		for i, it := range batch {
+			if it.sent != nil {
+				it.sent <- i < n // buffered: never blocks the flusher
+			}
+		}
 		batch = batch[:0]
 	}
 }
 
 // xdpFlushBatch writes a batch of frames into the TX ring and kicks the kernel
-// once for the whole batch. Frames that don't fit (ring momentarily full) are
-// left unsent; their probes retry or time out.
-func xdpFlushBatch(xsk *xdp.Socket, frames [][]byte) {
-	if len(frames) == 0 {
-		return
+// once for the whole batch. It returns how many of the batch's frames, from
+// the start, made it onto the ring; the rest found no free frame and were not
+// sent, which the flusher reports to their probes.
+func xdpFlushBatch(xsk *xdp.Socket, items []xdpTxItem) int {
+	if len(items) == 0 {
+		return 0
 	}
 	xdpSockLock.Lock()
 	defer xdpSockLock.Unlock()
 
-	descs := xsk.GetDescs(len(frames))
-	if len(descs) < len(frames) {
+	descs := xsk.GetDescs(len(items))
+	if len(descs) < len(items) {
 		xdpReclaimSent(xsk) // free completed frames, then try for more
-		descs = xsk.GetDescs(len(frames))
+		descs = xsk.GetDescs(len(items))
 	}
 	n := 0
-	for ; n < len(descs) && n < len(frames); n++ {
-		copy(xsk.GetFrame(descs[n]), frames[n])
-		descs[n].Len = uint32(len(frames[n]))
+	for ; n < len(descs) && n < len(items); n++ {
+		copy(xsk.GetFrame(descs[n]), items[n].frame)
+		descs[n].Len = uint32(len(items[n].frame))
 	}
 	if n > 0 {
-		xsk.Transmit(descs[:n]) // one sendto for the whole batch
+		n = xsk.Transmit(descs[:n]) // one sendto for the whole batch
+		xdpKickTx(xsk)
+	}
+	return n
+}
+
+// xdpTxKickLimit bounds the extra sendto calls one flush makes: enough for a
+// full batch plus a backlog, never an unbounded loop under xdpSockLock.
+const xdpTxKickLimit = 8
+
+// xdpKickTx makes the kernel transmit what Transmit left in the TX ring.
+//
+// In copy mode (veth and most virtual NICs, generic attach, drivers without
+// zero-copy) one sendto transmits at most 32 descriptors (TX_BATCH_SIZE in
+// net/xdp/xsk.c) and returns EAGAIN for the rest, and the xdp library's
+// Transmit stops at that EAGAIN. With txBatchSize (64) frames per flush, the
+// ring then kept up to half of every batch: under load it filled (2048
+// descriptors), its frames waited for later flushes, and new probes found no
+// room: 4636 probes of a -w 4096 lab scan could not be sent.
+//
+// It kicks again while the kernel keeps consuming descriptors, and stops as
+// soon as a kick makes no progress (the device is busy: the next flush tries
+// again). In zero-copy mode the NIC consumes the ring asynchronously, so
+// Transmit's own wakeup is all it needs. The caller holds xdpSockLock.
+func xdpKickTx(xsk *xdp.Socket) {
+	if !xdpCopyMode || xdpTxRingSize == 0 {
+		return
+	}
+	pending := xdpTxRingSize - xsk.NumFreeTxSlots()
+	for kicks := 0; pending > 0 && kicks < xdpTxKickLimit; kicks++ {
+		_, _, errno := unix.Syscall6(unix.SYS_SENDTO, uintptr(xsk.FD()), 0, 0, uintptr(unix.MSG_DONTWAIT), 0, 0)
+		switch errno {
+		case 0, unix.EAGAIN, unix.EBUSY, unix.EINTR:
+		default:
+			return // a broken socket: the probes' timeouts report it
+		}
+		left := xdpTxRingSize - xsk.NumFreeTxSlots()
+		if left >= pending {
+			return // no progress
+		}
+		pending = left
 	}
 }
 
@@ -854,6 +975,7 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 	attemptTimeout := probeTimeout(rtt, timeout)
 	attempts := probeAttempts(opts)
 	var lastLatency time.Duration
+	unsent := 0 // attempts whose frame never got into the TX queue
 
 	// Register the waiter before the first transmit: a same-subnet SYN-ACK
 	// can return in under a millisecond, before this goroutine would reach
@@ -870,15 +992,11 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 		}
 
 		pacedWait(limiter)
-		t0 := time.Now()
 		if !transmitXDPFrames(xsk, framesToSend) {
-			return TargetResult{
-				IP:     ip,
-				Port:   port,
-				State:  StateFiltered,
-				Reason: "XDP TX Ring Congestion (Fragment dropped)",
-			}
+			unsent++
+			continue // not sent: try again rather than read silence into it
 		}
+		t0 := time.Now()
 
 		select {
 		case resp := <-ch:
@@ -909,6 +1027,12 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 		case <-time.After(attemptTimeout):
 			lastLatency = time.Since(t0)
 		}
+	}
+
+	if unsent == attempts {
+		// Nothing was sent: this port's state is unknown, not filtered.
+		xdpTxUnsent.Add(1)
+		return TargetResult{IP: ip, Port: port, State: StateFiltered, Reason: xdpNotProbedReason}
 	}
 
 	return TargetResult{
@@ -996,6 +1120,7 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 	attemptTimeout := probeTimeout(rtt, timeout)
 	attempts := probeAttempts(opts)
 	var lastLatency time.Duration
+	unsent := 0 // attempts whose frame never got into the TX queue
 
 	// Register before transmit (see ScanXDPPort): the RX loop delivers a
 	// reply straight into this channel and drops it if no waiter exists.
@@ -1009,15 +1134,11 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 		}
 
 		pacedWait(limiter)
-		t0 := time.Now()
 		if !transmitXDPFrames(xsk, framesToSend) {
-			return TargetResult{
-				IP:     ip,
-				Port:   port,
-				State:  StateFiltered,
-				Reason: "XDP TX Ring Congestion (Fragment dropped)",
-			}
+			unsent++
+			continue // not sent: try again rather than read silence into it
 		}
+		t0 := time.Now()
 
 		select {
 		case resp := <-ch:
@@ -1040,6 +1161,12 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 		case <-time.After(attemptTimeout):
 			lastLatency = time.Since(t0)
 		}
+	}
+
+	if unsent == attempts {
+		// Nothing was sent: this port's state is unknown, not filtered.
+		xdpTxUnsent.Add(1)
+		return TargetResult{IP: ip, Port: port, State: StateOpenFiltered, Reason: xdpNotProbedReason}
 	}
 
 	return TargetResult{
