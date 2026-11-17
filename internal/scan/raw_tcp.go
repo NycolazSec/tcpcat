@@ -40,6 +40,7 @@ type rawTCPScanner struct {
 	relayIP net.IP
 	mptcp   bool // advertise MP_CAPABLE (kind 30) in the SYN, for MPTCP detection
 	t0      time.Time
+	sa      syscall.SockaddrInet4 // Send's destination, reused across attempts
 
 	rxKey  rawRxKeyT
 	rxChan chan *rawTCPPacket
@@ -348,7 +349,18 @@ func (s *rawTCPScanner) Send(flags byte) error {
 		}
 	}
 
-	tcpHeader := make([]byte, headerLen)
+	// The whole probe is built in one stack buffer: [outer IPv4 header, for
+	// IP-in-IP relaying][IPv4 header][TCP header]. It used to allocate the
+	// TCP header, the IP header, their concatenation, the checksum's
+	// pseudo-header and the destination address, for every probe.
+	var buf [rawMaxPacket]byte
+	off := 0
+	if s.relayIP != nil {
+		off = 20
+	}
+	ipHeader := buf[off : off+20]
+	tcpHeader := buf[off+20 : off+20+headerLen]
+
 	binary.BigEndian.PutUint16(tcpHeader[0:2], uint16(s.srcPort))
 	binary.BigEndian.PutUint16(tcpHeader[2:4], uint16(s.dstPort))
 	binary.BigEndian.PutUint32(tcpHeader[4:8], 1)
@@ -365,50 +377,68 @@ func (s *rawTCPScanner) Send(flags byte) error {
 	}
 	tcpHeader[13] = flags
 	binary.BigEndian.PutUint16(tcpHeader[14:16], 65535)
+	binary.BigEndian.PutUint16(tcpHeader[16:18], tcpChecksum(s.srcIP, s.dstIP, tcpHeader))
 
-	cs := calcTCPChecksum(s.srcIP, s.dstIP, tcpHeader)
-	binary.BigEndian.PutUint16(tcpHeader[16:18], cs)
-
-	var packetToSend []byte
-	var destAddr [4]byte
-
+	putIPv4Header(ipHeader, s.srcIP, s.dstIP, syscall.IPPROTO_TCP, uint16(headerLen))
+	packet := buf[off : off+20+headerLen]
+	dst := s.dstIP
 	if s.relayIP != nil {
-
-		innerIPHeader := constructIPv4Header(s.srcIP, s.dstIP, syscall.IPPROTO_TCP, uint16(len(tcpHeader)))
-		innerPacket := append(innerIPHeader, tcpHeader...)
-		outerIPHeader := constructIPv4Header(probeSourceIP(""), s.relayIP, syscall.IPPROTO_IPIP, uint16(len(innerPacket)))
-		packetToSend = append(outerIPHeader, innerPacket...)
-		copy(destAddr[:], s.relayIP.To4())
-	} else {
-		packetToSend = append(constructIPv4Header(s.srcIP, s.dstIP, syscall.IPPROTO_TCP, uint16(len(tcpHeader))), tcpHeader...)
-		copy(destAddr[:], s.dstIP.To4())
+		putIPv4Header(buf[0:20], probeSourceIP(""), s.relayIP, syscall.IPPROTO_IPIP, uint16(20+headerLen))
+		packet = buf[0 : 40+headerLen]
+		dst = s.relayIP
 	}
-
-	sockAddr := &syscall.SockaddrInet4{
-		Port: 0,
-		Addr: destAddr,
-	}
+	copy(s.sa.Addr[:], dst.To4())
 
 	s.t0 = time.Now()
-	return syscall.Sendto(s.fd, packetToSend, 0, sockAddr)
+	return syscall.Sendto(s.fd, packet, 0, &s.sa)
+}
+
+// rawMaxPacket is the largest probe Send builds: an outer IPv4 header (for
+// IP-in-IP relaying), the IPv4 header, and the longest TCP header (a SYN
+// that carries MP_CAPABLE).
+const rawMaxPacket = 20 + 20 + synMPTCPHeaderLen
+
+// putIPv4Header writes a 20-byte IPv4 header into h, checksum included.
+func putIPv4Header(h []byte, srcIP, dstIP net.IP, protocol byte, payloadLen uint16) {
+	h[0] = 0x45
+	h[1] = 0x00
+	binary.BigEndian.PutUint16(h[2:4], 20+payloadLen)
+	binary.BigEndian.PutUint16(h[4:6], 0x0000)
+	binary.BigEndian.PutUint16(h[6:8], 0x4000)
+	h[8] = 64
+	h[9] = protocol
+	binary.BigEndian.PutUint16(h[10:12], 0x0000)
+	copy(h[12:16], srcIP.To4())
+	copy(h[16:20], dstIP.To4())
+	binary.BigEndian.PutUint16(h[10:12], calcIPChecksum(h[:20]))
+}
+
+// tcpChecksum is the TCP checksum of seg over the IPv4 pseudo-header
+// (source, destination, protocol, length), summed in place instead of
+// copying both into a pseudo-header buffer.
+func tcpChecksum(srcIP, dstIP net.IP, seg []byte) uint16 {
+	src, dst := srcIP.To4(), dstIP.To4()
+	sum := uint32(src[0])<<8 | uint32(src[1])
+	sum += uint32(src[2])<<8 | uint32(src[3])
+	sum += uint32(dst[0])<<8 | uint32(dst[1])
+	sum += uint32(dst[2])<<8 | uint32(dst[3])
+	sum += 6 // protocol: TCP
+	sum += uint32(len(seg))
+	for i := 0; i+1 < len(seg); i += 2 {
+		sum += uint32(seg[i])<<8 | uint32(seg[i+1])
+	}
+	if len(seg)%2 == 1 {
+		sum += uint32(seg[len(seg)-1]) << 8
+	}
+	for sum > 0xffff {
+		sum = sum>>16 + sum&0xffff
+	}
+	return ^uint16(sum)
 }
 
 func constructIPv4Header(srcIP, dstIP net.IP, protocol byte, payloadLen uint16) []byte {
 	header := make([]byte, 20)
-	header[0] = 0x45
-	header[1] = 0x00
-	binary.BigEndian.PutUint16(header[2:4], 20+payloadLen)
-	binary.BigEndian.PutUint16(header[4:6], 0x0000)
-	binary.BigEndian.PutUint16(header[6:8], 0x4000)
-	header[8] = 64
-	header[9] = protocol
-	binary.BigEndian.PutUint16(header[10:12], 0x0000)
-	copy(header[12:16], srcIP.To4())
-	copy(header[16:20], dstIP.To4())
-
-	checksum := calcIPChecksum(header)
-	binary.BigEndian.PutUint16(header[10:12], checksum)
-
+	putIPv4Header(header, srcIP, dstIP, protocol, payloadLen)
 	return header
 }
 
@@ -445,14 +475,5 @@ func (s *rawTCPScanner) Close() {
 }
 
 func calcTCPChecksum(srcIP, dstIP net.IP, tcpHeader []byte) uint16 {
-	pseudo := make([]byte, 12+len(tcpHeader))
-	copy(pseudo[0:4], srcIP.To4())
-	copy(pseudo[4:8], dstIP.To4())
-	pseudo[8] = 0
-	pseudo[9] = 6
-	tcpLen := uint16(len(tcpHeader))
-	binary.BigEndian.PutUint16(pseudo[10:12], tcpLen)
-	copy(pseudo[12:], tcpHeader)
-
-	return xdpChecksum(pseudo)
+	return tcpChecksum(srcIP, dstIP, tcpHeader)
 }
