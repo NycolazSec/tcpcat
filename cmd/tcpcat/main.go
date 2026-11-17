@@ -493,8 +493,20 @@ func main() {
 			fmt.Printf("%s[i] XDP engine init phase: %v%s\n", config.Gray, time.Since(xdpInitStart), config.Reset)
 		}
 
-		scan.GlobalXsk = xsk
-		defer scan.ShutdownXDPEngine()
+		if scan.UseRawInsteadOfCopyModeXDP(opts, scan.XDPCopyMode()) {
+			// Copy mode: AF_XDP has nothing to win here and sends from one
+			// thread; the raw-socket engine sends from every core.
+			scan.ShutdownXDPEngine()
+			scan.FallBackToRawEngine(opts)
+			iface := opts.Interface
+			if iface == "" {
+				iface = "this interface"
+			}
+			fmt.Printf("%s[i] AF_XDP can only run in copy mode on %s (its driver has no zero-copy support). There it is slower than the raw-socket engine, so this scan uses the raw-socket engine. Pass --ebpf-copy to keep AF_XDP.%s\n", config.Gray, iface, config.Reset)
+		} else {
+			scan.GlobalXsk = xsk
+			defer scan.ShutdownXDPEngine()
+		}
 	}
 
 	t0 := time.Now()
@@ -978,5 +990,14 @@ func main() {
 				fmt.Printf("%s[✓] Change alert sent to webhook.%s\n", config.White, config.Reset)
 			}
 		}
+	}
+
+	// An --ebpf scan that could not send some of its probes is incomplete:
+	// say so in the exit status too, not only in the log line, so a CI job
+	// does not read the unprobed ports as a clean result. The reports above
+	// are written first.
+	if scan.XDPNotProbed() > 0 {
+		scan.ShutdownXDPEngine() // os.Exit skips the deferred call
+		os.Exit(1)
 	}
 }

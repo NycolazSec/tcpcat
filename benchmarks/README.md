@@ -33,7 +33,7 @@ every tool's raw output and logs.
 
 | Name | Command |
 |---|---|
-| `tcpcat-ebpf` | `tcpcat -i eth0 -p 1-65535 -sS --ebpf --debug --open -T 5 --rate $RATE -Pn -j out.json <host1> <host2>` |
+| `tcpcat-ebpf` | `tcpcat -i eth0 -p 1-65535 -sS --ebpf --ebpf-copy --debug --open -T 5 --rate $RATE -Pn -j out.json <host1> <host2>` |
 | `tcpcat-syn` | `tcpcat -i eth0 -p 1-65535 -sS --open -T 5 --rate $RATE -Pn -j out.json <host1> <host2>` |
 | `nmap` | `nmap -e eth0 -p 1-65535 -sS -n -Pn -T4 --max-rate $RATE -oG out.txt <host1> <host2>` |
 | `naabu` | `naabu -interface eth0 -p 1-65535 -rate $RATE -host <host1>,<host2> -silent -Pn -o out.txt` |

@@ -57,7 +57,9 @@ WRAP
 }
 # --debug only adds a few start/stop lines, among them the AF_XDP sockets' own
 # drop counters, which report.py reads back from the log.
-wrapper tcpcat-ebpf "tcpcat -i $IF -p $PORTS -sS --ebpf --debug --open -T 5 --rate $RATE -Pn -j \$OUTFILE ${HOSTS[*]} >\$LOGFILE 2>&1"
+# --ebpf-copy: the lab's veth gives AF_XDP copy mode only, where tcpcat would
+# otherwise switch to its raw-socket engine; this row measures AF_XDP itself.
+wrapper tcpcat-ebpf "tcpcat -i $IF -p $PORTS -sS --ebpf --ebpf-copy --debug --open -T 5 --rate $RATE -Pn -j \$OUTFILE ${HOSTS[*]} >\$LOGFILE 2>&1"
 wrapper tcpcat-syn  "tcpcat -i $IF -p $PORTS -sS --open -T 5 --rate $RATE -Pn -j \$OUTFILE ${HOSTS[*]} >\$LOGFILE 2>&1"
 # nmap: $RATE is a ceiling (--max-rate), as it is for the other tools, and
 # nmap paces itself below it with its own defaults. Forcing it up with

@@ -78,8 +78,11 @@ type Options struct {
 	ZombieHost  string
 	UdpScan     bool
 	UseXDP      bool
-	OnlyOpen    bool
-	ShowClosed  bool
+	// EBPFCopy keeps the AF_XDP engine when it can only run in copy mode;
+	// by default tcpcat then uses the raw-socket engine (see main.go).
+	EBPFCopy   bool
+	OnlyOpen   bool
+	ShowClosed bool
 
 	Ports    string
 	TopPorts int
@@ -391,6 +394,7 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.UdpScan, "sU", false, "UDP Port Scan")
 	flag.IntVar(&opts.TopPorts, "top-ports", 0, "Scan <number> most common ports")
 	flag.BoolVar(&opts.UseXDP, "ebpf", false, "Enable experimental AF_XDP/eBPF engine")
+	flag.BoolVar(&opts.EBPFCopy, "ebpf-copy", false, "Keep the AF_XDP engine even when it can only run in copy mode (no zero-copy driver), where the raw-socket engine is faster")
 	flag.BoolVar(&opts.OnlyOpen, "open", false, "Show only open ports")
 	flag.BoolVar(&opts.ShowClosed, "show-closed", false, "Show CLOSED ports individually instead of a per-host summary count")
 
@@ -505,7 +509,8 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s-sU%s             UDP Port Scan\n", White, Reset)
 		fmt.Printf("  %s--open%s          Show only open ports\n", White, Reset)
 		fmt.Printf("  %s--show-closed%s   Show CLOSED ports individually instead of a per-host summary count\n", White, Reset)
-		fmt.Printf("  %s--ebpf%s          Enable experimental AF_XDP/eBPF engine (Extreme Performance)\n", White, Reset)
+		fmt.Printf("  %s--ebpf%s          Enable experimental AF_XDP/eBPF engine (zero-copy NICs; in copy mode tcpcat uses the raw-socket engine)\n", White, Reset)
+		fmt.Printf("  %s--ebpf-copy%s     Keep AF_XDP even in copy mode, where it is slower than the raw-socket engine\n", White, Reset)
 		fmt.Println(Bold + Red + "\nSERVICE & OS DETECTION:" + Reset)
 		fmt.Printf("  %s-sV%s             Service & Version detection\n", White, Reset)
 		fmt.Printf("  %s--scripts <dir>%s Run scripts from directory for advanced detection\n", White, Reset)

@@ -11,6 +11,13 @@ Full diffs for every release are available via GitHub's
 ## [Unreleased]
 
 ### Changed
+- `--ebpf` now uses the raw-socket engine when AF_XDP can only run in copy
+  mode (veth, most virtual NICs, drivers without zero-copy), and says so. In
+  copy mode every frame is still copied through the kernel and one thread
+  owns the AF_XDP send ring, so a full-range lab scan was about 4 times
+  slower than the raw-socket engine, which sends from every core.
+  `--ebpf-copy` keeps AF_XDP anyway; so does `-f`, which only the AF_XDP path
+  implements.
 - Raw-socket scans (`-sS` without `--ebpf`, and `-sA`, `-sW`, `-sF`, `-sN`,
   `-sX`, idle) use about 5 to 8 times less CPU per probe. Every probe used to
   open, bind and close its own send socket and look up its source address
@@ -21,6 +28,12 @@ Full diffs for every release are available via GitHub's
   4.5 s and 25 s of CPU to 1.3 s and 6.7 s.
 
 ### Fixed
+- `--ebpf` no longer crashes when a send fails for good, for instance when
+  the interface goes down mid-scan: the AF_XDP library panicked on any
+  unexpected `sendto` error, from the sender or from the receive loop
+  sending a RST. The error is now reported once, the remaining ports are
+  reported with the reason "Not probed: AF_XDP transmit failed", the reports
+  are still written, and the scan exits 1 since it is incomplete.
 - The macOS installers (`.pkg`, `.dmg`) shipped a binary that reported
   `tcpcat dev (commit none, built unknown)`: `build-dmg.sh` built it without
   the version stamp the other release archives get. It now carries the
