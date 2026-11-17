@@ -55,3 +55,6 @@ public/
 
 # Benchmark runs (benchmarks/run.sh); publish a report by copying it out
 benchmarks/results/
+
+# Built by examples/wasm-dissector/build.sh
+examples/wasm-dissector/*.wasm
