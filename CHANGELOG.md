@@ -10,6 +10,12 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-17
+
+### Added
+- `--ebpf-copy`: keep the AF_XDP engine when it can only run in copy mode
+  (see Changed).
+
 ### Changed
 - `--ebpf` now uses the raw-socket engine when AF_XDP can only run in copy
   mode (veth, most virtual NICs, drivers without zero-copy), and says so. In
@@ -946,7 +952,8 @@ Full diffs for every release are available via GitHub's
   visibility-testing controls, and a WASM-based scripting engine for custom
   detectors and exploit modules.
 
-[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/NycolazSec/tcpcat/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/NycolazSec/tcpcat/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/NycolazSec/tcpcat/compare/v1.4.4...v1.5.0
 [1.4.4]: https://github.com/NycolazSec/tcpcat/compare/v1.4.3...v1.4.4
