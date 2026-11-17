@@ -14,7 +14,7 @@ authors:
 repository-code: "https://github.com/NycolazSec/tcpcat"
 url: "https://tcpcat.io"
 license: AGPL-3.0-only
-version: 1.6.0
+version: 1.7.0
 date-released: "2026-11-17"
 keywords:
   - network-scanner
