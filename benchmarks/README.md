@@ -1,13 +1,16 @@
 # Reproducible benchmark
 
-One command measures tcpcat against Nmap and naabu and checks that each of
-them found every open port. It needs only Docker.
+One command measures tcpcat against Nmap and naabu (and, on request,
+masscan) and checks that each of them found every open port. It needs only
+Docker.
 
 ```bash
 ./benchmarks/run.sh                 # ports 1-65535, 2 hosts, ceiling 25 000 packets/s, 3 runs per tool
 RATE=1000000 ./benchmarks/run.sh    # same, with the rate ceiling out of the way
 PORTS=1-10000 RUNS=1 ./benchmarks/run.sh   # one-minute check that the harness works
 SUBNET_PREFIX=10.211.55 ./benchmarks/run.sh # use another /24 if 10.200.0.x is taken
+TCPCAT_VERSION=1.6.0 TCPCAT_COMMIT=c18dd58 ./benchmarks/run.sh  # name the build of a copied tree (no .git)
+TOOLS="tcpcat-ebpf tcpcat-syn nmap naabu masscan" ./benchmarks/run.sh  # include masscan (see below)
 ```
 
 The report is written to `benchmarks/results/<timestamp>/report.md`, next to
@@ -15,8 +18,8 @@ every tool's raw output and logs.
 
 ## What a run does
 
-1. Builds tcpcat from your checkout into an image that also holds Nmap, naabu
-   and hyperfine.
+1. Builds tcpcat from your checkout, stamped with its version like a release
+   build, into an image that also holds Nmap, naabu, masscan and hyperfine.
 2. Starts two targets on a private Docker network. Each listens on 40 TCP
    ports drawn from a fixed seed (8 well-known ones, 32 anywhere in 1-65535).
    Every other port is closed. This list is the **ground truth**.
@@ -34,14 +37,27 @@ every tool's raw output and logs.
 | `tcpcat-syn` | `tcpcat -i eth0 -p 1-65535 -sS --open -T 5 --rate $RATE -Pn -j out.json <host1> <host2>` |
 | `nmap` | `nmap -e eth0 -p 1-65535 -sS -n -Pn -T4 --max-rate $RATE -oG out.txt <host1> <host2>` |
 | `naabu` | `naabu -interface eth0 -p 1-65535 -rate $RATE -host <host1>,<host2> -silent -Pn -o out.txt` |
+| `masscan` | one per target, side by side: `masscan -e eth0 --router-mac <its MAC> -p 1-65535 --rate $RATE/2 --wait 1 -oL out.txt <host>` |
 
-Two choices are worth knowing about:
+Three choices are worth knowing about:
 
 - Nmap gets `--max-rate` and its own defaults, not `--min-rate`. Forced to
   100 000 packets/s with `--min-rate`, Nmap found 21 of the 80 open ports in
   our lab, which measures a misconfigured Nmap rather than Nmap.
 - `--debug` on `tcpcat-ebpf` adds a few start and stop lines, among them the
   AF_XDP sockets' drop counters that the report reads back.
+- masscan sends every probe to one next-hop MAC, by default the gateway's,
+  and does no neighbour lookup. In the lab that would route its probes
+  through the Docker host while the other tools reach the targets directly,
+  so each target gets its own masscan aimed at its MAC, all running at once
+  at `$RATE` divided by the number of targets: the same path and the same
+  total ceiling. `--wait 1` (`MASSCAN_WAIT`) replaces masscan's 10-second
+  default, which is sized for Internet round trips. A routed target (through
+  `BENCH_TARGETS`) keeps masscan's default next hop. masscan is not in the
+  default `TOOLS`: the 1.3.2 package intermittently never exits after its
+  scan (its countdown goes negative and it ignores Ctrl-C). A watchdog stops
+  it after its probes' time at the rate plus `--wait` plus 15 s; that run's
+  output is lost, it counts as invalid, and the report says so.
 
 ## What the report records
 
@@ -58,7 +74,9 @@ Two choices are worth knowing about:
 
 A tool is **valid** only if every one of its runs found every open port with
 no false positive. Speed ratios are computed between valid tools only: a fast
-run that missed a port is not a result.
+run that missed a port is not a result. Two tools whose mean times differ by
+less than their combined run-to-run spread (σ), or by under 2 %, are reported
+as on par rather than given a ratio.
 
 ## Through a real NIC
 

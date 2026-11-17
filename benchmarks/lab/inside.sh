@@ -10,6 +10,7 @@ PORTS="${PORTS:-1-65535}"
 RATE="${RATE:-25000}"
 RUNS="${RUNS:-3}"
 TOOLS="${TOOLS:-tcpcat-ebpf tcpcat-syn nmap naabu}"
+MASSCAN_WAIT="${MASSCAN_WAIT:-1}"
 read -r -a HOSTS <<< "${TARGETS:?TARGETS is required}"
 mkdir -p "$OUT/raw" "$OUT/logs" /tmp/bench
 
@@ -31,12 +32,13 @@ jq -n \
   --arg tcpcat "$(tcpcat --version 2>/dev/null | head -1)" \
   --arg nmap "$(nmap --version | head -1)" \
   --arg naabu "$(naabu -version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" \
+  --arg masscan "$(masscan --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" \
   --arg hyperfine "$(hyperfine --version)" \
   --arg ports "$PORTS" --arg rate "$RATE" --arg runs "$RUNS" --arg targets "${HOSTS[*]}" \
   '{kernel:$kernel, arch:$arch, cpu:$cpu, cores:($cores|tonumber), mem_kb:($mem_kb|tonumber),
     interface:$iface, nic_driver:$driver, nic_model:$nic_model, nic_speed_mbps:$nic_speed,
     nic_rx_queues:($nic_queues|tonumber), mtu:($mtu|tonumber),
-    versions:{tcpcat:$tcpcat, nmap:$nmap, naabu:$naabu, hyperfine:$hyperfine},
+    versions:{tcpcat:$tcpcat, nmap:$nmap, naabu:$naabu, masscan:$masscan, hyperfine:$hyperfine},
     workload:{ports:$ports, rate_pps:($rate|tonumber), runs:($runs|tonumber), targets:($targets|split(" "))}}' \
   > "$OUT/env.json"
 
@@ -63,6 +65,41 @@ wrapper tcpcat-syn  "tcpcat -i $IF -p $PORTS -sS --open -T 5 --rate $RATE -Pn -j
 # misconfigured nmap rather than nmap.
 wrapper nmap        "nmap -e $IF -p $PORTS -sS -n -Pn -T4 --max-rate $RATE -oG \$OUTFILE ${HOSTS[*]} >\$LOGFILE 2>&1"
 wrapper naabu       "naabu -interface $IF -p $PORTS -rate $RATE -host $comma_hosts -silent -Pn -o \$OUTFILE >\$LOGFILE 2>&1"
+# masscan sends every probe to a single next-hop MAC and does no neighbour
+# lookup of its own: by default the default gateway's. On the lab's Docker
+# network that would detour its probes through the host's routing (and its
+# firewall rules) while every other tool reaches the targets directly. So
+# one masscan per target runs side by side, aimed at that target's own MAC
+# (--router-mac) when it is on-link, each at RATE/N: same path and same
+# total rate ceiling as the others. A routed target keeps masscan's default
+# next hop, which is then the right one. --wait is how long masscan listens
+# after its last probe; its default (10 s) is sized for the Internet, and
+# MASSCAN_WAIT (default 1 s) is the setting used here.
+#
+# masscan 1.3.2 (Debian's) intermittently never exits after its scan: its
+# countdown goes negative ("waiting -538-secs") and it ignores SIGINT. A
+# watchdog stops it with SIGTERM after the time its probes need at the rate,
+# plus --wait, plus 15 s. Its output is lost then, so that run counts as
+# invalid, and report.py says why.
+probes="$(python3 -c 'import sys
+n = 0
+for part in sys.argv[1].split(","):
+    lo, _, hi = part.partition("-")
+    n += int(hi or lo) - int(lo) + 1
+print(n * int(sys.argv[2]))' "$PORTS" "${#HOSTS[@]}")"
+masscan_deadline=$(( probes / RATE + MASSCAN_WAIT + 16 ))
+masscan_cmd=""
+for i in "${!HOSTS[@]}"; do
+  h="${HOSTS[$i]}"
+  next_hop=""
+  if [[ "$(ip route get "$h" 2>/dev/null)" != *" via "* ]]; then
+    timeout 1 bash -c "exec 3<>/dev/tcp/$h/1" 2>/dev/null || true  # resolves its MAC
+    mac="$(ip neigh show "$h" dev "$IF" 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "lladdr") {print $(i + 1); exit}}')"
+    [ -n "$mac" ] && next_hop="--router-mac $mac"
+  fi
+  masscan_cmd+="timeout -s TERM $masscan_deadline masscan -e $IF $next_hop -p $PORTS --rate $((RATE / ${#HOSTS[@]})) --wait $MASSCAN_WAIT -oL /tmp/bench/masscan-out.$i $h >>\$LOGFILE 2>&1 & "
+done
+wrapper masscan     "rm -f /tmp/bench/masscan-out.*; : >\$LOGFILE; ${masscan_cmd}wait; cat /tmp/bench/masscan-out.* >\$OUTFILE"
 
 # --- timing, with interface drop counters around each tool -----------------------
 stat() { cat "/sys/class/net/$IF/statistics/$1" 2>/dev/null || echo 0; }
