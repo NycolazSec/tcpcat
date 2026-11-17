@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 	"time"
 
@@ -84,7 +85,7 @@ func For(target string, e explain.Entry, key ed25519.PrivateKey, now time.Time) 
 			b.Systemd = systemdDropIn(e.Owner.Unit, e.Port)
 		}
 		if e.Owner.Pod != "" {
-			b.KubePolicy = kubeNetworkPolicy(e.Owner.Pod, e.Port)
+			b.KubePolicy = kubeNetworkPolicy(e.Owner.Pod, e.Owner.PodLabels, e.Port)
 		}
 	}
 	// A host-only service bound to a wildcard address is best fixed at the
@@ -150,28 +151,92 @@ IPAddressAllow=localhost
 `, unit, unit)
 }
 
+// placeholderSelector is written when the pod's labels are unknown. It is a
+// valid label that no pod carries, so the policy applied unedited selects
+// nothing and changes nothing. An empty selector would do the opposite: it
+// selects every pod in the namespace and cuts all of their ingress.
+const placeholderSelector = "tcpcat.io/replace-with-pod-labels"
+
+// volatileLabels are set by controllers per revision or per replica. A
+// selector that includes them would match only the pod tcpcat saw, and stop
+// matching the workload at its next rollout.
+var volatileLabels = map[string]bool{
+	"pod-template-hash":                        true, // Deployment / ReplicaSet revision
+	"controller-revision-hash":                 true, // StatefulSet / DaemonSet revision
+	"pod-template-generation":                  true, // DaemonSet generation
+	"statefulset.kubernetes.io/pod-name":       true,
+	"apps.kubernetes.io/pod-index":             true,
+	"controller-uid":                           true, // Job (pre-1.27 key)
+	"batch.kubernetes.io/controller-uid":       true,
+	"batch.kubernetes.io/job-completion-index": true,
+}
+
+// workloadSelector returns the pod's labels minus the volatile ones, sorted
+// by key, or nil when none are left.
+func workloadSelector(labels map[string]string) []string {
+	var keys []string
+	for k := range labels {
+		if !volatileLabels[k] {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 // kubeNetworkPolicy scaffolds a default-deny-ingress policy for the pod's
-// namespace. The podSelector is left for the operator: a NetworkPolicy
-// selects by label, and an inventory holds the pod's name, not its labels,
-// so guessing a selector could silently match the wrong pods.
-func kubeNetworkPolicy(pod string, port int) string {
+// workload. With the pod's labels (collected by inventory through kubectl)
+// it selects the workload by them; without, it carries a placeholder
+// selector that matches no pod until the operator replaces it, rather than
+// a guess that could match the wrong pods.
+func kubeNetworkPolicy(pod string, labels map[string]string, port int) string {
 	namespace, name, ok := strings.Cut(pod, "/")
 	if !ok {
 		namespace, name = "default", pod
 	}
-	return fmt.Sprintf(`# Fill podSelector.matchLabels with the labels of %s, then kubectl apply.
-apiVersion: networking.k8s.io/v1
+	var sb strings.Builder
+	keys := workloadSelector(labels)
+	if len(keys) > 0 {
+		fmt.Fprintf(&sb, "# Selects the workload of pod %s by its labels (revision hashes left out).\n", name)
+		fmt.Fprintf(&sb, "# Check that the selector matches only that workload, then kubectl apply.\n")
+	} else {
+		fmt.Fprintf(&sb, "# The inventory has no labels for pod %s. Replace the placeholder selector\n", name)
+		fmt.Fprintf(&sb, "# with its workload's labels (kubectl -n %s get pod %s --show-labels),\n", namespace, name)
+		fmt.Fprintf(&sb, "# then kubectl apply. As written, it selects no pod and changes nothing.\n")
+	}
+	fmt.Fprintf(&sb, `apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: tcpcat-restrict-%d
+  name: %s
   namespace: %s
 spec:
   podSelector:
-    matchLabels: {} # TODO: the labels of pod %s
-  policyTypes:
+    matchLabels:
+`, policyName(name, port), namespace)
+	if len(keys) > 0 {
+		for _, k := range keys {
+			fmt.Fprintf(&sb, "      %q: %q\n", k, labels[k])
+		}
+	} else {
+		fmt.Fprintf(&sb, "      %s: \"true\"\n", placeholderSelector)
+	}
+	sb.WriteString(`  policyTypes:
   - Ingress
   ingress: [] # deny all ingress until an explicit rule is added
-`, name, port, namespace, name)
+`)
+	return sb.String()
+}
+
+// policyName names the policy after the pod and port, so two pods of one
+// namespace exposing the same port get distinct policies. Object names are
+// DNS subdomains: at most 253 characters, ending alphanumeric.
+func policyName(pod string, port int) string {
+	suffix := fmt.Sprintf("-%d", port)
+	const prefix, max = "tcpcat-restrict-", 253
+	if room := max - len(prefix) - len(suffix); len(pod) > room {
+		pod = strings.TrimRight(pod[:room], "-.")
+	}
+	return prefix + pod + suffix
 }
 
 // signingPayload is the stable serialization the attestation signs: the

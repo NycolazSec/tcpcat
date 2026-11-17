@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 )
@@ -63,4 +64,35 @@ func ParseKubeServices(out string) []KubeService {
 		}
 	}
 	return svcs
+}
+
+// KubePod is a pod as enrichKubernetes reads it from kubectl.
+type KubePod struct {
+	Name   string // namespace/name
+	Labels map[string]string
+}
+
+// ParseKubePods reads the kubectl jsonpath output of enrichKubernetes, one
+// "uid<TAB>ns/name<TAB>labels" line per pod, labels being the JSON object
+// kubectl prints for .metadata.labels (nothing when the pod has none). The
+// result is keyed by pod UID. Labels that do not parse as JSON (kubectl
+// releases that print Go's map[k:v] form) are dropped and the name is kept:
+// remediate then writes a placeholder selector instead of a guessed one.
+func ParseKubePods(out string) map[string]KubePod {
+	pods := map[string]KubePod{}
+	for _, line := range strings.Split(out, "\n") {
+		cols := strings.SplitN(line, "\t", 3)
+		if len(cols) < 2 || cols[0] == "" {
+			continue
+		}
+		p := KubePod{Name: cols[1]}
+		if len(cols) == 3 {
+			var labels map[string]string
+			if json.Unmarshal([]byte(strings.TrimSpace(cols[2])), &labels) == nil && len(labels) > 0 {
+				p.Labels = labels
+			}
+		}
+		pods[cols[0]] = p
+	}
+	return pods
 }

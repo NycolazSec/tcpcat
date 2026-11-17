@@ -36,7 +36,12 @@ Full diffs for every release are available via GitHub's
   loopback, a commented line is the allow-list template to edit), a systemd
   drop-in that confines the unit with `IPAddressDeny=any`/`IPAddressAllow`,
   and a Kubernetes default-deny-ingress NetworkPolicy when the owner is a pod.
-  Everything written is inert text to review and apply by hand; tcpcat runs
+  The policy selects the pod's workload by its labels, which `tcpcat
+  inventory` now records (`pod_labels`, read through kubectl) without the
+  per-revision hashes; when they are unknown it carries a placeholder
+  selector that matches no pod until edited, never an empty one (which would
+  cut ingress to every pod of the namespace). Each policy is named after its
+  pod and port. Everything written is inert text to review and apply by hand; tcpcat runs
   none of it. `--remediate-key` signs each bundle with an Ed25519 key from
   `tcpcat evidence keygen`.
 - WebAssembly dissector SDK. A dissector can now talk to the port it is run
