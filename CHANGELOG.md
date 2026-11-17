@@ -29,6 +29,24 @@ Full diffs for every release are available via GitHub's
   no macOS arm64 runner to give (v1.6.0's installer job was never picked up):
   the job falls back to the Intel macOS image, and `macos-installers.yml`
   can rebuild the installers of an existing release by hand.
+- `--ebpf` reported open ports as FILTERED when it ran many probes at once,
+  without having sent them. With `-w 4096` (the default on a 128-core
+  host), a lab scan found 3 of its 80 open ports, and 91 % of its probes
+  were reported FILTERED with the reason "XDP TX Ring Congestion" although
+  none of them had left. Three causes are fixed:
+  - A probe whose frame found the send queue full gave up at once. It now
+    waits for room, so the scan slows down to what the engine can send.
+  - A probe's timeout started when its frame was queued, so frames waiting
+    behind thousands of others timed out before they had left. The timeout
+    now starts when the frame is on the TX ring.
+  - In copy mode the kernel sends at most 32 frames per kick, and the rest
+    of each 64-frame batch waited in the TX ring until it filled and new
+    probes found no room. The engine now kicks again until the ring drains.
+
+  The same lab scan now finds all 80 open ports at 256, 1 024, 4 096 and
+  8 192 workers, with no timeout. A probe that still cannot be sent is
+  reported with the reason "Not probed: AF_XDP transmit queue saturated",
+  and the end of the scan says how many there were.
 
 ## [1.6.0] - 2026-11-17
 
