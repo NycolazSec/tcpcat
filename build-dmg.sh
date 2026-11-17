@@ -31,10 +31,23 @@ pkgbuild --root build/pkg-root \
 cp "${OUTPUT_PKG}" build/dmg-source/Install-tcpcat.pkg
 
 echo "[*] Creating disk image..."
-hdiutil create -volname "tcpcat ${VERSION}" \
-    -srcfolder build/dmg-source \
-    -ov -format UDZO \
-    "${OUTPUT_DMG}"
+# On GitHub's macOS runners, hdiutil intermittently fails with "create
+# failed - Resource busy" (v1.6.0's installer build did); the same command
+# goes through a few seconds later.
+for attempt in 1 2 3 4 5; do
+    if hdiutil create -volname "tcpcat ${VERSION}" \
+        -srcfolder build/dmg-source \
+        -ov -format UDZO \
+        "${OUTPUT_DMG}"; then
+        break
+    fi
+    if [ "${attempt}" -eq 5 ]; then
+        echo "[-] hdiutil create failed ${attempt} times; giving up." >&2
+        exit 1
+    fi
+    echo "[!] hdiutil create failed (attempt ${attempt}/5); retrying in $((attempt * 5)) s..." >&2
+    sleep $((attempt * 5))
+done
 
 echo "[+] Created ${OUTPUT_DMG}"
 echo "[+] Created ${OUTPUT_PKG}"
