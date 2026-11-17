@@ -10,6 +10,16 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Fixed
+- The macOS installers (`.pkg`, `.dmg`) shipped a binary that reported
+  `tcpcat dev (commit none, built unknown)`: `build-dmg.sh` built it without
+  the version stamp the other release archives get. It now carries the
+  release version, commit and build date.
+- A release no longer goes out without its macOS installers when GitHub has
+  no macOS arm64 runner to give (v1.6.0's installer job was never picked up):
+  the job falls back to the Intel macOS image, and `macos-installers.yml`
+  can rebuild the installers of an existing release by hand.
+
 ## [1.6.0] - 2026-11-17
 
 ### Added

@@ -9,9 +9,15 @@ echo "[*] Cleaning previous macOS build outputs..."
 rm -rf build "${OUTPUT_DMG}" "${OUTPUT_PKG}"
 mkdir -p build/bin build/pkg-root/usr/local/bin build/dmg-source
 
-echo "[*] Building universal macOS binary..."
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o build/bin/tcpcat-arm64 ./cmd/tcpcat
-CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o build/bin/tcpcat-amd64 ./cmd/tcpcat
+# Stamp the binary like GoReleaser does (.goreleaser.yaml), so `tcpcat
+# --version` from the installer reports the release, not "dev".
+COMMIT="${COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo none)}"
+DATE="${DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+
+echo "[*] Building universal macOS binary (${VERSION}, ${COMMIT})..."
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="${LDFLAGS}" -o build/bin/tcpcat-arm64 ./cmd/tcpcat
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o build/bin/tcpcat-amd64 ./cmd/tcpcat
 lipo -create -output build/bin/tcpcat build/bin/tcpcat-arm64 build/bin/tcpcat-amd64
 chmod +x build/bin/tcpcat
 
