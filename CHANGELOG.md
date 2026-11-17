@@ -10,6 +10,8 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-17
+
 ### Added
 - `--profile ot` runs a per-target latency circuit breaker: it learns each
   target's baseline round-trip time and aborts the scan on a target whose
@@ -55,6 +57,24 @@ Full diffs for every release are available via GitHub's
   invalid whatever its speed.
 - `--debug` with `--ebpf` prints, per queue, the frames received and sent and
   the replies the kernel dropped.
+- `tcpcat passive [--duration <d>] [--json]`: discover what a host listens on
+  and who it talks to by watching the kernel instead of probing it -- nothing
+  is sent on the wire. An eBPF program on the `sock/inet_sock_set_state`
+  tracepoint reports every socket entering LISTEN and every connection
+  reaching ESTABLISHED, inbound and outbound told apart. Linux 5.8 or later,
+  root or CAP_BPF, IPv4 for now; see
+  [docs/PASSIVE_DISCOVERY.md](docs/PASSIVE_DISCOVERY.md).
+- `tcpcat scripts search|info|install|list|remove|dir`: install WASM
+  dissectors from a hub, a static `index.json` that pins each module's
+  SHA-256. `install` verifies the digest before writing the module, so a
+  tampered or corrupted `.wasm` is refused; `--scripts "$(tcpcat scripts dir)"`
+  loads what was installed. The default hub is
+  [NycolazSec/tcpcat-scripts](https://github.com/NycolazSec/tcpcat-scripts);
+  `--index` or `$TCPCAT_SCRIPTS_INDEX` points at another one, and
+  `examples/scripts-hub/` is a reference hub to fork.
+- Multi-arch container images (linux/amd64 and linux/arm64) are published to
+  `ghcr.io/nycolazsec/tcpcat` with every release, tagged with the version and
+  `latest`.
 
 ### Fixed
 - Only the first target given on the command line was scanned:
@@ -71,6 +91,8 @@ Full diffs for every release are available via GitHub's
 - SYN scans (`-sS` without `--ebpf`) missed open ports at high rates: the raw
   receive socket kept the kernel's default buffer, which overflowed under the
   burst of replies.
+
+### Security
 - A crafted ICMP "port unreachable" reply could make the `--ebpf` engine read
   past the end of the frame.
 
@@ -92,6 +114,10 @@ Full diffs for every release are available via GitHub's
   scanned, and without checking that every open port was found. They are
   withdrawn; see [benchmarks/README.md](benchmarks/README.md) for the protocol
   that replaces them.
+- Console output is condensed: a finding that enumerates items (weak ciphers,
+  MACs, key exchanges) shows what fits on one line then `(+N more)`, and each
+  port lists its 8 highest-CVSS CVEs followed by `... and N more`. The JSON,
+  SARIF and XML reports still carry every CVE and the full finding text.
 
 ## [1.5.0] - 2026-10-10
 
@@ -864,7 +890,8 @@ Full diffs for every release are available via GitHub's
   visibility-testing controls, and a WASM-based scripting engine for custom
   detectors and exploit modules.
 
-[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/NycolazSec/tcpcat/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/NycolazSec/tcpcat/compare/v1.4.4...v1.5.0
 [1.4.4]: https://github.com/NycolazSec/tcpcat/compare/v1.4.3...v1.4.4
 [1.4.3]: https://github.com/NycolazSec/tcpcat/compare/v1.4.2...v1.4.3
