@@ -44,6 +44,9 @@ def found_in(tool: str, path: str) -> set[str]:
             if m:
                 found |= {f"{m.group(1)}:{p.split('/')[0]}" for p in m.group(2).split(", ") if "/open/" in p}
         return found
+    if tool == "masscan":  # -oL: open tcp <port> <ip> <timestamp>
+        return {f"{f[3]}:{f[2]}" for f in (line.split() for line in text.splitlines())
+                if len(f) >= 4 and f[0] == "open" and f[1] == "tcp"}
     return {line.strip() for line in text.splitlines() if re.fullmatch(r"\S+:\d+", line.strip())}  # naabu: ip:port
 
 
@@ -101,7 +104,8 @@ lines = [
     f"- Interface: `{env['interface']}`, driver **{env['nic_driver'] or 'unknown'}**, {env['nic_model']}, "
     f"link speed {env['nic_speed_mbps']} Mb/s, {env['nic_rx_queues']} RX queue(s), MTU {env['mtu']}",
     f"- tcpcat AF_XDP engine: {xdp_mode}",
-    f"- Versions: {env['versions']['tcpcat']} · {env['versions']['nmap']} · naabu {env['versions']['naabu']} · {env['versions']['hyperfine']}",
+    f"- Versions: {env['versions']['tcpcat']} · {env['versions']['nmap']} · naabu {env['versions']['naabu']} · "
+    f"masscan {env['versions'].get('masscan') or 'n/a'} · {env['versions']['hyperfine']}",
     "", "## Workload", "",
     f"- SYN scan of ports `{w['ports']}` on {len(w['targets'])} host(s) ({', '.join(w['targets'])}), "
     f"rate ceiling {w['rate_pps']} packets/s, {w['runs']} run(s) per tool, same interface for all",
@@ -127,13 +131,23 @@ if base:
     for r in valid:
         if r is not base:
             ratio = r["mean"] / base["mean"]
-            if 0.98 <= ratio <= 1.02:
-                verdict = "on par with"  # within 2 %: not a difference worth a ratio
+            # A gap smaller than the two tools' run-to-run spread, or under
+            # 2 %, is not a difference worth quoting as a ratio.
+            if abs(r["mean"] - base["mean"]) <= max(0.02 * base["mean"], r["stddev"] + base["stddev"]):
+                verdict = "on par with"
             else:
                 verdict = f"{ratio:.2f}× faster than" if ratio > 1 else f"{1 / ratio:.2f}× slower than"
             lines.append(f"- tcpcat-ebpf is **{verdict}** {r['tool']} "
                          f"(CPU time {base['user'] + base['system']:.1f} s vs {r['user'] + r['system']:.1f} s)")
 elif rows:
     lines.append("- tcpcat-ebpf did not produce a valid run here, so no speed ratio is reported.")
+# masscan 1.3.2 sometimes never exits after its scan (inside.sh stops it with
+# a watchdog); say so, rather than leave its invalid runs unexplained.
+hung = sum(1 for log in glob.glob(str(out / "logs" / "masscan.*.log"))
+           if re.search(r"waiting -\d+-secs", Path(log).read_text(errors="replace")))
+if hung:
+    lines.append(f"- masscan did not exit after its scan in {hung} of its {w['runs']} run(s) (its countdown went "
+                 "negative, a masscan 1.3.2 bug) and was stopped by the harness's watchdog; its output was lost, "
+                 "so those runs are invalid and their time is the watchdog's.")
 out.joinpath("report.md").write_text("\n".join(lines) + "\n")
 print("\n".join(lines))

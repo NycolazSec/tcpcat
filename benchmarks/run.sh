@@ -6,6 +6,8 @@
 #   RATE=1000000 ./run.sh             same, with the rate ceiling out of the way
 #   PORTS=1-10000 RUNS=1 ./run.sh     quick check of the harness
 #   TOOLS="tcpcat-ebpf nmap" ./run.sh  subset of tools
+#   TCPCAT_VERSION=1.6.0 TCPCAT_COMMIT=c18dd58 ./run.sh   name the build when
+#                                     the checkout has no .git (a copied tree)
 #
 # Through a real NIC, against machines you own (see README.md):
 #   on target i (0, 1, ...):  SEED=$((1337 + i)) python3 benchmarks/lab/target.py
@@ -23,7 +25,11 @@ cd "$(dirname "$0")/.."
 PORTS="${PORTS:-1-65535}"
 RATE="${RATE:-25000}"
 RUNS="${RUNS:-3}"
-TOOLS="${TOOLS:-tcpcat-ebpf tcpcat-syn nmap naabu}"
+TOOLS="${TOOLS:-tcpcat-ebpf tcpcat-syn nmap naabu}"  # add masscan: see README.md
+MASSCAN_WAIT="${MASSCAN_WAIT:-1}"
+# The version stamped into the tcpcat under test, so the report names it.
+TCPCAT_VERSION="${TCPCAT_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
+TCPCAT_COMMIT="${TCPCAT_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo none)}"
 OPEN_PORTS="${OPEN_PORTS:-40}"
 SEED="${SEED:-1337}"
 NET=tcpcat-bench
@@ -53,8 +59,9 @@ trap cleanup EXIT
 cleanup
 mkdir -p "$OUT"
 
-echo "==> Building the scanner image (tcpcat from this checkout, nmap, naabu, hyperfine)"
-docker build -q -f benchmarks/lab/Dockerfile -t tcpcat-bench-scanner . >/dev/null
+echo "==> Building the scanner image (tcpcat ${TCPCAT_VERSION#v} from this checkout, nmap, naabu, masscan, hyperfine)"
+docker build -q -f benchmarks/lab/Dockerfile -t tcpcat-bench-scanner \
+  --build-arg TCPCAT_VERSION="${TCPCAT_VERSION#v}" --build-arg TCPCAT_COMMIT="$TCPCAT_COMMIT" . >/dev/null
 
 target_ports() {  # the ports target number $1 listens on, from the seed alone
   docker run --rm -e PRINT_PORTS=1 -e SEED="$((SEED + $1))" -e COUNT="$OPEN_PORTS" \
@@ -109,6 +116,7 @@ echo "==> Running: ports $PORTS, $RATE pps, $RUNS run(s) per tool: $TOOLS"
 # inside the container; with BENCH_TARGETS the hook goes on the host's $IF.
 docker run --rm --privileged "${NETWORK_ARGS[@]}" \
   -e TARGETS="${TARGET_IPS[*]}" -e PORTS="$PORTS" -e RATE="$RATE" -e RUNS="$RUNS" -e TOOLS="$TOOLS" \
+  -e MASSCAN_WAIT="$MASSCAN_WAIT" \
   -v "$(pwd)/$OUT:/results" tcpcat-bench-scanner
 
 echo
