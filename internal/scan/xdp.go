@@ -76,6 +76,43 @@ var (
 	xdpCopyMode   bool
 )
 
+// XDPCopyMode reports whether the engine InitXDPEngine started runs in copy
+// mode (no zero-copy support in the driver: veth and most virtual NICs,
+// generic attach). There every frame is still copied through the kernel and
+// one thread owns the TX ring, so the raw-socket engine, which sends from
+// every core, is faster.
+func XDPCopyMode() bool { return xdpCopyMode }
+
+// XDPNotProbed is how many probes of this scan could not be sent on any
+// attempt (queue full, or transmit failed): their ports were never probed.
+func XDPNotProbed() int64 { return xdpTxUnsent.Load() }
+
+// xdpTxBroken is set once a transmit has failed for good (the interface went
+// down, the socket is gone): no further frame is queued, and the remaining
+// probes are reported as not probed instead of waiting on a dead ring.
+var (
+	xdpTxBroken   atomic.Bool
+	xdpTxFailOnce sync.Once
+)
+
+// xdpTransmit is xsk.Transmit without its panic. The xdp library panics on
+// any sendto error other than EINTR, EAGAIN or EBUSY -- ENETDOWN or ENXIO
+// when the interface goes down mid-scan, for instance -- which took the
+// whole scan down, from the flusher or from the RX loop sending a RST. It
+// returns the error instead and marks the TX path broken.
+func xdpTransmit(xsk *xdp.Socket, descs []xdp.Desc) (n int, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			n, err = 0, fmt.Errorf("%v", r)
+			xdpTxBroken.Store(true)
+			xdpTxFailOnce.Do(func() {
+				log.Printf("[!] AF_XDP transmit failed (%v): no further probe can be sent; the remaining ports are reported as not probed.", err)
+			})
+		}
+	}()
+	return xsk.Transmit(descs), nil
+}
+
 // xdpSocketOptions sizes one queue's AF_XDP socket. The library's defaults
 // (64-slot rings over 128 frames) are sized for a demo: a scan gets one reply
 // per probe, so at a few thousand probes/s the TX ring fills and probes are
@@ -722,7 +759,8 @@ func xdpSendLocked(xsk *xdp.Socket, frame []byte) bool {
 	}
 	copy(xsk.GetFrame(descs[0]), frame)
 	descs[0].Len = uint32(len(frame))
-	return xsk.Transmit(descs) == 1
+	n, err := xdpTransmit(xsk, descs)
+	return err == nil && n == 1
 }
 
 func getSrcPort(opts *config.Options) uint16 {
@@ -776,6 +814,15 @@ var xdpTxUnsent atomic.Int64
 // xdpNotProbedReason is the Reason of a port whose probe never left tcpcat.
 const xdpNotProbedReason = "Not probed: AF_XDP transmit queue saturated"
 
+// xdpNotProbed is the Reason for a port whose probe never left: the queue
+// stayed full, or the transmit path failed (see xdpTransmit).
+func xdpNotProbed() string {
+	if xdpTxBroken.Load() {
+		return "Not probed: AF_XDP transmit failed"
+	}
+	return xdpNotProbedReason
+}
+
 // transmitXDPFrames hands a probe's frames to the TX flusher, waiting up to
 // xdpTxEnqueueWait for room when the queue is full, then waits for the flusher
 // to put the last of them on the TX ring. It returns false when they were not
@@ -793,6 +840,9 @@ const xdpNotProbedReason = "Not probed: AF_XDP transmit queue saturated"
 func transmitXDPFrames(_ *xdp.Socket, frames [][]byte) bool {
 	if len(frames) == 0 {
 		return true
+	}
+	if xdpTxBroken.Load() {
+		return false
 	}
 	deadline := time.NewTimer(xdpTxEnqueueWait)
 	defer deadline.Stop()
@@ -875,7 +925,10 @@ func xdpFlushBatch(xsk *xdp.Socket, items []xdpTxItem) int {
 		descs[n].Len = uint32(len(items[n].frame))
 	}
 	if n > 0 {
-		n = xsk.Transmit(descs[:n]) // one sendto for the whole batch
+		var err error
+		if n, err = xdpTransmit(xsk, descs[:n]); err != nil { // one sendto for the whole batch
+			return 0
+		}
 		xdpKickTx(xsk)
 	}
 	return n
@@ -1032,7 +1085,7 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 	if unsent == attempts {
 		// Nothing was sent: this port's state is unknown, not filtered.
 		xdpTxUnsent.Add(1)
-		return TargetResult{IP: ip, Port: port, State: StateFiltered, Reason: xdpNotProbedReason}
+		return TargetResult{IP: ip, Port: port, State: StateFiltered, Reason: xdpNotProbed()}
 	}
 
 	return TargetResult{
@@ -1166,7 +1219,7 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 	if unsent == attempts {
 		// Nothing was sent: this port's state is unknown, not filtered.
 		xdpTxUnsent.Add(1)
-		return TargetResult{IP: ip, Port: port, State: StateOpenFiltered, Reason: xdpNotProbedReason}
+		return TargetResult{IP: ip, Port: port, State: StateOpenFiltered, Reason: xdpNotProbed()}
 	}
 
 	return TargetResult{

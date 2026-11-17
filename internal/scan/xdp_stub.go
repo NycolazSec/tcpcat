@@ -20,6 +20,12 @@ func ShutdownXDPEngine() {
 
 }
 
+// XDPCopyMode is false here: there is no AF_XDP engine off Linux.
+func XDPCopyMode() bool { return false }
+
+// XDPNotProbed is 0 here: there is no AF_XDP engine off Linux.
+func XDPNotProbed() int64 { return 0 }
+
 func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duration, spoofedSrcIP net.IP, rtt *RTTEstimator, limiter *AdaptiveRateLimiter) TargetResult {
 	return TargetResult{IP: ip, Port: port, State: StateFiltered, Reason: "XDP non supporté"}
 }
