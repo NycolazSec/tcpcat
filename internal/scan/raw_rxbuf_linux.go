@@ -19,3 +19,16 @@ func tuneRawRxBuffer(fd int) {
 		_ = syscall.SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_RCVBUF, rawRxBufferBytes)
 	}
 }
+
+// rawTxBufferBytes is the send buffer of the shared send socket. Every probe
+// now goes through that one socket, so its buffer bounds how many probes can
+// wait in the kernel for the interface at once; with one socket per probe,
+// each had a default buffer of its own.
+const rawTxBufferBytes = 4 << 20
+
+// tuneRawTxBuffer enlarges fd's send buffer, the same way as tuneRawRxBuffer.
+func tuneRawTxBuffer(fd int) {
+	if err := syscall.SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_SNDBUFFORCE, rawTxBufferBytes); err != nil {
+		_ = syscall.SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_SNDBUF, rawTxBufferBytes)
+	}
+}
