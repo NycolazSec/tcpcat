@@ -1,0 +1,81 @@
+name: macOS installers
+
+# Builds tcpcat-v<version>.dmg and .pkg for a release and attaches them to it.
+# Called by release.yml on every tag; also runnable by hand to (re)build the
+# installers of an existing release:
+#   gh workflow run macos-installers.yml -f tag=v1.6.0 -f runner=macos-15-intel
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+      runner:
+        type: string
+        default: macos-latest
+    outputs:
+      uploaded:
+        description: "'true' once both installers are attached to the release"
+        value: ${{ jobs.build.outputs.uploaded }}
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build the installers for (e.g. v1.6.0)
+        required: true
+      runner:
+        description: macOS runner image
+        type: choice
+        default: macos-latest
+        options: [macos-latest, macos-15-intel]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build macOS installers (${{ inputs.runner }})
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 20
+    outputs:
+      uploaded: ${{ steps.upload.outputs.uploaded }}
+    steps:
+      - name: Checkout the release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      # Sources come from the tag; the packaging script comes from the commit
+      # this workflow runs from. On a tag push they are the same commit. Run by
+      # hand from main, it rebuilds an older release with the current script
+      # (e.g. one that stamps the version into the binary).
+      - name: Use the current packaging script
+        run: git checkout "$GITHUB_SHA" -- build-dmg.sh
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "stable"
+          cache: true
+
+      - name: Build DMG and PKG
+        env:
+          TAG: ${{ inputs.tag }}
+        run: VERSION="${TAG#v}" ./build-dmg.sh
+
+      - name: Check the binary reports the release version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          ./build/bin/tcpcat --version | tee /dev/stderr | grep -q "tcpcat ${TAG#v} "
+
+      - name: Upload installers to the release
+        id: upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          VERSION="${TAG#v}"
+          gh release upload "$TAG" "tcpcat-v${VERSION}.dmg" "tcpcat-v${VERSION}.pkg" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          echo "uploaded=true" >> "$GITHUB_OUTPUT"

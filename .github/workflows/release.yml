@@ -61,49 +61,24 @@ jobs:
           # HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           # AUR_KEY: ${{ secrets.AUR_KEY }}
 
+  # macOS installers (.dmg + .pkg). The build cross-compiles both
+  # architectures and merges them with lipo, so any macOS runner will do.
+  # macos-latest (arm64) is tried first; GitHub has run out of capacity on it
+  # ("The job was not acquired by Runner of type hosted even after multiple
+  # attempts", v1.6.0), so when it does not upload the installers the Intel
+  # image takes over. A missing installer never fails the release: goreleaser
+  # above has already published every archive and Linux package.
   macos-installers:
-    name: Build macOS installers
     needs: goreleaser
-    runs-on: macos-latest
-    # `macos-13` was retired and never got scheduled: every release since
-    # v1.0.1 sat queued on this job until the run was cancelled. `macos-latest`
-    # tracks whatever image GitHub currently supports, so this job stops
-    # silently rotting every time an old pinned version ages out.
-    #
-    # macOS runners can still occasionally queue for a long time even on a
-    # supported image (GitHub-side queueing, not a build failure). Cap the
-    # wait instead of leaving the run stuck indefinitely, and don't let it
-    # fail the release: the goreleaser job above already published
-    # linux/darwin/windows archives and Linux packages, so a missing
-    # .dmg/.pkg here is a soft-fail, not a blocker.
-    timeout-minutes: 20
-    continue-on-error: true
-    steps:
-      - name: Checkout release tag
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
+    uses: ./.github/workflows/macos-installers.yml
+    with:
+      tag: ${{ github.ref_name }}
+      runner: macos-latest
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version: "stable"
-          cache: true
-
-      - name: Build DMG and PKG
-        env:
-          VERSION: ${{ github.ref_name }}
-        run: |
-          VERSION="${VERSION#v}" ./build-dmg.sh
-
-      - name: Upload macOS installers to release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ github.ref_name }}
-        run: |
-          VERSION="${VERSION#v}"
-          gh release upload "${{ github.ref_name }}" \
-            "tcpcat-v${VERSION}.dmg" \
-            "tcpcat-v${VERSION}.pkg" \
-            --repo "${{ github.repository }}" \
-            --clobber
+  macos-installers-fallback:
+    needs: [goreleaser, macos-installers]
+    if: ${{ !cancelled() && needs.goreleaser.result == 'success' && needs.macos-installers.outputs.uploaded != 'true' }}
+    uses: ./.github/workflows/macos-installers.yml
+    with:
+      tag: ${{ github.ref_name }}
+      runner: macos-15-intel
