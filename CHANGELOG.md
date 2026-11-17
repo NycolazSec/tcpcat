@@ -10,6 +10,16 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Changed
+- Raw-socket scans (`-sS` without `--ebpf`, and `-sA`, `-sW`, `-sF`, `-sN`,
+  `-sX`, idle) use about 5 to 8 times less CPU per probe. Every probe used to
+  open, bind and close its own send socket and look up its source address
+  (a UDP dial plus two netlink dumps); one send socket per interface is now
+  shared and the address is cached for a few seconds. Measured on Linux 6.12:
+  from about 200 to 21-42 µs of CPU per probe, 90 to 20 allocations. In the
+  benchmark lab (`benchmarks/`), a full-range SYN scan of two hosts went from
+  4.5 s and 25 s of CPU to 1.3 s and 6.7 s.
+
 ### Fixed
 - The macOS installers (`.pkg`, `.dmg`) shipped a binary that reported
   `tcpcat dev (commit none, built unknown)`: `build-dmg.sh` built it without

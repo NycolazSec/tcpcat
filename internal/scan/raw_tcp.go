@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -42,7 +41,7 @@ type rawTCPScanner struct {
 	mptcp   bool // advertise MP_CAPABLE (kind 30) in the SYN, for MPTCP detection
 	t0      time.Time
 
-	rxKey  string
+	rxKey  rawRxKeyT
 	rxChan chan *rawTCPPacket
 }
 
@@ -67,8 +66,16 @@ type rawTCPScanner struct {
 var (
 	rawRxOnce    sync.Once
 	rawRxErr     error
-	rawRxWaiters sync.Map // rawRxKey(...) -> chan *rawTCPPacket
+	rawRxWaiters sync.Map // rawRxKeyT -> chan *rawTCPPacket
 )
+
+// rawRxKeyT is a comparable value, not a string: the receive loop builds
+// one for every TCP segment it reads, and formatting the address into a
+// string allocated on each of them.
+type rawRxKeyT struct {
+	ip                    [4]byte
+	remotePort, localPort uint16
+}
 
 // rawRxKey identifies one pending probe: the target host, the port being
 // probed (their source port in any reply), and our own source port (their
@@ -77,8 +84,107 @@ var (
 // same port, which the single-socket-per-job code never actually guarded
 // against either (any raw socket would accept a same-port reply from any
 // host, not just the one it happened to be probing).
-func rawRxKey(remoteIP net.IP, remotePort, localPort int) string {
-	return remoteIP.String() + "|" + strconv.Itoa(remotePort) + "|" + strconv.Itoa(localPort)
+func rawRxKey(remoteIP net.IP, remotePort, localPort int) rawRxKeyT {
+	k := rawRxKeyT{remotePort: uint16(remotePort), localPort: uint16(localPort)}
+	copy(k.ip[:], remoteIP.To4())
+	return k
+}
+
+// rawRxKeyFromFrame is rawRxKey read straight out of a received segment:
+// its IP source (the probed host), its TCP source port (the probed port)
+// and its TCP destination port (our source port). The caller has checked
+// that the IP and TCP headers fit in buf.
+func rawRxKeyFromFrame(buf []byte, ipOffset, tcpOffset int) rawRxKeyT {
+	k := rawRxKeyT{
+		remotePort: binary.BigEndian.Uint16(buf[tcpOffset : tcpOffset+2]),
+		localPort:  binary.BigEndian.Uint16(buf[tcpOffset+2 : tcpOffset+4]),
+	}
+	copy(k.ip[:], buf[ipOffset+12:ipOffset+16])
+	return k
+}
+
+// Send path, shared across probes ------------------------------------------
+//
+// Every probe used to open its own send socket, bind it to -i, look up the
+// interface's address (two netlink dumps) and the default route's address
+// (a UDP "dial"), send one packet and close the socket: some 25 system
+// calls around the one sendto that does the work. Measured with
+// BenchmarkRawProbe, that came to about 200 µs of CPU per probe, which is
+// why a SYN scan kept five cores busy at 25 000 probes/s. The socket and
+// the source address are now set up once and shared.
+
+// rawTxSockets maps an -i value ("" for none) to its send-only raw socket.
+// sendto(2) on one raw socket is safe from any number of threads, and the
+// socket lives as long as the process, like the shared receive socket.
+var (
+	rawTxMu      sync.Mutex
+	rawTxSockets sync.Map // string -> int (fd)
+)
+
+func rawTxSocket(ifaceName string) (int, error) {
+	if fd, ok := rawTxSockets.Load(ifaceName); ok {
+		return fd.(int), nil
+	}
+	rawTxMu.Lock()
+	defer rawTxMu.Unlock()
+	if fd, ok := rawTxSockets.Load(ifaceName); ok {
+		return fd.(int), nil
+	}
+	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_RAW)
+	if err != nil {
+		return -1, fmt.Errorf("raw Socket error (sudo required): %v", err)
+	}
+	tuneRawTxBuffer(fd)
+	if ifaceName != "" {
+		if err := netiface.BindToDevice(fd, ifaceName); err != nil {
+			fmt.Printf("%s[!] Warning: could not bind raw send socket to interface %q: %v%s\n", config.Red, ifaceName, err, config.Reset)
+		}
+	}
+	rawTxSockets.Store(ifaceName, fd)
+	return fd, nil
+}
+
+// srcIPTTL is how long a resolved source address is reused. A scan
+// resolves it a handful of times instead of once per probe, and the
+// long-running web server still follows an address change within seconds.
+const srcIPTTL = 5 * time.Second
+
+type srcIPEntry struct {
+	ip net.IP
+	at time.Time
+}
+
+var (
+	srcIPMu    sync.Mutex
+	srcIPCache sync.Map // string (-i value) -> srcIPEntry
+)
+
+// probeSourceIP is the address probes are sent from: the IPv4 address of
+// the -i interface when there is one, else that of the default route. The
+// returned slice is shared; callers must not modify it.
+func probeSourceIP(ifaceName string) net.IP {
+	if v, ok := srcIPCache.Load(ifaceName); ok {
+		if e := v.(srcIPEntry); time.Since(e.at) < srcIPTTL {
+			return e.ip
+		}
+	}
+	// One resolution at a time, so that an expiry doesn't send every worker
+	// into its own netlink dump at once.
+	srcIPMu.Lock()
+	defer srcIPMu.Unlock()
+	if v, ok := srcIPCache.Load(ifaceName); ok {
+		if e := v.(srcIPEntry); time.Since(e.at) < srcIPTTL {
+			return e.ip
+		}
+	}
+	ip := getLocalIPv4()
+	if ifaceName != "" {
+		if ifaceIP, _, err := netiface.Lookup(ifaceName); err == nil {
+			ip = ifaceIP
+		}
+	}
+	srcIPCache.Store(ifaceName, srcIPEntry{ip: ip, at: time.Now()})
+	return ip
 }
 
 func ensureRawRxLoop(ifaceName string) error {
@@ -136,11 +242,7 @@ func rawRxLoop(fd int) {
 			continue
 		}
 
-		srcIP := net.IP(append([]byte(nil), buf[ipOffset+12:ipOffset+16]...))
-		srcPortRecv := int(binary.BigEndian.Uint16(buf[tcpOffset : tcpOffset+2]))
-		dstPortRecv := int(binary.BigEndian.Uint16(buf[tcpOffset+2 : tcpOffset+4]))
-
-		chAny, ok := rawRxWaiters.Load(rawRxKey(srcIP, srcPortRecv, dstPortRecv))
+		chAny, ok := rawRxWaiters.Load(rawRxKeyFromFrame(buf, ipOffset, tcpOffset))
 		if !ok {
 			continue
 		}
@@ -184,24 +286,14 @@ func newRawTCPScanner(targetIP string, port int, opts *config.Options, timeout t
 		return nil, err
 	}
 
-	srcIP := getLocalIPv4()
-	if ifaceName != "" {
-		if ifaceIP, _, err := netiface.Lookup(ifaceName); err == nil {
-			srcIP = ifaceIP
-		}
-	}
+	srcIP := probeSourceIP(ifaceName)
 	if spoofedSrcIP != nil {
 		srcIP = spoofedSrcIP.To4()
 	}
 
-	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_RAW)
+	fd, err := rawTxSocket(ifaceName)
 	if err != nil {
-		return nil, fmt.Errorf("raw Socket error (sudo required): %v", err)
-	}
-	if ifaceName != "" {
-		if err := netiface.BindToDevice(fd, ifaceName); err != nil {
-			fmt.Printf("%s[!] Warning: could not bind raw send socket to interface %q: %v%s\n", config.Red, ifaceName, err, config.Reset)
-		}
+		return nil, err
 	}
 
 	srcPort := 54321
@@ -284,7 +376,7 @@ func (s *rawTCPScanner) Send(flags byte) error {
 
 		innerIPHeader := constructIPv4Header(s.srcIP, s.dstIP, syscall.IPPROTO_TCP, uint16(len(tcpHeader)))
 		innerPacket := append(innerIPHeader, tcpHeader...)
-		outerIPHeader := constructIPv4Header(getLocalIPv4(), s.relayIP, syscall.IPPROTO_IPIP, uint16(len(innerPacket)))
+		outerIPHeader := constructIPv4Header(probeSourceIP(""), s.relayIP, syscall.IPPROTO_IPIP, uint16(len(innerPacket)))
 		packetToSend = append(outerIPHeader, innerPacket...)
 		copy(destAddr[:], s.relayIP.To4())
 	} else {
@@ -332,10 +424,12 @@ func calcIPChecksum(header []byte) uint16 {
 }
 
 func (s *rawTCPScanner) Receive() (*rawTCPPacket, error) {
+	t := time.NewTimer(s.timeout)
+	defer t.Stop()
 	select {
 	case pkt := <-s.rxChan:
 		return pkt, nil
-	case <-time.After(s.timeout):
+	case <-t.C:
 		return nil, fmt.Errorf("timeout waiting for response")
 	}
 }
@@ -344,9 +438,10 @@ func (s *rawTCPScanner) Latency() time.Duration {
 	return time.Since(s.t0)
 }
 
+// Close releases the probe's reply slot. The send socket is shared across
+// probes (see rawTxSocket) and stays open.
 func (s *rawTCPScanner) Close() {
 	rawRxWaiters.Delete(s.rxKey)
-	_ = syscall.Close(s.fd)
 }
 
 func calcTCPChecksum(srcIP, dstIP net.IP, tcpHeader []byte) uint16 {

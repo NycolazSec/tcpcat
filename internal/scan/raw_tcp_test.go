@@ -3,6 +3,7 @@
 package scan
 
 import (
+	"encoding/binary"
 	"net"
 	"strings"
 	"testing"
@@ -30,7 +31,7 @@ func TestRawRxKeyMatchesSentAndReceivedView(t *testing.T) {
 		ourSrcPort /* packet's TCP dst port */)
 
 	if registered != fromReply {
-		t.Fatalf("registration key %q != reply-parsed key %q", registered, fromReply)
+		t.Fatalf("registration key %+v != reply-parsed key %+v", registered, fromReply)
 	}
 }
 
@@ -41,15 +42,41 @@ func TestRawRxKeyMatchesSentAndReceivedView(t *testing.T) {
 func TestRawRxKeyDistinguishesConcurrentProbes(t *testing.T) {
 	base := rawRxKey(net.ParseIP("10.0.0.1").To4(), 80, 54321)
 
-	tests := map[string]string{
+	tests := map[string]rawRxKeyT{
 		"different target IP":   rawRxKey(net.ParseIP("10.0.0.2").To4(), 80, 54321),
 		"different probed port": rawRxKey(net.ParseIP("10.0.0.1").To4(), 443, 54321),
 		"different local port":  rawRxKey(net.ParseIP("10.0.0.1").To4(), 80, 54322),
 	}
 	for name, other := range tests {
 		if other == base {
-			t.Errorf("%s: expected a different key, got the same one (%q)", name, base)
+			t.Errorf("%s: expected a different key, got the same one (%+v)", name, base)
 		}
+	}
+}
+
+// TestRawRxKeyFromFrameMatchesRegistration checks that the key the receive
+// loop reads out of a reply equals the one the probe registered: if the two
+// ever disagree, every reply is dropped and every port reads as filtered.
+func TestRawRxKeyFromFrameMatchesRegistration(t *testing.T) {
+	target := net.ParseIP("192.0.2.7").To4()
+	const probedPort, ourSrcPort = 8443, 54321
+
+	// A SYN/ACK from target:8443 to us:54321, IP header without options.
+	frame := make([]byte, 40)
+	frame[0] = 0x45
+	copy(frame[12:16], target)
+	copy(frame[16:20], net.IPv4(198, 51, 100, 1).To4())
+	binary.BigEndian.PutUint16(frame[20:22], probedPort)
+	binary.BigEndian.PutUint16(frame[22:24], ourSrcPort)
+	frame[33] = 0x12
+
+	got := rawRxKeyFromFrame(frame, 0, 20)
+	if want := rawRxKey(target, probedPort, ourSrcPort); got != want {
+		t.Fatalf("key from the reply %+v != registered key %+v", got, want)
+	}
+	// A 16-byte form of the same address must register the same key.
+	if got != rawRxKey(net.ParseIP("192.0.2.7"), probedPort, ourSrcPort) {
+		t.Fatal("a 16-byte IPv4 address registers a different key than its 4-byte form")
 	}
 }
 
