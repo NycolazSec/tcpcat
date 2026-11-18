@@ -1,3 +1,16 @@
+tcpcat (1.7.0-0kali1) kali-dev; urgency=medium
+
+  * New upstream release 1.7.0.
+    - Raw-socket scans use 5 to 8 times less CPU per probe.
+    - --ebpf no longer reports unsent probes as filtered under load, no
+      longer crashes when a send fails, and uses the raw-socket engine in
+      AF_XDP copy mode (--ebpf-copy keeps AF_XDP).
+  * debian/control: describe exposure analysis, policy checks, evidence and
+    passive discovery.
+  * debian/tcpcat.1: document --ebpf-copy and the copy-mode fallback.
+
+ -- Nicolas Blondelle <support@tcpcat.io>  Wed, 18 Nov 2026 19:00:00 +0100
+
 tcpcat (1.4.1-0kali1) kali-dev; urgency=medium
 
   * Initial release.

@@ -1,4 +1,4 @@
-.TH TCPCAT 1 "September 2026" "tcpcat" "Network reconnaissance"
+.TH TCPCAT 1 "November 2026" "tcpcat" "Network reconnaissance"
 .SH NAME
 tcpcat \- fast network scanner with an eBPF/AF_XDP engine and CVE correlation
 .SH SYNOPSIS
@@ -22,7 +22,11 @@ On Linux, the optional
 .B \-\-ebpf
 engine attaches an XDP program at run time and redirects only the replies to
 tcpcat's own probes into AF_XDP sockets; all other traffic on the interface
-continues through the normal kernel network stack.
+continues through the normal kernel network stack. When the driver offers no
+zero-copy support (AF_XDP copy mode), tcpcat uses its raw-socket engine
+instead, which is faster there, unless
+.B \-\-ebpf\-copy
+is given.
 .SH OPTIONS
 Only the most common options are listed here. Run
 .B tcpcat \-\-help
@@ -61,7 +65,11 @@ TCP connect scan.
 UDP scan.
 .TP
 .B \-\-ebpf
-Enable the experimental AF_XDP/eBPF engine (Linux only).
+Enable the AF_XDP/eBPF engine (Linux only). In copy mode the raw-socket
+engine is used instead.
+.TP
+.B \-\-ebpf\-copy
+Keep the AF_XDP engine even in copy mode.
 .SS Detection
 .TP
 .B \-sV

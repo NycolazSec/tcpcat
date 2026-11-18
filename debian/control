@@ -33,3 +33,8 @@ Description: fast network scanner with an eBPF/AF_XDP engine and CVE correlation
      engagements
    * optional eBPF/AF_XDP engine on Linux (--ebpf) that only redirects the
      replies to its own probes, leaving all other traffic to the kernel
+   * exposure analysis: "tcpcat inventory" records which process, systemd
+     unit, container or pod listens on each port, and "tcpcat explain"
+     classifies each port as seen from outside and writes the fix
+   * segmentation policy checks, signed evidence bundles and passive
+     (eBPF tracepoint) discovery

@@ -2,7 +2,7 @@
 # See COPYING for license details.
 
 pkgname=tcpcat
-pkgver=v1.6.0.r0.gc18dd58
+pkgver=v1.7.0.r0.gd6e6e8c
 pkgrel=1
 groups=('blackarch' 'blackarch-scanner' 'blackarch-networking')
 pkgdesc='High-performance network reconnaissance and vulnerability intelligence scanner with an eBPF/AF_XDP engine.'
