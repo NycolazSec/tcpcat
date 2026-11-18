@@ -102,7 +102,7 @@ docker_manifests:
 # ---------------------------------------------------------------------------
 # Homebrew tap  ->  `brew install nycolazsec/tap/tcpcat`
 # Prerequisites (one-time), see docs/DISTRIBUTION.md:
-#   1. Create a PUBLIC repo  NycolazSec/homebrew-tap  (done 2026-11-18)
+#   1. Create a PUBLIC repo  NycolazSec/homebrew-tap  (done 2026-11-18, live)
 #   2. Create a fine-grained PAT with Contents:write on that repo and add it to
 #      THIS repo as the secret HOMEBREW_TAP_GITHUB_TOKEN
 #      (the default GITHUB_TOKEN cannot push to another repo)
@@ -114,7 +114,7 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://tcpcat.io"
-    description: "Fast network scanner in Go with an eBPF/AF_XDP engine, service/OS detection and CVE correlation"
+    description: "Network scanner with an AF_XDP engine, service detection and CVE lookup"
     license: "AGPL-3.0-only"
     commit_author:
       name: NycolazSec
@@ -131,7 +131,7 @@ brews:
 # aurs:
 #   - name: tcpcat-bin
 #     homepage: "https://tcpcat.io"
-#     description: "Fast network scanner in Go with an eBPF/AF_XDP engine, service/OS detection and CVE correlation"
+#     description: "Network scanner with an AF_XDP engine, service detection and CVE lookup"
 #     maintainers:
 #       - "NycolazSec <support@tcpcat.io>"
 #     license: "AGPL-3.0-only"
