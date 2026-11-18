@@ -58,7 +58,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Uncomment alongside the brews:/aurs: blocks in .goreleaser.yaml once
           # the matching secrets exist (see docs/DISTRIBUTION.md):
-          # HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           # AUR_KEY: ${{ secrets.AUR_KEY }}
 
   # macOS installers (.dmg + .pkg). The build cross-compiles both
