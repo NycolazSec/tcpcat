@@ -12,7 +12,8 @@ without ever visiting the repo.
 | macOS installer | `.dmg` / `.pkg` on Releases | ✅ live | none (release workflow) |
 | Container (GHCR) | `docker run ghcr.io/nycolazsec/tcpcat:latest ...` | ✅ live | make package public once |
 | BlackArch | `pacman -S tcpcat` | 🟡 PKGBUILD in repo | submit/refresh upstream |
-| Homebrew | `brew install nycolazsec/tap/tcpcat` | ⚪ ready, off | tap repo + PAT secret |
+| Homebrew (tap) | `brew install nycolazsec/tap/tcpcat` | ✅ live | renew the PAT yearly |
+| Homebrew (core) | `brew install tcpcat` | ⚪ not eligible yet | notability, see below |
 | AUR | `yay -S tcpcat-bin` | ⚪ ready, off | AUR package + SSH key |
 
 ## Container image (GHCR) — live
@@ -34,20 +35,68 @@ docker run --rm --cap-add=NET_RAW --cap-add=NET_ADMIN \
 
 The eBPF/AF_XDP engine (`--ebpf`) needs `--privileged --network=host`.
 
-## Homebrew tap — ready, currently off
+## Homebrew tap — live
 
-The `brews:` block in [.goreleaser.yaml](../.goreleaser.yaml) is written but
-commented out, because publishing to a tap needs a token that can push to a
-*second* repo (the built-in `GITHUB_TOKEN` cannot).
+Users install with:
 
-1. Create a **public** repo `NycolazSec/homebrew-tap`.
-2. Create a fine-grained Personal Access Token scoped to that repo with
-   **Contents: read and write**.
-3. In this repo: **Settings → Secrets and variables → Actions → New secret**,
-   name `HOMEBREW_TAP_GITHUB_TOKEN`, value = the PAT.
-4. Uncomment the `brews:` block in `.goreleaser.yaml` **and** the
-   `HOMEBREW_TAP_GITHUB_TOKEN` line in `.github/workflows/release.yml`.
-5. Tag a release. Users then run `brew install nycolazsec/tap/tcpcat`.
+```bash
+brew install nycolazsec/tap/tcpcat
+```
+
+Naming the tap in full is what lets Homebrew 7+ load a third-party formula: it
+records the formula as trusted. After that, `brew upgrade tcpcat` and the short
+name work. A bare `brew install tcpcat` only works once tcpcat is in
+homebrew-core (below).
+
+GoReleaser's `brews:` block in [.goreleaser.yaml](../.goreleaser.yaml) writes
+`Formula/tcpcat.rb` to [NycolazSec/homebrew-tap](https://github.com/NycolazSec/homebrew-tap)
+on every release. The formula for v1.7.0 was published by hand on 2026-11-18;
+the next release overwrites it.
+
+Publishing needs a token that can push to a *second* repo (the built-in
+`GITHUB_TOKEN` cannot): the secret `HOMEBREW_TAP_GITHUB_TOKEN` holds a
+fine-grained PAT with **Contents: read and write** on `homebrew-tap` only.
+**It expires.** When it does, the release workflow fails at the Homebrew step:
+create a new PAT with the same scope and replace the secret.
+
+## Homebrew core (`brew install tcpcat`) — not eligible yet
+
+homebrew-core is the official repository: a formula there installs with
+`brew install tcpcat`, with no tap. Its
+[acceptance policy](https://docs.brew.sh/Package-Acceptance-Policy) requires a
+notable project. For a GitHub project that means at least **75 stars, 30 forks
+or 30 watchers**, and **225 stars, 90 forks or 90 watchers** when the author
+submits it. The name `tcpcat` is free there, the license (AGPL-3.0) is
+accepted, and the code builds from source without cgo, so notability is the
+only blocker.
+
+When the threshold is met, the core formula must build from source rather than
+install the release binaries:
+
+```ruby
+class Tcpcat < Formula
+  desc "Network scanner with an AF_XDP engine, service detection and CVE lookup"
+  homepage "https://tcpcat.io"
+  url "https://github.com/NycolazSec/tcpcat/archive/refs/tags/vX.Y.Z.tar.gz"
+  sha256 "..."
+  license "AGPL-3.0-only"
+
+  depends_on "go" => :build
+
+  def install
+    ldflags = "-s -w -X main.version=#{version}"
+    system "go", "build", *std_go_args(ldflags:), "./cmd/tcpcat"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/tcpcat --version")
+  end
+end
+```
+
+Check it with `brew audit --new --strict --online tcpcat` and
+`brew install --build-from-source tcpcat` before opening the pull request on
+[Homebrew/homebrew-core](https://github.com/Homebrew/homebrew-core).
 
 ## AUR (`tcpcat-bin`) — ready, currently off
 
