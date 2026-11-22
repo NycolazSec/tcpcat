@@ -128,7 +128,7 @@ tcpcat with more workers (`-w`), 3 runs each:
 - **All three tools work over a WireGuard interface**, which has no Ethernet
   header: the setup of a pentest through a VPN.
 
-### The fix: an adaptive probe window (PR #75)
+### The fix: an adaptive probe window (v1.8.0)
 
 Those findings led to a congestion window for raw scans when `-w` is not
 given: it starts at the old default, grows while probes are answered on their
