@@ -111,8 +111,8 @@ so masscan cannot use it, and tcpcat's XDP hook should not be attached to a
 tunnel that carries other traffic: run
 `TOOLS="tcpcat-syn nmap naabu"`. With round trips of several milliseconds,
 note that tcpcat 1.7.0 sizes its worker count from the CPU and each worker
-waits for its reply, so it needs a larger `-w` there; from the adaptive probe
-window (PR #75) on, it sizes the window itself unless `-w` is given (see
+waits for its reply, so it needs a larger `-w` there; from v1.8.0 on, its
+adaptive probe window sizes this itself unless `-w` is given (see
 [BENCHMARK_RESULTS.md](../docs/BENCHMARK_RESULTS.md#across-a-real-network-two-servers-11-ms-apart)).
 
 ## Sample report

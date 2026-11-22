@@ -10,6 +10,16 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-22
+
+### Added
+- Homebrew: `brew install nycolazsec/tap/tcpcat` on macOS and Linux. Each
+  release publishes the formula to
+  [NycolazSec/homebrew-tap](https://github.com/NycolazSec/homebrew-tap).
+- Benchmark results across a real network (two servers 11 ms apart, through
+  a WireGuard tunnel) in `docs/BENCHMARK_RESULTS.md`, and how to run the
+  benchmark through a tunnel interface in `benchmarks/README.md`.
+
 ### Changed
 - Raw scans (`-sS`, `-sA`, `-sW`, `-sN`, `-sF`, `-sX`, and AF_XDP) adapt how
   many probes are in flight when `-w` is not given. Each worker waits for its
@@ -26,7 +36,21 @@ Full diffs for every release are available via GitHub's
   goes below the old default. `-w` still fixes the count, and connect, UDP
   and idle scans and the `safe-production` and `ot` profiles are unchanged.
   A scan says how the window moved, and warns when 1% or more of the replies
-  needed a retransmission.
+  needed a retransmission. Across a real network this took a full-range
+  scan of two hosts from 11.95 s to 5.38 s at 25,000 pps and from 12.07 s
+  to 3.75 s at 100,000 pps (Nmap: 13.4 s), every run finding every open
+  port; on a LAN it is unchanged.
+- Kali packaging metadata (`debian/`) and the BlackArch PKGBUILD follow
+  v1.7.0.
+
+### Fixed
+- `benchmarks/lab/report.py` quotes speed ratios against tcpcat's raw-socket
+  engine when the AF_XDP engine was not run, instead of reporting that it had
+  no valid run.
+
+### Removed
+- `docs/COMPETITIVE_ANALYSIS.md` and `docs/COMPETITOR_MATRIX.md`, which still
+  quoted the withdrawn speed figures.
 
 ## [1.7.0] - 2026-11-17
 
@@ -970,7 +994,8 @@ Full diffs for every release are available via GitHub's
   visibility-testing controls, and a WASM-based scripting engine for custom
   detectors and exploit modules.
 
-[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/NycolazSec/tcpcat/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/NycolazSec/tcpcat/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/NycolazSec/tcpcat/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/NycolazSec/tcpcat/compare/v1.4.4...v1.5.0
