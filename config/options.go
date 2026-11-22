@@ -118,12 +118,16 @@ type Options struct {
 	PayloadAnalysis bool
 	ProtocolTracing bool
 
-	Timing         int
-	RateLimit      int
-	AdaptiveRate   bool
-	MaxRetries     int
-	NoRandomize    bool
-	MaxWorkers     int
+	Timing       int
+	RateLimit    int
+	AdaptiveRate bool
+	MaxRetries   int
+	NoRandomize  bool
+	MaxWorkers   int
+	// WorkersAuto is set when -w was not given and MaxWorkers was derived
+	// from the CPU count: the raw packet paths then adapt how many probes
+	// are in flight (see internal/scan/probe_window.go).
+	WorkersAuto    bool
 	BatchSize      int
 	ConnPoolSize   int
 	UnsafeNoLimits bool
@@ -429,7 +433,7 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.ProtocolTracing, "protocol-trace", false, "Trace full protocol negotiation sequence (3-way handshake, etc)")
 
 	flag.IntVar(&opts.Timing, "T", 3, "Set timing template (0-5, higher is faster)")
-	flag.IntVar(&opts.MaxWorkers, "w", 0, "Number of parallel workers (default: auto-scaled to CPU cores × 32)")
+	flag.IntVar(&opts.MaxWorkers, "w", 0, "Number of parallel workers (default: CPU cores × 32, adapted to the network on SYN/raw scans)")
 	flag.IntVar(&opts.MaxWorkers, "workers", 0, "Number of parallel workers (alias for -w)")
 	flag.IntVar(&opts.BatchSize, "batch-size", 1000, "Number of jobs dispatched per batch")
 	flag.IntVar(&opts.ConnPoolSize, "conn-pool", 64, "Max idle TCP connections kept per address (for -sT scans)")
@@ -552,7 +556,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Println(Bold + Red + "\nTIMING & OUTPUT:" + Reset)
 		fmt.Printf("  %s-T <0-5>%s        Set timing template\n", White, Reset)
 		fmt.Printf("  %s--rate <pps>%s    Set max packets per second for discovery and scans\n", White, Reset)
-		fmt.Printf("  %s-w, --workers <n>%s Number of parallel workers (default: auto CPU×32)\n", White, Reset)
+		fmt.Printf("  %s-w, --workers <n>%s Parallel workers (default: auto, adapts on raw scans)\n", White, Reset)
 		fmt.Printf("  %s--batch-size <n>%s  Jobs dispatched per batch (default: 1000)\n", White, Reset)
 		fmt.Printf("  %s--conn-pool <n>%s   Max idle TCP connections per address (default: 64)\n", White, Reset)
 		fmt.Printf("  %s-v%s              Enable verbose output\n", White, Reset)
@@ -606,6 +610,7 @@ func ParseFlags() (*Options, error) {
 			cpuBased = 100
 		}
 		opts.MaxWorkers = cpuBased
+		opts.WorkersAuto = true
 	}
 
 	if opts.TTLJitter {
@@ -757,6 +762,7 @@ func ApplyProfile(opts *Options) {
 		opts.DecoyIPs = ""
 		opts.SmartBypass = false
 		opts.ServiceDetect = true
+		opts.WorkersAuto = false // a fixed worker count, no adaptive window
 
 	case "ot":
 		// Industrial control gear (PLCs, RTUs, field controllers) can fault
@@ -776,6 +782,7 @@ func ApplyProfile(opts *Options) {
 		opts.XmasScan = false
 		opts.UseXDP = false
 		opts.MaxWorkers = 1
+		opts.WorkersAuto = false
 		opts.BatchSize = 1
 		opts.Timing = 1
 		opts.RateLimit = 5

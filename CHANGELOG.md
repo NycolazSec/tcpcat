@@ -10,6 +10,24 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Changed
+- Raw scans (`-sS`, `-sA`, `-sW`, `-sN`, `-sF`, `-sX`, and AF_XDP) adapt how
+  many probes are in flight when `-w` is not given. Each worker waits for its
+  probe's reply, so throughput is about workers ÷ round trip: the old fixed
+  default (CPU cores × 32) capped a scan across a real network well below
+  `--rate` (128 workers at 11 ms is about 11,700 probes/s). The count now
+  starts at that default and moves like a TCP congestion window: it grows
+  while probes are answered on their first attempt, up to twice what `--rate`
+  needs in flight (rate × round trip) and at most 4,096; it stops growing
+  while the round trip is above twice the fastest one seen, the sign of a
+  queue building before it overflows; and it drops to 70% when a reply only
+  came after a retransmission, the congestion signal Nmap uses. A port that
+  never answers (a firewall) does not slow the scan, and the window never
+  goes below the old default. `-w` still fixes the count, and connect, UDP
+  and idle scans and the `safe-production` and `ot` profiles are unchanged.
+  A scan says how the window moved, and warns when 1% or more of the replies
+  needed a retransmission.
+
 ## [1.7.0] - 2026-11-17
 
 ### Added
