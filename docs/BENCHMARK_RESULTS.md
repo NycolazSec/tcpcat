@@ -120,13 +120,35 @@ tcpcat with more workers (`-w`), 3 runs each:
 - **Past what the path can carry, tcpcat loses ports.** With 2 048 workers at
   100 000 pps, 1.1 to 1.4 % of probes got no reply, even after retries. The
   interface counters show no drop, so the loss is further along the tunnel.
-  In one run two open ports came back FILTERED (timeout). tcpcat has no
-  congestion control yet; Nmap has, which is why it is slower and was right
+  In one run two open ports came back FILTERED (timeout). tcpcat 1.7.0 has
+  no congestion control; Nmap has, which is why it is slower and was right
   in every run.
 - **naabu missed open ports at both ceilings over this network** (65/80 and
   60/80), although it was valid at 25 000 pps in the Docker lab.
 - **All three tools work over a WireGuard interface**, which has no Ethernet
   header: the setup of a pentest through a VPN.
+
+### The fix: an adaptive probe window (PR #75)
+
+Those findings led to a congestion window for raw scans when `-w` is not
+given: it starts at the old default, grows while probes are answered on their
+first attempt, stops growing when the round trip rises above twice the
+fastest one seen (a queue building), and drops to 70% when a reply needed a
+retransmission. Same path, same protocol, the build of PR #75 against
+v1.7.0's code (`main` at ebe92a5) and Nmap in one session, 5 runs each:
+
+| Ceiling | tcpcat 1.7.0 | tcpcat, adaptive window | Nmap |
+|---|---|---|---|
+| 25 000 pps | 11.95 s ± 0.33, 80/80 | **5.38 s ± 0.01**, 80/80 | 13.35 s ± 0.12, 80/80 |
+| 100 000 pps | 12.07 s ± 0.25, 80/80 | **3.75 s ± 0.31**, 80/80 | 13.38 s ± 0.14, 80/80 |
+
+With its defaults, tcpcat is now 2.5× faster than Nmap at 25 000 pps (at the
+5.24 s floor) and 3.6× at 100 000 pps, about as fast as the best hand-picked
+`-w` above, with every run valid. At 100 000 pps the window peaked near
+1 000 probes in flight and fewer than 1% of replies needed a retransmission.
+In the Docker lab the same build matched v1.7.0 (1.30 s at 1 000 000 pps,
+5.45 s vs 5.39 s at 25 000 pps): with no queue to find, there is nothing to
+gain there.
 
 ### Earlier sample: laptop, before v1.7.0
 
@@ -145,9 +167,10 @@ since v1.7.0.
   run that is not reproducible with `benchmarks/run.sh`.
 - No figure for AF_XDP on a zero-copy NIC until someone has measured one
   (see issue #70).
-- No speed ratio over a real network with default settings beyond the one
-  measured above (1.12× Nmap): the larger gains need `-w` sized for the
-  latency, until tcpcat sizes it itself.
+- No speed ratio over a real network beyond the ones measured above, on one
+  path 11 ms long: v1.7.0's defaults were 1.12× Nmap there, and the adaptive
+  window 2.5 to 3.6×. Another path, with other latency, loss or bottleneck,
+  will give other numbers.
 - masscan and ZMap remain the reference for internet-wide, raw packets-per-
   second scanning. tcpcat's aim is a fast, *correct* scanner paired with
   exposure analysis, service/OS detection, CVE correlation, WASM scripting
