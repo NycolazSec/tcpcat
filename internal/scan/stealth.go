@@ -81,6 +81,7 @@ func ScanStealthPort(targetIP string, port int, scanType StealthType, opts *conf
 			rtt.Sample(res.Latency)
 		}
 
+		res.Attempts = attempt + 1
 		if resp.Flags&0x04 != 0 {
 			res.State = StateClosed
 			res.Reason = "RST Received (Closed)"

@@ -252,3 +252,13 @@ func TestRenderBannerEmptyFallsBackToEth0(t *testing.T) {
 		t.Errorf("RenderBanner(\"\") = %q, want it to fall back to the eth0 placeholder", got)
 	}
 }
+
+func TestApplyProfileFixesTheWorkerCount(t *testing.T) {
+	for _, profile := range []string{"safe-production", "ot"} {
+		opts := &Options{Profile: profile, MaxWorkers: 256, WorkersAuto: true}
+		ApplyProfile(opts)
+		if opts.WorkersAuto {
+			t.Errorf("--profile %s left the adaptive probe window on", profile)
+		}
+	}
+}

@@ -62,6 +62,7 @@ func ScanAckPort(targetIP string, port int, opts *config.Options, timeout time.D
 		if rtt != nil {
 			rtt.Sample(res.Latency)
 		}
+		res.Attempts = attempt + 1
 
 		if resp.Flags&0x04 != 0 {
 			res.State = StateUnfiltered
@@ -125,6 +126,7 @@ func ScanWindowPort(targetIP string, port int, opts *config.Options, timeout tim
 		if rtt != nil {
 			rtt.Sample(res.Latency)
 		}
+		res.Attempts = attempt + 1
 
 		if resp.Flags&0x04 != 0 {
 			if resp.WindowSize > 0 {
