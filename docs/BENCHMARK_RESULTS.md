@@ -69,6 +69,65 @@ Rate ceiling 25 000 packets/s (no run can take less than ~5.24 s):
   the server was shared. Nmap did the same workload in 0.94 s in a laptop
   Docker lab.
 
+## Across a real network: two servers 11 ms apart
+
+The runs above never leave one machine: no latency, no loss. On 2026-11-22
+the same protocol ran between two servers in different datacenters:
+
+- **Scanner**: KVM server, 4 vCPUs (Haswell), Linux 6.12, otherwise idle.
+- **Targets**: the two `target.py` processes (seeds 1337 and 1338, 80 open
+  ports) on the other server. Round trip 10.9 ms, no ping loss.
+- **Path**: a WireGuard tunnel between the two servers (MTU 1420), so the
+  probes were encrypted between two machines we own rather than sent as a
+  port scan across the Internet. Its encryption is part of what was measured.
+- **Versions**: tcpcat 1.7.0-6-gebe92a5 (v1.7.0 scanner code), Nmap 7.93,
+  naabu 2.7.0, 131 070 probes per run.
+- **Not run**: `tcpcat --ebpf` (its XDP hook would have sat on a tunnel that
+  carries production traffic) and masscan (it needs an Ethernet interface).
+
+Each tool with its defaults and the rate ceiling:
+
+| Ceiling | tcpcat -sS | nmap | naabu |
+|---|---|---|---|
+| 25 000 pps, 5 runs | 12.04 s ± 0.38, 80/80 | 13.46 s ± 0.37, 80/80 | 20.33 s ± 0.01, 65/80, **invalid** |
+| 100 000 pps, 3 runs | 12.04 s ± 0.14, 80/80 | 13.43 s ± 0.24, 80/80 | 12.80 s ± 0.11, 60/80, **invalid** |
+
+CPU time (user + sys) per run at 25 000 pps: tcpcat 4.1 s, Nmap 2.4 s,
+naabu 20.9 s.
+
+tcpcat with more workers (`-w`), 3 runs each:
+
+| Ceiling | Workers | Mean ± σ | Open ports, worst run | Valid |
+|---|---|---|---|---|
+| 25 000 pps | 128 (default on 4 cores) | 12.52 s ± 0.11 | 80/80 | yes |
+| 25 000 pps | 256 | 7.16 s ± 0.24 | 80/80 | yes |
+| 25 000 pps | 512 | 5.38 s ± 0.01 | 80/80 | yes |
+| 25 000 pps | 1024 | 5.37 s ± 0.00 | 80/80 | yes |
+| 100 000 pps | 1024 | 3.60 s ± 0.17 | 80/80 | yes |
+| 100 000 pps | 2048 | 3.51 s ± 0.10 | 78/80 | **no** |
+
+### What this run shows
+
+- **With its defaults, tcpcat is barely ahead of Nmap here** (1.12× at both
+  ceilings). Neither gets near the 5.24 s that 25 000 pps allows: both are
+  bound by latency, not by the ceiling.
+- **tcpcat's limit is its own worker count.** Each worker waits for its
+  probe's reply, so throughput is about workers ÷ round trip: 128 ÷ 10.9 ms is
+  about 11 700 probes/s, or 11.2 s for this scan. The default (CPU cores × 32)
+  takes neither `--rate` nor latency into account. With `-w 512` tcpcat
+  reaches the 25 000 pps floor (5.38 s, 2.5× faster than Nmap), and with
+  `-w 1024` it scans at 100 000 pps in 3.60 s (3.7× Nmap), every run valid.
+- **Past what the path can carry, tcpcat loses ports.** With 2 048 workers at
+  100 000 pps, 1.1 to 1.4 % of probes got no reply, even after retries. The
+  interface counters show no drop, so the loss is further along the tunnel.
+  In one run two open ports came back FILTERED (timeout). tcpcat has no
+  congestion control yet; Nmap has, which is why it is slower and was right
+  in every run.
+- **naabu missed open ports at both ceilings over this network** (65/80 and
+  60/80), although it was valid at 25 000 pps in the Docker lab.
+- **All three tools work over a WireGuard interface**, which has no Ethernet
+  header: the setup of a pentest through a VPN.
+
 ### Earlier sample: laptop, before v1.7.0
 
 Docker Desktop on an Apple-silicon Mac, 10 cores, veth, copy mode. Kept for
@@ -86,6 +145,9 @@ since v1.7.0.
   run that is not reproducible with `benchmarks/run.sh`.
 - No figure for AF_XDP on a zero-copy NIC until someone has measured one
   (see issue #70).
+- No speed ratio over a real network with default settings beyond the one
+  measured above (1.12× Nmap): the larger gains need `-w` sized for the
+  latency, until tcpcat sizes it itself.
 - masscan and ZMap remain the reference for internet-wide, raw packets-per-
   second scanning. tcpcat's aim is a fast, *correct* scanner paired with
   exposure analysis, service/OS detection, CVE correlation, WASM scripting

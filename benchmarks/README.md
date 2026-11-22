@@ -102,6 +102,18 @@ anti-scan filter) drops the probes. The ground truth is derived from the same
 seeds, so the targets must be started with the `SEED` values above and no
 other service may listen on them in the scanned range.
 
+### Through a tunnel
+
+`IF` can also be a WireGuard (or other point-to-point) interface between the
+scanner and the targets: probes then cross a real network inside the tunnel
+instead of as a visible port scan. Such an interface has no Ethernet header,
+so masscan cannot use it, and tcpcat's XDP hook should not be attached to a
+tunnel that carries other traffic: run
+`TOOLS="tcpcat-syn nmap naabu"`. With round trips of several milliseconds,
+also measure tcpcat with a larger `-w`: its default worker count is sized from
+the CPU, and each worker waits for its reply (see
+[BENCHMARK_RESULTS.md](../docs/BENCHMARK_RESULTS.md#across-a-real-network-two-servers-11-ms-apart)).
+
 ## Sample report
 
 Docker Desktop on an Apple-silicon Mac: kernel 6.12.76-linuxkit (aarch64),
