@@ -113,6 +113,10 @@ brews:
       owner: NycolazSec
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    # The tap keeps its formulae in Formula/, and Homebrew reads only that
+    # directory when it exists: without this, the formula lands at the
+    # repository root and `brew install` keeps the previous version.
+    directory: Formula
     homepage: "https://tcpcat.io"
     description: "Fast network scanner in Go with an eBPF/AF_XDP engine, service/OS detection and CVE correlation"
     license: "AGPL-3.0-only"
