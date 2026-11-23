@@ -173,3 +173,128 @@ func TestIsVersionAffectedHandlesRealDebianEcosystemEntry(t *testing.T) {
 		})
 	}
 }
+
+func TestIsVersionAffectedLastAffectedIsInclusive(t *testing.T) {
+	ranges := []osvAffected{{Ranges: []osvRange{{Type: "SEMVER", Events: []osvEvent{
+		{Introduced: "1.0.0"},
+		{LastAffected: "1.4.0"},
+	}}}}}
+	for version, want := range map[string]bool{"1.2.0": true, "1.4.0": true, "1.4.1": false, "0.9.0": false} {
+		if got := IsVersionAffected(version, ranges); got != want {
+			t.Errorf("IsVersionAffected(%q) = %v, want %v", version, got, want)
+		}
+	}
+}
+
+func TestCompareDistroVersionsAdoptsTheBoundaryEpoch(t *testing.T) {
+	tests := []struct {
+		target, boundary string
+		want             int
+	}{
+		{"10.0p2-7+deb13u4", "1:9.3p2-1", 1},           // without the epoch this read 10 vs 1
+		{"10.0p2-7+deb13u4", "1:10.0p2-7+deb13u4", 0},  // the exact fixed version
+		{"10.0p2-7+deb13u3", "1:10.0p2-7+deb13u4", -1}, // one backport behind
+		{"1:10.0p2-7", "1:9.3p2-1", 1},                 // target already has one
+	}
+	for _, tt := range tests {
+		if got := compareDistroVersions(tt.target, tt.boundary); got != tt.want {
+			t.Errorf("compareDistroVersions(%q, %q) = %d, want %d", tt.target, tt.boundary, got, tt.want)
+		}
+	}
+}
+
+func TestUpstreamPart(t *testing.T) {
+	for in, want := range map[string]string{
+		"1:9.3p2-1":           "9.3p2",
+		"1:10.0p2-7+deb13u4":  "10.0p2",
+		"9.3_p2-r0":           "9.3_p2",
+		"1.24.0+dfsg-1":       "1.24.0",
+		"5:7.0.15-1~deb12u4":  "7.0.15",
+		"8.7p1-38.el9":        "8.7p1",
+		"9.6p1":               "9.6p1",
+		"1:8.9p1-3ubuntu0.10": "8.9p1",
+	} {
+		if got := upstreamPart(in); got != want {
+			t.Errorf("upstreamPart(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestIsUpstreamVersionAffected(t *testing.T) {
+	ubuntuOpen := osvAffected{Package: osvPackage{Name: "openssh", Ecosystem: "Ubuntu:24.04:LTS"},
+		Ranges: []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{{Introduced: "0"}}}}}
+	ubuntuBackport := osvAffected{Package: osvPackage{Name: "openssh", Ecosystem: "Ubuntu:22.04:LTS"},
+		Ranges: []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{{Introduced: "0"}, {Fixed: "1:8.9p1-3ubuntu0.3"}}}}}
+	debianFix := osvAffected{Package: osvPackage{Name: "openssh", Ecosystem: "Debian:13"},
+		Ranges: []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{{Introduced: "0"}, {Fixed: "1:9.3p2-1"}}}}}
+	pypi := osvAffected{Package: osvPackage{Name: "redis", Ecosystem: "PyPI"},
+		Ranges: []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{{Introduced: "0"}}}}}
+	upstreamSemver := osvAffected{Ranges: []osvRange{{Type: "SEMVER", Events: []osvEvent{{Introduced: "2.0.0"}, {Fixed: "2.4.0"}}}}}
+
+	tests := []struct {
+		name     string
+		version  string
+		affected []osvAffected
+		want     bool
+	}{
+		{"fixed upstream before this version, open in an Ubuntu release", "10.0p2", []osvAffected{ubuntuOpen, ubuntuBackport, debianFix}, false},
+		{"older than the upstream fix", "9.2p1", []osvAffected{ubuntuOpen, ubuntuBackport, debianFix}, true},
+		{"a backport's older upstream number is not the upstream fix", "9.0p1", []osvAffected{ubuntuBackport, debianFix}, true},
+		{"no fix anywhere yet: every version", "10.0p2", []osvAffected{ubuntuOpen}, true},
+		{"a language package with the same name is another product", "7.4.12", []osvAffected{pypi}, false},
+		{"the CVE's own SEMVER range still applies", "2.1.0", []osvAffected{upstreamSemver}, true},
+		{"the CVE's own SEMVER range, past the fix", "2.4.0", []osvAffected{upstreamSemver}, false},
+		{"no affected data: assume affected", "1.0", nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsUpstreamVersionAffected(tt.version, tt.affected); got != tt.want {
+				t.Errorf("IsUpstreamVersionAffected(%q) = %v, want %v", tt.version, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestUpstreamAndDistroMatchingOnRealOpenSSHRecords replays OSV's real
+// records for CVE-2023-38408 (fixed upstream in OpenSSH 9.3p2): the CVE
+// record, Debian's and Ubuntu's, as returned to a lookup by name alone
+// (testdata/osv-openssh-cve-2023-38408.json, trimmed from api.osv.dev).
+// Before upstream matching ignored open distro entries, every OpenSSH
+// version matched, 10.0p2 included.
+func TestUpstreamAndDistroMatchingOnRealOpenSSHRecords(t *testing.T) {
+	data, err := os.ReadFile("testdata/osv-openssh-cve-2023-38408.json")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	var resp osvResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		t.Fatalf("decode fixture: %v", err)
+	}
+	upstream := func(version string) bool {
+		for _, v := range resp.Vulns {
+			if affects(osvPackage{Name: "openssh"}, version, v.Affected) {
+				return true
+			}
+		}
+		return false
+	}
+	for version, want := range map[string]bool{"10.0p2": false, "9.7": false, "9.3p2": false, "9.3p1": true, "6.6.1p1": true} {
+		if got := upstream(version); got != want {
+			t.Errorf("upstream %s affected = %v, want %v", version, got, want)
+		}
+	}
+	debian13 := func(version string) bool {
+		for _, v := range resp.Vulns {
+			if affects(osvPackage{Name: "openssh", Ecosystem: "Debian:13"}, version, v.Affected) {
+				return true
+			}
+		}
+		return false
+	}
+	// what DetectDistroPackage rebuilds from "OpenSSH_10.0p2 Debian-7+deb13u4": no epoch
+	for version, want := range map[string]bool{"10.0p2-7+deb13u4": false, "9.2p1-2": true, "9.3p2-1": false} {
+		if got := debian13(version); got != want {
+			t.Errorf("Debian:13 %s affected = %v, want %v", version, got, want)
+		}
+	}
+}

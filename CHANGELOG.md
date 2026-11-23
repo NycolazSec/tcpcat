@@ -10,6 +10,21 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Fixed
+- CVE lookups no longer report vulnerabilities that were fixed before the
+  detected version. A lookup by name returns every ecosystem's view of a CVE,
+  and tcpcat matched the version against all of them: an Ubuntu release that
+  never shipped a fix, or another package listed in the same record, made
+  every version "affected" (OpenSSH 10.0p2 was flagged with CVE-2023-38408,
+  fixed in 9.3p2). Upstream versions are now compared with the release that
+  fixed the CVE, and only the scanned package's own entries count.
+- On Debian, the distro's own answer is used: a banner such as
+  `OpenSSH_10.0p2 Debian-7+deb13u4` is matched against Debian's records for
+  that release (the lookup used to send the whole banner as the version and
+  silently fell back to the upstream match), so backported fixes are no
+  longer reported, nor issues Debian rates `unimportant` for its build.
+- OSV `last_affected` range events are honoured.
+
 ## [1.8.0] - 2026-11-22
 
 ### Added
