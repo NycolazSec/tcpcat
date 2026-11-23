@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -78,41 +79,70 @@ func (s *OSVScanner) GetForDistroPackage(pkg DistroPackage) ([]Vulnerability, er
 	return s.query(osvPackage{Name: pkg.Name, Ecosystem: pkg.Ecosystem}, pkg.Version)
 }
 
+// LookupDistroPackage is GetForDistroPackage for callers that want to
+// trust the distro's answer: known reports whether OSV has any record of
+// the package in that ecosystem at all. When it does, a CVE missing from
+// the result is one the distro does not consider open for this version
+// (fixed by a backport, or not affecting its build); when it does not,
+// the package name or release is probably not one OSV tracks, and the
+// caller should keep its upstream result.
+//
+// The query is sent without the version: a version rebuilt from a banner
+// lacks the package epoch, which OSV would read as older than every fix.
+// The returned entries are matched locally instead, where the epoch is
+// handled (see compareDistroVersions).
+func (s *OSVScanner) LookupDistroPackage(pkg DistroPackage) (vulns []Vulnerability, known bool, err error) {
+	if pkg.Name == "" || pkg.Version == "" || pkg.Ecosystem == "" {
+		return nil, false, nil
+	}
+	vulns, raw, err := s.lookup(osvPackage{Name: pkg.Name, Ecosystem: pkg.Ecosystem}, "", pkg.Version)
+	return vulns, raw > 0, err
+}
+
 func (s *OSVScanner) query(pkg osvPackage, version string) ([]Vulnerability, error) {
+	vulns, _, err := s.lookup(pkg, version, version)
+	return vulns, err
+}
+
+// lookup asks OSV about pkg (at sendVersion, or every version when it is
+// empty) and keeps the entries affecting matchVersion. raw is how many
+// entries OSV returned before that filter.
+func (s *OSVScanner) lookup(pkg osvPackage, sendVersion, matchVersion string) (vulns []Vulnerability, raw int, err error) {
+	version := matchVersion
 	query := osvQuery{
-		Version: version,
+		Version: sendVersion,
 		Package: pkg,
 	}
 
 	body, err := json.Marshal(query)
 	if err != nil {
-		return nil, fmt.Errorf("osv: could not marshal request: %w", err)
+		return nil, 0, fmt.Errorf("osv: could not marshal request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(context.Background(), "POST", osvApiUrl, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("osv: could not create request: %w", err)
+		return nil, 0, fmt.Errorf("osv: could not create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("osv: request failed: %w", err)
+		return nil, 0, fmt.Errorf("osv: request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("osv: api returned non-200 status %d: %s", resp.StatusCode, string(bodyBytes))
+		return nil, 0, fmt.Errorf("osv: api returned non-200 status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var osvResp osvResponse
 	if err := json.NewDecoder(resp.Body).Decode(&osvResp); err != nil {
-		return nil, fmt.Errorf("osv: could not decode response: %w", err)
+		return nil, 0, fmt.Errorf("osv: could not decode response: %w", err)
 	}
 
 	if len(osvResp.Vulns) == 0 {
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	// seen maps a canonical CVE ID to its row's index in vulnerabilities,
@@ -121,7 +151,7 @@ func (s *OSVScanner) query(pkg osvPackage, version string) ([]Vulnerability, err
 	seen := make(map[string]int)
 	var vulnerabilities []Vulnerability
 	for _, v := range osvResp.Vulns {
-		if !IsVersionAffected(version, v.Affected) {
+		if !affects(pkg, version, v.Affected) {
 			continue
 		}
 
@@ -149,11 +179,11 @@ func (s *OSVScanner) query(pkg osvPackage, version string) ([]Vulnerability, err
 		vulnerabilities = append(vulnerabilities, Vulnerability{ID: id, Title: title, CVSS: cvss})
 	}
 
-	return vulnerabilities, nil
+	return vulnerabilities, len(osvResp.Vulns), nil
 }
 
 type osvQuery struct {
-	Version string     `json:"version"`
+	Version string     `json:"version,omitempty"`
 	Package osvPackage `json:"package"`
 }
 type osvPackage struct {
@@ -178,10 +208,25 @@ type osvSeverity struct {
 }
 
 type osvAffected struct {
-	Package  osvPackage    `json:"package"`
-	Ranges   []osvRange    `json:"ranges"`
-	Versions []string      `json:"versions,omitempty"`
-	Severity []osvSeverity `json:"severity"`
+	Package           osvPackage      `json:"package"`
+	Ranges            []osvRange      `json:"ranges"`
+	Versions          []string        `json:"versions,omitempty"`
+	Severity          []osvSeverity   `json:"severity"`
+	EcosystemSpecific json.RawMessage `json:"ecosystem_specific,omitempty"`
+}
+
+// unimportant reports Debian's "unimportant" urgency: the security team
+// judged the issue to have no security impact on Debian's build (it does
+// not apply there, or it is not a vulnerability in practice) and will not
+// fix it, so it stays "open" in the data forever.
+func (a osvAffected) unimportant() bool {
+	if len(a.EcosystemSpecific) == 0 {
+		return false
+	}
+	var es struct {
+		Urgency string `json:"urgency"`
+	}
+	return json.Unmarshal(a.EcosystemSpecific, &es) == nil && es.Urgency == "unimportant"
 }
 
 type osvRange struct {
@@ -190,8 +235,9 @@ type osvRange struct {
 }
 
 type osvEvent struct {
-	Introduced string `json:"introduced,omitempty"`
-	Fixed      string `json:"fixed,omitempty"`
+	Introduced   string `json:"introduced,omitempty"`
+	Fixed        string `json:"fixed,omitempty"`
+	LastAffected string `json:"last_affected,omitempty"`
 }
 
 type osvDatabaseSpecific struct {
@@ -241,4 +287,49 @@ func maxCVSSV3(severities []osvSeverity) float64 {
 		}
 	}
 	return maxScore
+}
+
+// affects applies the right version logic for how the lookup was scoped.
+// A lookup by name alone gets every ecosystem's entries and is judged on
+// upstream fixes (IsUpstreamVersionAffected); an ecosystem-scoped lookup
+// is judged only on that ecosystem's own entries, since one record often
+// carries several releases (Debian:12 and Debian:13 with different fixes).
+//
+// Either way only the entries for this package count: one record lists
+// every package a CVE touches (Debian's record for Terrapin covers putty,
+// erlang, libssh and a dozen more next to openssh).
+func affects(pkg osvPackage, version string, affected []osvAffected) bool {
+	if len(affected) == 0 {
+		return true
+	}
+	var own []osvAffected
+	for _, a := range affected {
+		if !samePackage(a.Package.Name, pkg.Name) {
+			continue
+		}
+		if pkg.Ecosystem != "" && a.Package.Ecosystem != "" && (a.Package.Ecosystem != pkg.Ecosystem || a.unimportant()) {
+			continue
+		}
+		own = append(own, a)
+	}
+	if len(own) == 0 {
+		return false
+	}
+	if pkg.Ecosystem == "" {
+		return IsUpstreamVersionAffected(version, own)
+	}
+	return IsVersionAffected(version, own)
+}
+
+// samePackage matches an OSV entry's package name against the name tcpcat
+// queried, allowing for the Debian source package name (apache: apache2).
+// An entry without a name (a CVE record's own range) always matches.
+func samePackage(entry, queried string) bool {
+	if entry == "" || queried == "" || strings.EqualFold(entry, queried) {
+		return true
+	}
+	if mapped, ok := debianSourcePackageNames[strings.ToLower(queried)]; ok && strings.EqualFold(entry, mapped) {
+		return true
+	}
+	return false
 }

@@ -334,3 +334,81 @@ func TestOSVScannerGetForDistroPackageEmptyArgs(t *testing.T) {
 		}
 	}
 }
+
+func TestOSVScannerLookupDistroPackageMatchesLocallyAndReportsKnown(t *testing.T) {
+	var gotQuery osvQuery
+	s := newTestOSVScanner(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&gotQuery)
+		resp := osvResponse{Vulns: []osvVulnerability{
+			{ID: "DEBIAN-CVE-2023-38408", Affected: []osvAffected{
+				{Package: osvPackage{Name: "openssh", Ecosystem: "Debian:12"}, Ranges: []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{{Introduced: "0"}, {Fixed: "1:9.2p1-2+deb12u1"}}}}},
+				{Package: osvPackage{Name: "openssh", Ecosystem: "Debian:13"}, Ranges: []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{{Introduced: "0"}, {Fixed: "1:9.3p2-1"}}}}},
+			}},
+			{ID: "DEBIAN-CVE-2099-0001", Affected: []osvAffected{
+				{Package: osvPackage{Name: "openssh", Ecosystem: "Debian:13"}, Ranges: []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{{Introduced: "0"}, {Fixed: "1:10.0p2-7+deb13u5"}}}}},
+			}},
+		}}
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+
+	got, known, err := s.LookupDistroPackage(DistroPackage{Ecosystem: "Debian:13", Name: "openssh", Version: "10.0p2-7+deb13u4"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotQuery.Version != "" {
+		t.Errorf("query sent version %q; an epoch-less banner version must be matched locally", gotQuery.Version)
+	}
+	if !known {
+		t.Error("known = false, want true: OSV returned records for the package")
+	}
+	if len(got) != 1 || got[0].ID != "CVE-2099-0001" {
+		t.Errorf("got %+v, want only CVE-2099-0001 (fixed in a later backport)", got)
+	}
+}
+
+func TestOSVScannerLookupDistroPackageUnknownPackage(t *testing.T) {
+	s := newTestOSVScanner(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(osvResponse{})
+	})
+	got, known, err := s.LookupDistroPackage(DistroPackage{Ecosystem: "Debian:13", Name: "nosuchpkg", Version: "1.0-1"})
+	if err != nil || known || got != nil {
+		t.Errorf("LookupDistroPackage = (%v, %v, %v), want (nil, false, nil)", got, known, err)
+	}
+}
+
+func TestAffectsOnlyCountsThisPackagesEntries(t *testing.T) {
+	// Debian's record for CVE-2023-48795 (Terrapin) as returned to an
+	// openssh lookup: openssh is fixed in 1:9.6p1-1, while another package
+	// in the same record has no fix and one is marked unimportant.
+	affected := []osvAffected{
+		{Package: osvPackage{Name: "openssh", Ecosystem: "Debian:13"}, Ranges: []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{{Introduced: "0"}, {Fixed: "1:9.6p1-1"}}}}},
+		{Package: osvPackage{Name: "erlang", Ecosystem: "Debian:13"}, Ranges: []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{{Introduced: "0"}, {Fixed: "1:25.3.2.8+dfsg-1"}}}}},
+		{Package: osvPackage{Name: "dropbear", Ecosystem: "Debian:13"}, Ranges: []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{{Introduced: "0"}}}}},
+	}
+	if affects(osvPackage{Name: "openssh", Ecosystem: "Debian:13"}, "10.0p2-7+deb13u4", affected) {
+		t.Error("Debian:13 openssh 10.0p2 matched another package's open entry")
+	}
+	if affects(osvPackage{Name: "openssh"}, "10.0p2", affected) {
+		t.Error("upstream openssh 10.0p2 took another package's fix (erlang 25.3) as its own")
+	}
+	if !affects(osvPackage{Name: "openssh"}, "9.5p1", affected) {
+		t.Error("upstream openssh 9.5p1 is before the 9.6p1 fix and should match")
+	}
+}
+
+func TestAffectsSkipsDebianUnimportant(t *testing.T) {
+	unimportant := osvAffected{
+		Package:           osvPackage{Name: "openssh", Ecosystem: "Debian:13"},
+		Ranges:            []osvRange{{Type: "ECOSYSTEM", Events: []osvEvent{{Introduced: "0"}}}},
+		EcosystemSpecific: json.RawMessage(`{"urgency": "unimportant"}`),
+	}
+	if affects(osvPackage{Name: "openssh", Ecosystem: "Debian:13"}, "10.0p2-7+deb13u4", []osvAffected{unimportant}) {
+		t.Error("an entry Debian marks unimportant (no fix planned, no impact on its build) was reported")
+	}
+	if affects(osvPackage{Name: "openssh"}, "10.0p2", []osvAffected{unimportant}) {
+		t.Error("an unimportant entry with no fix made every upstream version affected")
+	}
+	if !unimportant.unimportant() {
+		t.Error("urgency not parsed")
+	}
+}

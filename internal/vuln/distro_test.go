@@ -44,6 +44,16 @@ func TestDetectDistroPackage(t *testing.T) {
 			wantOK:          true,
 		},
 		{
+			name:            "OpenSSH states the Debian revision after its version",
+			software:        "openssh",
+			upstreamVersion: "10.0p2",
+			banner:          "SSH-2.0-OpenSSH_10.0p2 Debian-7+deb13u4",
+			wantEcosystem:   "Debian:13",
+			wantPkgName:     "openssh",
+			wantVersion:     "10.0p2-7+deb13u4",
+			wantOK:          true,
+		},
+		{
 			name:            "generic Ubuntu dpkg revision has no extractable release number",
 			software:        "openssh",
 			upstreamVersion: "8.9p1",
