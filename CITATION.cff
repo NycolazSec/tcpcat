@@ -1,11 +1,14 @@
 cff-version: 1.2.0
 message: "If you use tcpcat in your research or tooling, please cite it."
-title: "tcpcat: a fast network scanner with an eBPF/AF_XDP engine and sandboxed WASM detection scripting"
+title: "tcpcat: know what your servers expose"
 abstract: >-
-  tcpcat is a network reconnaissance engine written in Go. It pairs a
-  kernel-bypass (eBPF/AF_XDP) data path with service and OS detection, CVE
-  correlation, sandboxed WebAssembly detection scripts, and JSON/SARIF
-  reporting, for authorized security assessments.
+  tcpcat checks what the servers and networks you are responsible for expose.
+  It scans them from the outside (SYN, connect and UDP scans, service, version
+  and OS detection, an eBPF/AF_XDP engine), ties each open port to the program
+  behind it, correlates vulnerabilities with distribution patch data, checks
+  exposure against YAML rules from several vantage points, and keeps signed
+  evidence that can be replayed to verify a fix. Reports are JSON, SARIF and
+  HTML.
 type: software
 authors:
   - family-names: Blondelle
