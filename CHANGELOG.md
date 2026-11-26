@@ -25,6 +25,36 @@ Full diffs for every release are available via GitHub's
   It stays at 100 % on standard ports and takes 375 KB.
   `go run ./internal/ai/aitrain -sweep` tunes the training on the
   calibration split, never on the test split.
+- With `--ai-lang fr`, everything the AI quotes from the scanner is in
+  French: the port's reason ("SYN-ACK reçu") and the probes' SSH, TLS and SMB
+  warnings. The help of `tcpcat ai`, its error messages, the service names
+  in `ai identify` and `tcpcat ai model` are in French too.
+- `tcpcat ai model` shows the model's scores per network condition.
+- `tcpcat ai identify` adds up its guesses by kind of service when it is
+  unsure of the product. When it cannot decide, it says so ("FTP or SMTP?")
+  instead of saying the dictionary does not know the service. The analysis
+  uses the same sums: a banner that is surely FTP but of an unknown product
+  is FTP.
+
+### Added
+- A spinner while the AI works (`--ai`, `--ai-deep`, `ai explain --deep`):
+  a twinkling star, what it is doing and for how long. It is drawn only on a
+  terminal, and not at all for work that finishes at once.
+- The AI says when the scan cannot be trusted, before its findings:
+  - every port filtered: the machine is off or ignores the scanner. This is
+    no longer reported as "no sensitive port reachable";
+  - every open port silent: something on the path may be answering for the
+    machine;
+  - a scan run from a Kubernetes node: cluster ports may be open to that node
+    only, so they are "to be confirmed" rather than critical.
+
+### Fixed
+- The thorough analysis said nothing when a follow-up probe got no answer.
+  It now reports "could not be verified".
+- A port where service detection got nothing back was judged on its number
+  as if confirmed. It is now marked "to be confirmed", with that evidence.
+- The machine profile could read "Serving websites." without a subject. It
+  now reads "a machine serving websites".
 
 ## [1.9.0] - 2026-11-26
 

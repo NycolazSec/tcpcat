@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -43,9 +44,41 @@ how serious it is, why, and what to do. It runs offline, inside tcpcat.
   explain exits 1 when something should be fixed, 0 otherwise, 2 on error.
 `
 
+const aiUsageFR = `L'IA de tcpcat : elle lit un scan et vous dit, avec des mots simples, ce qui
+est exposé, à quel point c'est grave, pourquoi, et quoi faire. Elle tourne hors
+ligne, dans tcpcat.
+
+  tcpcat ai explain <scan.json>     juge chaque port ouvert d'un scan (-j scan.json)
+  tcpcat ai explain --deep <scan>   prend son temps : vérifie chaque hypothèse par
+                                    des sondes en lecture seule, dresse le profil de
+                                    la machine, planifie les corrections
+  tcpcat ai policy <scan.json>      rédige la politique d'exposition pour tcpcat policy check
+  tcpcat ai identify "<bannière>"   nomme le service derrière une bannière
+  tcpcat ai model                   ce que l'IA sait et comment elle a été entraînée
+
+  Ou ajoutez --ai (rapide) ou --ai-deep (approfondi) à un scan :
+  tcpcat -sV --ai-deep <cible>
+
+  --lang fr|en        langue des réponses (par défaut : selon $LANG)
+  --from internet|internal
+                      d'où le scan a été lancé (par défaut : internal quand toutes les
+                      adresses scannées sont privées, internet sinon)
+  -j <fichier>        (explain) écrit aussi les constats en JSON
+  --policy <fichier>  (explain) écrit aussi le brouillon de politique
+  -o <fichier>        (policy) où l'écrire (par défaut : exposure.yaml)
+  --port <n>          (identify) port d'où vient la bannière
+
+  explain se termine avec le code 1 s'il y a quelque chose à corriger, 0 sinon,
+  2 en cas d'erreur.
+`
+
+// usageIn is the help of tcpcat ai in a language.
+func usageIn(lang string) string { return msg(lang, aiUsage, aiUsageFR) }
+
 func runAI(args []string) int {
+	l := defaultLang()
 	if len(args) == 0 {
-		fmt.Print(aiUsage)
+		fmt.Print(usageIn(l))
 		return exitError
 	}
 	switch args[0] {
@@ -56,12 +89,12 @@ func runAI(args []string) int {
 	case "identify":
 		return runAIIdentify(args[1:])
 	case "model":
-		return runAIModel()
+		return runAIModel(args[1:])
 	case "-h", "--help", "help":
-		fmt.Print(aiUsage)
+		fmt.Print(usageIn(l))
 		return exitOK
 	default:
-		fmt.Printf("%s[!] Unknown ai command %q.%s\n\n%s", config.Red, args[0], config.Reset, aiUsage)
+		fmt.Printf("%s[!] %s %q.%s\n\n%s", config.Red, msg(l, "Unknown ai command", "Commande ai inconnue"), args[0], config.Reset, usageIn(l))
 		return exitError
 	}
 }
@@ -74,7 +107,7 @@ type aiFlags struct {
 
 func newAIFlags(name string) aiFlags {
 	fs := flag.NewFlagSet("ai "+name, flag.ContinueOnError)
-	fs.Usage = func() { fmt.Print(aiUsage) }
+	fs.Usage = func() { fmt.Print(usageIn(defaultLang())) }
 	f := aiFlags{fs: fs}
 	f.lang = fs.String("lang", defaultLang(), "Language of the answers: fr or en")
 	f.from = fs.String("from", "", "Where the scan ran from: internet or internal")
@@ -126,11 +159,12 @@ func loadScan(f aiFlags, args []string) (*ai.Analyzer, []scan.TargetResult, ai.O
 		return nil, nil, ai.Options{}, exitError
 	}
 	if file == "" {
-		fmt.Printf("%s[!] Give the JSON report of a scan (tcpcat -sV -j scan.json <target>).%s\n\n%s", config.Red, config.Reset, aiUsage)
+		fmt.Printf("%s[!] %s%s\n\n%s", config.Red, msg(*f.lang, "Give the JSON report of a scan (tcpcat -sV -j scan.json <target>).",
+			"Donnez le rapport JSON d'un scan (tcpcat -sV -j scan.json <cible>)."), config.Reset, usageIn(*f.lang))
 		return nil, nil, ai.Options{}, exitError
 	}
 	if *f.from != "" && *f.from != ai.Internet && *f.from != ai.Internal {
-		fmt.Printf("%s[!] --from must be internet or internal.%s\n", config.Red, config.Reset)
+		fmt.Printf("%s[!] %s%s\n", config.Red, msg(*f.lang, "--from must be internet or internal.", "--from doit valoir internet ou internal."), config.Reset)
 		return nil, nil, ai.Options{}, exitError
 	}
 	results, err := compare.LoadBaseline(file)
@@ -195,7 +229,8 @@ func runAIPolicy(args []string) int {
 
 func writeDraftPolicy(a *ai.Analyzer, rep ai.Report, path string) int {
 	if rep.Vantage != ai.Internet {
-		fmt.Printf("%s[!] A draft exposure policy needs a scan run from the internet (--from internet).%s\n", config.Red, config.Reset)
+		fmt.Printf("%s[!] %s%s\n", config.Red, msg(rep.Lang, "A draft exposure policy needs a scan run from the internet (--from internet).",
+			"Un brouillon de politique d'exposition demande un scan lancé depuis Internet (--from internet)."), config.Reset)
 		return exitError
 	}
 	data := a.DraftPolicy(rep, msg(rep.Lang, "public exposure", "exposition publique"))
@@ -209,7 +244,7 @@ func writeDraftPolicy(a *ai.Analyzer, rep ai.Report, path string) int {
 
 func runAIIdentify(args []string) int {
 	fs := flag.NewFlagSet("ai identify", flag.ContinueOnError)
-	fs.Usage = func() { fmt.Print(aiUsage) }
+	fs.Usage = func() { fmt.Print(usageIn(defaultLang())) }
 	port := fs.Int("port", 0, "Port the banner came from")
 	lang := fs.String("lang", defaultLang(), "Language of the answers: fr or en")
 	// A banner may itself start with "-" (Redis answers "-NOAUTH ..."), so
@@ -223,7 +258,7 @@ func runAIIdentify(args []string) int {
 		return exitError
 	}
 	if banner == "" && *port == 0 {
-		fmt.Printf("%s[!] Give a banner, a --port, or both.%s\n", config.Red, config.Reset)
+		fmt.Printf("%s[!] %s%s\n", config.Red, msg(*lang, "Give a banner, a --port, or both.", "Donnez une bannière, un --port, ou les deux."), config.Reset)
 		return exitError
 	}
 	a, err := ai.New()
@@ -233,25 +268,48 @@ func runAIIdentify(args []string) int {
 	}
 	r := scan.TargetResult{Port: *port, Banner: banner, State: "OPEN"}
 	id := a.Identify(r, *lang)
+	name := func(id string) string {
+		if s := a.Dict.Get(id); s != nil {
+			return s.DisplayName(*lang)
+		}
+		return id
+	}
+	pct := func(p float64) string { return fmt.Sprintf("%3.0f%s", 100*p, msg(*lang, "%", "\u00a0%")) }
 	fmt.Printf("%s%s%s\n", config.Bold, msg(*lang, "Most likely:", "Le plus probable :"), config.Reset)
+	var families []model.Guess
 	if banner != "" {
-		for i, g := range a.Model.Classify(banner, *port) {
+		guesses := a.Model.Classify(banner, *port)
+		for i, g := range guesses {
 			if i == 3 || g.P < 0.01 {
 				break
 			}
-			name := g.ID
-			if s := a.Dict.Get(g.ID); s != nil {
-				name = s.Name
+			fmt.Printf("  %s%s%s  %s\n", config.White, pct(g.P), config.Reset, name(g.ID))
+		}
+		// Unsure of the product: say how sure it is of the kind of service.
+		if families = a.Families(guesses); guesses[0].P < 0.5 && len(families) > 0 {
+			fmt.Printf("%s%s%s\n", config.Bold, msg(*lang, "By kind of service:", "Par type de service :"), config.Reset)
+			for i, f := range families {
+				if i == 3 || f.P < 0.01 {
+					break
+				}
+				fmt.Printf("  %s%s%s  %s\n", config.White, pct(f.P), config.Reset, name(f.ID))
 			}
-			fmt.Printf("  %s%3.0f%%%s  %s\n", config.White, 100*g.P, config.Reset, name)
 		}
 	}
 	s := a.Dict.Get(id.ID)
 	if s == nil {
-		fmt.Printf("  %s\n", msg(*lang, "The dictionary does not know this service.", "Le dictionnaire ne connaît pas ce service."))
+		switch {
+		case len(families) >= 2:
+			fmt.Println()
+			printItem("  ", msg(*lang,
+				fmt.Sprintf("Not sure enough to decide: %s or %s? The banner does not say clearly.", name(families[0].ID), name(families[1].ID)),
+				fmt.Sprintf("Pas assez sûre pour trancher : %s ou %s ? La bannière ne le dit pas clairement.", name(families[0].ID), name(families[1].ID))))
+		default:
+			fmt.Printf("  %s\n", msg(*lang, "The dictionary does not know this service.", "Le dictionnaire ne connaît pas ce service."))
+		}
 		return exitOK
 	}
-	fmt.Printf("\n%s%s%s  %s\n", config.Bold, s.Name, config.Reset, s.What.In(*lang))
+	fmt.Printf("\n%s%s%s  %s\n", config.Bold, s.DisplayName(*lang), config.Reset, s.What.In(*lang))
 	fmt.Printf("  %s  %s\n", msg(*lang, "internet:", "Internet :"), exposureLabel(*lang, s.Exposure))
 	if w := s.Why.In(*lang); w != "" {
 		printWrapped(msg(*lang, "why", "pourquoi"), w)
@@ -267,18 +325,86 @@ func isIdentifyFlag(a string) bool {
 	return strings.HasPrefix(a, "-") && (name == "port" || name == "lang" || name == "h" || name == "help")
 }
 
-func runAIModel() int {
+func runAIModel(args []string) int {
+	fs := flag.NewFlagSet("ai model", flag.ContinueOnError)
+	fs.Usage = func() { fmt.Print(usageIn(defaultLang())) }
+	lang := fs.String("lang", defaultLang(), "Language of the answers: fr or en")
+	if err := fs.Parse(args); err != nil {
+		return exitError
+	}
+	l := *lang
 	a, err := ai.New()
 	if err != nil {
 		fmt.Printf("%s[!] %v%s\n", config.Red, err, config.Reset)
 		return exitError
 	}
-	fmt.Printf("%sDictionary%s  %d services, %d known ports\n", config.Bold, config.Reset, len(a.Dict.All()), len(a.Dict.Ports()))
-	fmt.Printf("%sModel%s       logistic regression over banner n-grams, words, prefixes and shape, plus the port\n", config.Bold, config.Reset)
-	fmt.Printf("            %d classes, %d weights, port weight %.2f, temperature %.2f\n", len(a.Model.Classes), a.Model.Size(), a.Model.PortWeight, a.Model.Temperature)
-	fmt.Printf("%sTrained%s     %s\n", config.Bold, config.Reset, a.Model.Trained)
-	fmt.Printf("%sEvaluation%s  internal/ai/model/EVALUATION.md (accuracy under %d network conditions)\n", config.Bold, config.Reset, len(model.Conditions))
+	m, st := a.Model, a.Model.Stats
+	label := func(en, fr string) string { return fmt.Sprintf("%s%-13s%s", config.Bold, msg(l, en, fr), config.Reset) }
+	pad := strings.Repeat(" ", 13)
+	fmt.Printf("%s %s\n", label("Dictionary", "Dictionnaire"), msg(l,
+		fmt.Sprintf("%s services, %s known ports", number(l, len(a.Dict.All())), number(l, len(a.Dict.Ports()))),
+		fmt.Sprintf("%s services, %s ports connus", number(l, len(a.Dict.All())), number(l, len(a.Dict.Ports())))))
+	fmt.Printf("%s %s\n", label("Model", "Modèle"), msg(l,
+		"logistic regression over the banner (n-grams, words, first characters, shape), plus the port",
+		"régression logistique sur la bannière (n-grammes, mots, premiers caractères, forme), plus le port"))
+	fmt.Printf("%s %s\n", pad, msg(l,
+		fmt.Sprintf("%d classes, %s weights, port weight %s, temperature %s", len(m.Classes), number(l, m.Size()), decimal(l, m.PortWeight), decimal(l, m.Temperature)),
+		fmt.Sprintf("%d classes, %s poids, poids du port %s, température %s", len(m.Classes), number(l, m.Size()), decimal(l, m.PortWeight), decimal(l, m.Temperature))))
+	if st.Date != "" {
+		printItem(label("Trained", "Entraînée")+" ", msg(l,
+			fmt.Sprintf("%s, from %s banners: %s, %s of them generated from its patterns; %s examples under %d network conditions",
+				st.Date, number(l, st.Banners), st.Source, number(l, st.Generated), number(l, st.Examples), len(model.Conditions)),
+			fmt.Sprintf("le %s, à partir de %s bannières : %s, dont %s générées à partir de ses motifs ; %s exemples sous %d conditions réseau",
+				st.Date, number(l, st.Banners), st.Source, number(l, st.Generated), number(l, st.Examples), len(model.Conditions))))
+	}
+	if len(st.Scores) > 0 {
+		fmt.Printf("\n%s%s%s\n", config.Bold, msg(l, "On banners it never saw:", "Sur des bannières qu'elle n'a jamais vues :"), config.Reset)
+		fmt.Printf("  %-34s %9s %9s %9s\n", "", msg(l, "service", "service"), msg(l, "product", "produit"), msg(l, "ports", "ports"))
+		for _, sc := range st.Scores {
+			name := sc.Condition
+			exact := percent(l, sc.Exact)
+			for _, c := range model.Conditions {
+				if c.Name == sc.Condition {
+					name = msg(l, c.Label[0], c.Label[1])
+					if c.ProtocolOnly {
+						exact = "-"
+					}
+				}
+			}
+			fmt.Printf("  %-34s %9s %9s %9s\n", name, percent(l, sc.Protocol), exact, percent(l, sc.Detector))
+		}
+		printItem(config.Gray+"  ", msg(l,
+			"service: the right kind of service; product: the right software; ports: tcpcat's signatures and port conventions alone",
+			"service : le bon type de service ; produit : le bon logiciel ; ports : les signatures et les ports habituels de tcpcat seuls")+config.Reset)
+	}
+	fmt.Printf("\n%s %s\n", label("Evaluation", "Évaluation"), "internal/ai/model/EVALUATION.md")
 	return exitOK
+}
+
+// number writes an integer with the language's thousands separator.
+func number(lang string, n int) string {
+	s := strconv.Itoa(n)
+	sep := msg(lang, ",", "\u202f")
+	var b strings.Builder
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteString(sep)
+		}
+		b.WriteRune(c)
+	}
+	return b.String()
+}
+
+// decimal writes a number with two decimals and the language's decimal mark.
+func decimal(lang string, f float32) string {
+	s := strconv.FormatFloat(float64(f), 'f', 2, 32)
+	return msg(lang, s, strings.Replace(s, ".", ",", 1))
+}
+
+// percent writes a share as a percentage with one decimal.
+func percent(lang string, f float32) string {
+	s := strconv.FormatFloat(float64(100*f), 'f', 1, 32)
+	return msg(lang, s+"%", strings.Replace(s, ".", ",", 1)+"\u00a0%")
 }
 
 // renderAIReport prints findings worst first: full detail for what needs
@@ -291,11 +417,25 @@ func renderAIReport(rep ai.Report) {
 		ai.Internal: {"seen from inside the network", "vu depuis le réseau interne"},
 	}[rep.Vantage]
 	fmt.Printf("\n%s%s%s %s(%s)%s\n", config.Bold, title, config.Reset, config.Gray, msg(l, vantage[0], vantage[1]), config.Reset)
+	printAlerts(rep.Alerts)
 	renderFindings(rep, false)
+}
+
+// printAlerts says what the scan as a whole cannot tell.
+func printAlerts(alerts []string) {
+	for _, a := range alerts {
+		fmt.Println()
+		printItem("  "+config.Yellow+"!"+config.Reset+" ", a)
+	}
 }
 
 func renderFindings(rep ai.Report, withChecks bool) {
 	l := rep.Lang
+	// After the quick report's alerts, a one-line entry needs a blank line
+	// before it (a detailed one starts with its own).
+	if !withChecks && len(rep.Alerts) > 0 && (len(rep.Findings) == 0 || rep.Findings[0].Verdict == ai.OK) {
+		fmt.Println()
+	}
 	if len(rep.Findings) == 0 {
 		fmt.Printf("  %s\n", msg(l, "No open port in this scan.", "Aucun port ouvert dans ce scan."))
 		return
@@ -397,20 +537,43 @@ func msg(lang, en, fr string) string {
 // printAIAfterScan is the --ai flag: the same analysis, on the results the
 // scan just produced.
 func printAIAfterScan(results []scan.TargetResult, lang, from string, deep bool) {
-	a, err := ai.New()
-	if err != nil {
-		fmt.Printf("%s[!] AI: %v%s\n", config.Red, err, config.Reset)
-		return
-	}
 	if lang == "" {
 		lang = defaultLang()
 	}
-	opt := ai.Options{Lang: lang, Vantage: vantageFor(results, from)}
 	if deep {
-		runDeep(a, results, opt)
+		a, err := ai.New()
+		if err != nil {
+			fmt.Printf("%s[!] AI: %v%s\n", config.Red, err, config.Reset)
+			return
+		}
+		runDeep(a, results, ai.Options{Lang: lang, Vantage: vantageFor(results, from), FromClusterNode: onClusterNode()})
 		return
 	}
-	renderAIReport(a.Analyze(results, opt))
+	sp := startSpinner(lang, thinkingVerbs)
+	a, err := ai.New()
+	if err != nil {
+		sp.Stop()
+		fmt.Printf("%s[!] AI: %v%s\n", config.Red, err, config.Reset)
+		return
+	}
+	rep := a.Analyze(results, ai.Options{Lang: lang, Vantage: vantageFor(results, from), FromClusterNode: onClusterNode()})
+	sp.Stop()
+	renderAIReport(rep)
+}
+
+// clusterNodePaths exist on a Kubernetes node (k3s, kubeadm, kubelet).
+var clusterNodePaths = []string{"/etc/rancher/k3s", "/var/lib/rancher/k3s", "/var/lib/kubelet", "/etc/kubernetes/kubelet.conf"}
+
+// onClusterNode reports whether tcpcat runs on a Kubernetes node: the
+// cluster's firewall may then let this machine reach ports the internet
+// cannot.
+func onClusterNode() bool {
+	for _, p := range clusterNodePaths {
+		if _, err := os.Stat(p); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // runDeep runs the thorough analysis, showing what it checks, and prints it.
@@ -420,9 +583,9 @@ func runDeep(a *ai.Analyzer, results []scan.TargetResult, opt ai.Options) ai.Dee
 		l = "en"
 	}
 	fmt.Printf("\n%s%s%s\n", config.Bold, msg(l, "tcpcat AI: thorough analysis", "IA de tcpcat : analyse approfondie"), config.Reset)
-	d := a.Deep(results, opt, ai.NetProber{Timeout: 5 * time.Second}, func(line string) {
-		fmt.Printf("  %s%s%s\n", config.Gray, line, config.Reset)
-	})
+	sp := startSpinner(l, verifyingVerbs)
+	d := a.Deep(results, opt, ai.NetProber{Timeout: 5 * time.Second}, sp.Step)
+	sp.Stop()
 	renderDeepReport(d)
 	return d
 }
@@ -432,9 +595,17 @@ func runDeep(a *ai.Analyzer, results []scan.TargetResult, opt ai.Options) ai.Dee
 func renderDeepReport(d ai.DeepReport) {
 	l := d.Lang
 	section := func(en, fr string) { fmt.Printf("\n%s%s%s\n", config.Bold+config.Red, msg(l, en, fr), config.Reset) }
-	section("What I understood", "Ce que j'ai compris")
-	for _, p := range d.Profile {
-		printItem("  ", p)
+	if len(d.Alerts) > 0 {
+		section("Before reading on", "Avant de lire la suite")
+		for _, a := range d.Alerts {
+			printItem("  "+config.Yellow+"!"+config.Reset+" ", a)
+		}
+	}
+	if len(d.Profile) > 0 {
+		section("What I understood", "Ce que j'ai compris")
+		for _, p := range d.Profile {
+			printItem("  ", p)
+		}
 	}
 	if len(d.Good) > 0 {
 		section("What is fine", "Ce qui va bien")
@@ -459,7 +630,8 @@ func printItem(prefix, text string) {
 	visible := len([]rune(stripANSI(prefix)))
 	pad := strings.Repeat(" ", visible)
 	line, n := prefix, visible
-	for _, w := range strings.Fields(text) {
+	// Only plain spaces break a line: a no-break space holds "9 878" together.
+	for _, w := range strings.FieldsFunc(text, func(r rune) bool { return r == ' ' || r == '\t' || r == '\n' }) {
 		k := len([]rune(w))
 		if n > visible && n+1+k > 92 {
 			fmt.Println(line)
@@ -489,6 +661,6 @@ func printChecks(l string, checks []ai.Check) {
 		case ai.CheckNote:
 			mark = config.Yellow + "•" + config.Reset
 		}
-		printItem("     "+config.Gray+fmt.Sprintf("%-8s", msg(l, "checked", "vérifié"))+config.Reset+" "+mark+" ", c.Text)
+		printItem("     "+config.Gray+fmt.Sprintf("%-8s", msg(l, "check", "contrôle"))+config.Reset+" "+mark+" ", c.Text)
 	}
 }

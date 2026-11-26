@@ -64,6 +64,9 @@ tcpcat ai explain scan.json --deep           # or analyse a saved scan in depth
      own error message.
    - Port 80: does it redirect to HTTPS?
    - Certificates: self-signed, expiring, or Traefik's default certificate.
+
+   When a probe gets no answer, the finding says so ("could not be verified:
+   nothing answered in SSH") instead of reading like a verified one.
 2. **It works out what the machine is** from everything that answered, for
    example: "a web server, under Kubernetes (k3s), behind the Traefik reverse
    proxy, on Debian 12".
@@ -74,10 +77,29 @@ tcpcat ai explain scan.json --deep           # or analyse a saved scan in depth
    setting for each step. The plan also covers patterns across ports, such
    as three SSH entry points facing the internet.
 
+While it works, a spinner shows what it is doing and for how long. The
+spinner is drawn only on a terminal, so a pipe or a CI log gets plain lines.
+
 The thorough analysis contacts the scanned hosts again, a few seconds per
 port. The SSH check leaves one failed login by user `tcpcat` in the server's
 log, with no password sent. Run it only against hosts you are allowed to
 scan.
+
+## When the scan itself cannot be trusted
+
+Before the findings, both analyses say when the scan cannot tell what a
+machine exposes:
+- **Every port tested is filtered.** The machine is off, or it ignores the
+  scanner's address, for instance after an anti-scan or anti-DDoS protection
+  spotted the scan. Closed sensitive ports are then not reported as good
+  news.
+- **Every open port accepts connections, but no service answers.** Something
+  on the path (an anti-DDoS, a SYN proxy, a firewall) may be answering for
+  the machine. Each such port is marked "to be confirmed".
+- **The scan runs from a Kubernetes node** (`--ai` and `--ai-deep` after a
+  scan). The cluster's firewall may trust that node and show it ports that
+  are closed to the internet. Cluster ports found open are then "to be
+  confirmed" from a machine outside the cluster, rather than critical.
 
 ## How it works
 

@@ -39,7 +39,25 @@ type Model struct {
 	PortDefault []float32
 	PortWeight  float32
 	Temperature float32 // divides the scores before the softmax; fitted on held-out data
-	Trained     string  // provenance, shown by `tcpcat ai model`
+	Stats       Stats   // how it was trained and how it scored, shown by `tcpcat ai model`
+}
+
+// Stats record a model's training and its scores on held-out banners.
+type Stats struct {
+	Date      string // YYYY-MM-DD
+	Source    string // "Rapid7 Recog f1191e2 (2026-11-12)"
+	Banners   int    // every banner, generated ones included
+	Generated int
+	Examples  int // after the network conditions
+	Scores    []Score
+}
+
+// Score is the accuracy on held-out banners under one network condition.
+type Score struct {
+	Condition string
+	Protocol  float32 // the right kind of service
+	Exact     float32 // the right product; meaningless for a ProtocolOnly condition
+	Detector  float32 // tcpcat's signatures and port fallback, for comparison
 }
 
 // Other is the class of banners whose service the dictionary does not know.

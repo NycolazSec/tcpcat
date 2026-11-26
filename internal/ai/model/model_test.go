@@ -14,6 +14,9 @@ func TestEmbeddedModelLoads(t *testing.T) {
 	if m.Size() == 0 || m.PortWeight <= 0 || m.Temperature <= 0 {
 		t.Fatalf("weights %d, port weight %v, temperature %v", m.Size(), m.PortWeight, m.Temperature)
 	}
+	if len(m.Stats.Scores) != len(Conditions) || m.Stats.Banners == 0 || m.Stats.Date == "" {
+		t.Fatalf("training stats missing: %+v", m.Stats)
+	}
 	for _, want := range []string{"openssh", "postfix", "nginx", Other} {
 		if !hasClass(m, want) {
 			t.Errorf("class %q missing", want)

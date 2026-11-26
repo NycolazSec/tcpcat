@@ -11,6 +11,8 @@ import (
 // hiding in an average.
 type Condition struct {
 	Name string
+	// Label names it for people, in English and French.
+	Label [2]string
 	// Why is shown in the evaluation report.
 	Why   string
 	Apply func(raw string, port int, r *rand.Rand) (string, int)
@@ -44,17 +46,20 @@ var Store = func(raw string) string {
 var Conditions = []Condition{
 	{
 		Name:  "clean",
+		Label: [2]string{"whole banner", "bannière complète"},
 		Why:   "the whole banner arrived",
 		Apply: func(raw string, port int, _ *rand.Rand) (string, int) { return raw, port },
 	},
 	{
 		Name:  "truncated",
+		Label: [2]string{"cut by a timeout", "coupée par un délai"},
 		Why:   "slow or lossy link: the read deadline expired mid-banner (40-90% kept)",
 		Apply: truncate,
 	},
 	{
-		Name: "first-bytes",
-		Why:  "only the first few bytes made it before the timeout (8-20 bytes)",
+		Name:  "first-bytes",
+		Label: [2]string{"first bytes only", "premiers octets seulement"},
+		Why:   "only the first few bytes made it before the timeout (8-20 bytes)",
 		Apply: func(raw string, port int, r *rand.Rand) (string, int) {
 			keep := 8 + r.Intn(13)
 			if keep < len(raw) {
@@ -65,12 +70,14 @@ var Conditions = []Condition{
 	},
 	{
 		Name:  "noise",
+		Label: [2]string{"binary noise around it", "bruit binaire autour"},
 		Why:   "negotiation or binary bytes around the text (Telnet IAC, framing, middleboxes)",
 		Apply: addNoise,
 	},
 	{
-		Name: "reformatted",
-		Why:  "different line endings, padding or letter case from the same software",
+		Name:  "reformatted",
+		Label: [2]string{"reformatted", "reformatée"},
+		Why:   "different line endings, padding or letter case from the same software",
 		Apply: func(raw string, port int, r *rand.Rand) (string, int) {
 			switch r.Intn(4) {
 			case 0:
@@ -86,26 +93,30 @@ var Conditions = []Condition{
 		},
 	},
 	{
-		Name: "unusual-port",
-		Why:  "the service listens on a non-standard port (SSH on 2222, a web app on 9443...)",
+		Name:  "unusual-port",
+		Label: [2]string{"unusual port", "port inhabituel"},
+		Why:   "the service listens on a non-standard port (SSH on 2222, a web app on 9443...)",
 		Apply: func(raw string, port int, r *rand.Rand) (string, int) {
 			return raw, randomPort(r)
 		},
 	},
 	{
 		Name:         "rebranded",
+		Label:        [2]string{"product name replaced", "nom du produit remplacé"},
 		Why:          "the administrator or vendor replaced the product name (a custom SSH version string, a hostname-only SMTP greeting, a home-made Server header)",
 		Apply:        rebrand,
 		ProtocolOnly: true,
 	},
 	{
 		Name:  "pipelined",
+		Label: [2]string{"server keeps talking", "le serveur continue de parler"},
 		Why:   "the server kept talking in the same read: the SSH key exchange right after the banner, a multi-line greeting that starts with a legal notice",
 		Apply: pipeline,
 	},
 	{
-		Name: "worst-case",
-		Why:  "truncated, noisy and on an unusual port at once",
+		Name:  "worst-case",
+		Label: [2]string{"cut, noisy, unusual port", "coupée, bruitée, port inhabituel"},
+		Why:   "truncated, noisy and on an unusual port at once",
 		Apply: func(raw string, port int, r *rand.Rand) (string, int) {
 			raw, _ = truncate(raw, port, r)
 			raw, _ = addNoise(raw, port, r)
