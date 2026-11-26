@@ -66,6 +66,9 @@ sudo tcpcat -sV -p 22,80,443 scanme.nmap.org
 Prefer a package, a container, or a prebuilt binary?
 
 ```bash
+# macOS / Linux (Homebrew)
+brew install nycolazsec/tap/tcpcat
+
 # BlackArch Linux
 sudo pacman -S tcpcat
 
@@ -76,7 +79,7 @@ docker run --rm --cap-add=NET_RAW --cap-add=NET_ADMIN \
 
 Binaries and packages are on the
 [releases page](https://github.com/NycolazSec/tcpcat/releases); other channels
-(Homebrew, AUR, BlackArch) are tracked in
+(AUR, BlackArch, Kali) are tracked in
 [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md). To build from source, see
 [Installation](#installation--prerequisites).
 

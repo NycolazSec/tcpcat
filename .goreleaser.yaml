@@ -102,7 +102,7 @@ docker_manifests:
 # ---------------------------------------------------------------------------
 # Homebrew tap  ->  `brew install nycolazsec/tap/tcpcat`
 # Prerequisites (one-time), see docs/DISTRIBUTION.md:
-#   1. Create a PUBLIC repo  NycolazSec/homebrew-tap  (done 2026-11-18)
+#   1. Create a PUBLIC repo  NycolazSec/homebrew-tap  (done 2026-11-18, live)
 #   2. Create a fine-grained PAT with Contents:write on that repo and add it to
 #      THIS repo as the secret HOMEBREW_TAP_GITHUB_TOKEN
 #      (the default GITHUB_TOKEN cannot push to another repo)
