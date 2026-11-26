@@ -103,3 +103,35 @@ func TestFamiliesAddUp(t *testing.T) {
 		t.Fatalf("families: %+v", fam)
 	}
 }
+
+// A port silent to service detection that then speaks SSH to the deep
+// check was only slow: the check settles what it is.
+func TestSlowServiceIsConfirmedByTheCheck(t *testing.T) {
+	a := analyzer(t)
+	p := &fakeProber{ssh: map[int][]string{22: {"password"}}}
+	rep := a.Deep([]scan.TargetResult{silentOpen(22), silentOpen(443), filtered(6443)}, Options{Lang: "en"}, p, nil)
+	f := find(t, rep.Report, 22)
+	if f.Service.Source != "probe" || strings.HasSuffix(f.Title, "(to be confirmed)") ||
+		contains(f.Evidence, tr("en", "ev-silent")) || !contains(f.Evidence, tr("en", "ev-answered-late", "SSH")) {
+		t.Fatalf("22 spoke SSH: %+v", f)
+	}
+	for _, e := range f.Evidence {
+		if strings.Contains(e, "identified only by its port") {
+			t.Fatalf("still port-only: %v", f.Evidence)
+		}
+	}
+	if len(rep.Alerts) != 0 {
+		t.Fatalf("the host answered, it is not mute: %v", rep.Alerts)
+	}
+	if !hasCheck(find(t, rep.Report, 443), CheckNote, "could not be verified") {
+		t.Fatal("443 still never answered")
+	}
+}
+
+func TestProfileOfOneService(t *testing.T) {
+	a := analyzer(t)
+	rep := a.Deep([]scan.TargetResult{open(22, "openssh", "SSH-2.0-OpenSSH_9.6")}, Options{Lang: "fr"}, &fakeProber{ssh: map[int][]string{22: {"publickey"}}}, nil)
+	if len(rep.Profile) != 1 || !strings.Contains(rep.Profile[0], "une machine qui expose un seul service") {
+		t.Fatalf("profile: %q", rep.Profile)
+	}
+}

@@ -79,6 +79,16 @@ func (a *Analyzer) Deep(results []scan.TargetResult, opt Options, p Prober, prog
 	}
 	wg.Wait()
 
+	// A host found mute that answered a follow-up probe was only slow.
+	for _, h := range muteHosts(results) {
+		for _, f := range rep.Findings {
+			if f.Host == h.host && answeredLate(f, lang) {
+				rep.Alerts = remove(rep.Alerts, tr(lang, "alert-mute", h.host, h.tested))
+				break
+			}
+		}
+	}
+
 	rep.ToFix, rep.ToReview, rep.Fine = 0, 0, 0
 	for _, f := range rep.Findings {
 		switch f.Verdict {
@@ -116,6 +126,31 @@ func (a *Analyzer) verify(f *Finding, r scan.TargetResult, vantage, lang string,
 	noAnswer := func(protocol string) {
 		f.Checks = append(f.Checks, Check{Kind: CheckNote, Text: tr(lang, "chk-no-answer", protocol, protocol)})
 	}
+	// answered settles a port service detection found silent: a follow-up
+	// probe got an answer in protocol, so the service is there, only slow.
+	answered := func(protocol string) {
+		silent := tr(lang, "ev-silent")
+		if !contains(f.Evidence, silent) {
+			return
+		}
+		portOnly := tr(lang, "ev-port", f.Port, f.Service.Name)
+		var kept []string
+		for _, e := range f.Evidence {
+			// Speaking SSH proves SSH; answering HTTPS does not prove which
+			// web service it is.
+			if e == silent || e == portOnly && protocol == "SSH" {
+				continue
+			}
+			kept = append(kept, e)
+		}
+		f.Evidence = append(kept, tr(lang, "ev-answered-late", protocol))
+		if protocol == "SSH" && f.Service.Source == "port" {
+			f.Service.Source, f.Service.Confidence = "probe", 0.99
+		}
+		if len(f.Service.Alternatives) == 0 && !contains(f.Evidence, tr(lang, "ev-cluster-node")) {
+			f.Title = strings.TrimSuffix(f.Title, tr(lang, "to-confirm"))
+		}
+	}
 	add := func(c Check) {
 		f.Checks = append(f.Checks, c)
 		if c.Kind != CheckIssue {
@@ -136,6 +171,7 @@ func (a *Analyzer) verify(f *Finding, r scan.TargetResult, vantage, lang string,
 	case proto == "ssh":
 		openssh := strings.Contains(r.Banner, "OpenSSH")
 		if methods, err := p.SSHAuthMethods(host, port); err == nil {
+			answered("SSH")
 			switch {
 			case contains(methods, "none"):
 				add(Check{Kind: CheckIssue, Severity: "critical", Text: tr(lang, "chk-ssh-none"), Fix: tr(lang, "fix-ssh-none")})
@@ -169,6 +205,7 @@ func (a *Analyzer) verify(f *Finding, r scan.TargetResult, vantage, lang string,
 
 	case f.Service.ID == "kubelet":
 		if code, _, _, err := p.HTTPGet(host, port, true, "/pods"); err == nil {
+			answered("HTTPS")
 			switch code {
 			case http.StatusUnauthorized:
 				add(Check{Kind: CheckOK, Text: tr(lang, "chk-kubelet-401")})
@@ -184,6 +221,7 @@ func (a *Analyzer) verify(f *Finding, r scan.TargetResult, vantage, lang string,
 
 	case f.Service.ID == "kube-apiserver":
 		if code, _, _, err := p.HTTPGet(host, port, true, "/api"); err == nil {
+			answered("HTTPS")
 			switch code {
 			case http.StatusUnauthorized:
 				add(Check{Kind: CheckOK, Text: tr(lang, "chk-api-401")})
@@ -199,6 +237,9 @@ func (a *Analyzer) verify(f *Finding, r scan.TargetResult, vantage, lang string,
 
 	case f.Service.ID == "docker-api":
 		code, _, body, err := p.HTTPGet(host, port, false, "/version")
+		if err == nil {
+			answered("HTTP")
+		}
 		switch {
 		case err != nil:
 			noAnswer("HTTP")
@@ -208,6 +249,7 @@ func (a *Analyzer) verify(f *Finding, r scan.TargetResult, vantage, lang string,
 
 	case f.Service.ID == "elasticsearch":
 		if code, _, body, err := p.HTTPGet(host, port, false, "/"); err == nil {
+			answered("HTTP")
 			switch {
 			case code == http.StatusOK && strings.Contains(body, "cluster_name"):
 				add(Check{Kind: CheckIssue, Severity: "critical", Text: tr(lang, "chk-es-open"), Fix: f.Fix})
@@ -233,6 +275,7 @@ func (a *Analyzer) verify(f *Finding, r scan.TargetResult, vantage, lang string,
 
 	case proto == "http" && port == 80:
 		if code, hdr, _, err := p.HTTPGet(host, port, false, "/"); err == nil {
+			answered("HTTP")
 			loc := hdr.Get("Location")
 			switch {
 			case code >= 300 && code < 400 && strings.HasPrefix(strings.ToLower(loc), "https://"):
@@ -250,6 +293,8 @@ func (a *Analyzer) verify(f *Finding, r scan.TargetResult, vantage, lang string,
 		// Nothing was measured on this HTTPS port: does it answer at all?
 		if _, _, _, err := p.HTTPGet(host, port, true, "/"); err != nil {
 			noAnswer("HTTPS")
+		} else {
+			answered("HTTPS")
 		}
 	}
 
@@ -425,6 +470,8 @@ func (a *Analyzer) profile(rep Report, results []scan.TargetResult, lang string)
 		switch {
 		case len(roles) == 0 && len(traits) > 0:
 			roles, machine = []string{tr(lang, "prof-machine")}, true
+		case len(roles) == 0 && len(ids) == 1:
+			roles = []string{tr(lang, "prof-generic-one")}
 		case len(roles) == 0:
 			roles = []string{tr(lang, "prof-generic", len(ids))}
 		}
@@ -582,6 +629,27 @@ func firstSentence(s string) string {
 		return s[:i+1]
 	}
 	return s
+}
+
+// answeredLate reports a finding whose silent service answered a follow-up
+// probe.
+func answeredLate(f Finding, lang string) bool {
+	for _, p := range []string{"SSH", "HTTP", "HTTPS"} {
+		if contains(f.Evidence, tr(lang, "ev-answered-late", p)) {
+			return true
+		}
+	}
+	return false
+}
+
+func remove(list []string, s string) []string {
+	var out []string
+	for _, x := range list {
+		if x != s {
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
 func hasIssue(cs []Check) bool {

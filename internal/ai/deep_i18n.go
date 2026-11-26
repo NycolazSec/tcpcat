@@ -65,6 +65,7 @@ func init() {
 		"prof-traefik":     {"behind the Traefik reverse proxy", "derrière le reverse proxy Traefik"},
 		"prof-os":          {"on %s", "sur %s"},
 		"prof-generic":     {"a machine exposing %d services", "une machine qui expose %d services"},
+		"prof-generic-one": {"a machine exposing one service", "une machine qui expose un seul service"},
 
 		"good-private-closed-one": {"the one sensitive port tested (a database, Docker, Kubernetes, an admin tool...) is not reachable",
 			"le seul port sensible testé (base de données, Docker, Kubernetes, outil d'administration…) n'est pas joignable"},
@@ -81,6 +82,8 @@ func init() {
 			"Ce scan part d'un nœud Kubernetes. Le pare-feu du cluster fait peut-être confiance à cette machine et lui ouvre des ports fermés à Internet : revérifiez les ports du cluster depuis une machine extérieure au cluster avant d'agir."},
 		"ev-cluster-node": {"seen from a Kubernetes node, which the cluster's firewall may trust", "vu depuis un nœud Kubernetes, auquel le pare-feu du cluster fait peut-être confiance"},
 		"ev-silent":       {"the port accepts connections, but the service sent nothing back", "le port accepte la connexion, mais le service n'a rien répondu"},
+		"ev-answered-late": {"the follow-up check got an answer in %s: the service is there, but answered too slowly for service detection",
+			"la vérification approfondie a obtenu une réponse en %s : le service est bien là, mais il a répondu trop lentement pour la détection de service"},
 		"chk-no-answer": {"could not be verified: nothing answered in %s (a firewall, a connection limit, or it is not %s)",
 			"vérification impossible : rien n'a répondu en %s (pare-feu, limite de connexions, ou ce n'est pas du %s)"},
 
