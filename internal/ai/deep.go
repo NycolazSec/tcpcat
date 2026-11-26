@@ -490,7 +490,11 @@ func (a *Analyzer) goodNews(rep Report, results []scan.TargetResult) []string {
 			}
 		}
 		if tested > 0 && open == 0 {
-			good = append(good, tr(lang, "good-private-closed", tested))
+			if tested == 1 {
+				good = append(good, tr(lang, "good-private-closed-one"))
+			} else {
+				good = append(good, tr(lang, "good-private-closed", tested))
+			}
 		}
 	}
 	for _, f := range rep.Findings {

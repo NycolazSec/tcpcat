@@ -66,6 +66,8 @@ func init() {
 		"prof-os":          {"on %s", "sur %s"},
 		"prof-generic":     {"a machine exposing %d services", "une machine qui expose %d services"},
 
+		"good-private-closed-one": {"the one sensitive port tested (a database, Docker, Kubernetes, an admin tool...) is not reachable",
+			"le seul port sensible testé (base de données, Docker, Kubernetes, outil d'administration…) n'est pas joignable"},
 		"good-private-closed": {"none of the %d sensitive ports tested (databases, Docker, Kubernetes, admin tools...) is reachable",
 			"aucun des %d ports sensibles testés (bases de données, Docker, Kubernetes, outils d'administration…) n'est joignable"},
 		"prof-machine": {"a machine", "une machine"},
