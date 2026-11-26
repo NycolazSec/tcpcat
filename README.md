@@ -177,12 +177,9 @@ tcpcat is a dual-licensed project (AGPL-3.0 or commercial) maintained by Nicolas
   30-line template in [examples/wasm-dissector](examples/wasm-dissector)
   ([SDK and ABI](docs/WASM_SDK.md))
 
-**For authorized audits: IDS/IPS visibility testing** (see [below](#idsips-visibility-testing))
-- **Timing Variation**: Configurable jitter (0.0-1.0 variance coefficient)
-- **Fragmentation Controls**: IPv4 datagram fragmentation for monitoring validation
-- **Decoy Traffic**: Configurable source patterns for authorized visibility testing
-- **Protocol Controls**: TCP/UDP window tuning and source-port selection
-- **Traffic Modeling**: Configurable traffic-pattern behavior for assessment scenarios
+**Deprecated: IDS/IPS visibility testing.** The packet-variation, fragmentation
+and decoy options do not help you check your own exposure. They still work, print
+a warning, and will be removed in 2.0. See [docs/IDS_VISIBILITY.md](docs/IDS_VISIBILITY.md).
 
 ---
 
@@ -227,15 +224,7 @@ See [docs/WASM_SDK.md](docs/WASM_SDK.md).
 ## Architecture
 
 ### Kernel-Space Operations (eBPF/AF_XDP)
-Direct packet I/O at the network driver level, bypassing the socket layer entirely. Achieves wire-speed performance (~1M pps per core) with minimal CPU overhead.
-
-### Modular Evasion Pipeline
-```
-Network Layer    → Fragmentation Orchestrator
-Transport Layer  → TCP/UDP Fingerprint Randomization
-Session Layer    → Timing Jitter & Behavioral Spoofing  
-Application Layer → Decoy Swarm Coordination
-```
+With `--ebpf`, an XDP hook redirects replies into AF_XDP sockets, which skips most of the per-packet kernel work. The gain needs a network card with zero-copy support; in copy mode (virtual interfaces) tcpcat uses its raw-socket engine instead, which is as fast there. See [Performance](#performance).
 
 ### Detection Integration
 Real-time CVE correlation across multiple intelligence feeds (Vulners API, Google OSV, offline database).
@@ -300,28 +289,6 @@ sudo tcpcat -sS --top-ports 1000 --rate 100000 target.domain
 ### Service Enumeration with Fingerprinting
 ```bash
 sudo tcpcat -sV -p 22,80,443,3306,5432,27017 192.168.0.0/24 -j results.json
-```
-
-### IDS/IPS Visibility Validation (Authorized Audits Only)
-```bash
-# Conservative timing variation for an approved assessment
-sudo tcpcat -Pn -sT -p 1-65535 \
-  --evasion light \
-  --jitter 0.3 \
-  --rate 5000 \
-  target
-
-# Validate how approved monitoring controls record fragmented and decoy traffic.
-# These controls do not guarantee detection avoidance or IDS/IPS bypass.
-sudo tcpcat -Pn -sT -p 1-10000 \
-  --evasion aggressive \
-  --jitter 0.8 \
-  --frag \
-  --ttl-mode random \
-  --window-size 512 \
-  --source-port-mode random \
-  --decoy 8.8.8.8,1.1.1.1 \
-  target
 ```
 
 ### Ultra-Fast Enumeration (eBPF Mode)
@@ -592,7 +559,7 @@ pointed at an IPv6 target instead of silently misbehaving.
 
 ### Scan Techniques
 ```
--sS                   TCP SYN reconnaissance (stealth, partial 3-way)
+-sS                   TCP SYN scan (half-open; needs root)
 -sT                   TCP Connect() scan (full 3-way handshake)
 -sA                   TCP ACK scan (firewall state detection)
 -sW                   TCP Window scan (packet filtering inference)
@@ -678,39 +645,11 @@ reachable from an untrusted network is itself worth flagging). These join the
 existing UDP probes (DNS, SNMP, NTP, SSDP, mDNS, SIP, IKE, QUIC, …) and OT
 control-port naming.
 
-### IDS/IPS Visibility Controls (Phase 4)
-```
---evasion <mode>          Coordinated packet-variation level for authorized testing:
-                          • off      — baseline traffic (0% overhead)
-                          • light    — limited variation (+5% latency)
-                          • moderate — standard variation (+15%)
-                          • aggressive — extensive variation (+30%)
-                          • stealthy  — high-variation testing profile (+50%)
-
---jitter <0.0-1.0>        Temporal variation coefficient
-                          (0.0=deterministic, 1.0=random intervals)
-
---frag                     Enable IPv4 fragmentation for monitoring validation
-
---ttl-mode <mode>         TTL mutation strategy:
-                          • fixed   — static TTL value
-                          • random  — per-packet randomization
-                          • probe   — adaptive per-target measurement
-
---probe-ttl <1-255>       Probe packet TTL (default: 64)
-
---window-size <0-65535>   TCP advertised window (0=auto-negotiate)
-                          Use only to evaluate flow-state inspection visibility
-
---source-port-mode        Ephemeral port allocation:
-                          • fixed   — static source port
-                          • random  — per-packet randomization
-
--g <port>                 Bind to specific source port
-
---decoy <ips>             Comma-separated decoy source IPs for an authorized assessment
-                          (requires raw socket privileges; no bypass is guaranteed)
-```
+### Deprecated: IDS/IPS visibility options
+`--evasion`, `--jitter`, `--frag`, `--ttl-mode`, `--probe-ttl`, `--window-size`,
+`--source-port-mode`, `--decoy`, `--smart-bypass`, `--relay-server`, `-sI`, and the
+`--deep-inspect` family still work, print a deprecation warning, and will be removed
+in tcpcat 2.0. See [docs/IDS_VISIBILITY.md](docs/IDS_VISIBILITY.md).
 
 ### Performance Tuning
 ```
@@ -733,7 +672,6 @@ control-port naming.
 -oH <file>              Export a self-contained HTML report (shareable; shows KEV/EPSS when enabled)
 -oG <file>              Export grepable output (one line per host)
 -oN <file>              Export a plain-text report
--oS <file>              Export leetspeak
 --sarif <file>          Export open-port and CVE findings as SARIF 2.1.0
 --audit-log <file>      Append one scan audit record per line (JSONL)
 --baseline <file>       Load a previous tcpcat JSON report for comparison
@@ -822,19 +760,7 @@ Without `--vulners-apikey`, tcpcat uses its embedded offline vulnerability datab
 
 ---
 
-## IDS/IPS Visibility Testing
-
-Packet variation, fragmentation, and decoy traffic can help an authorized team assess how its monitoring controls record different scan patterns. Results depend on the network, endpoint protections, IDS/IPS configuration, and operator behavior. tcpcat does not guarantee reduced detection, bypass of controls, or access to a target.
-
-| Mode | Variation | Overhead | Recommended Use |
-|------|-----------|----------|-----------------|
-| **off** | Baseline traffic | 0% | Authorized inventory and fast reconnaissance |
-| **light** | Limited timing and packet variation | +5% | Approved production assessments |
-| **moderate** | Standard variation | +15% | Monitoring validation in controlled environments |
-| **aggressive** | Extensive variation | +30% | Lab validation with an approved test plan |
-| **stealthy** | High-variation profile | +50% | Controlled monitoring-validation scenarios |
-
-**Performance vs. Nmap and naabu (full port range):**
+## Performance
 
 A speed figure is only worth something next to the conditions it was measured
 in and proof that nothing was missed, so the benchmark is a script rather than
