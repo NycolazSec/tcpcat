@@ -70,13 +70,13 @@ func TestProbeMinecraft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	go func() {
 		c, err := ln.Accept()
 		if err != nil {
 			return
 		}
-		defer c.Close()
+		defer func() { _ = c.Close() }()
 		r := bufio.NewReader(c)
 		for i := 0; i < 2; i++ { // handshake, then status request
 			n, err := readVarInt(r)
@@ -104,7 +104,7 @@ func TestProbeMinecraft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	info, ok := probeMinecraft(conn, 2*time.Second)
 	if !ok || info.Name != "minecraft" || info.Version != "Paper 1.21.4" || info.Banner != "Minecraft Paper 1.21.4, 3/20 players" {
 		t.Fatalf("got %+v ok=%v", info, ok)
