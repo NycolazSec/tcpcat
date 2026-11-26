@@ -154,6 +154,7 @@ type Options struct {
 	AI             bool   // --ai: tcpcat's AI judges the results (internal/ai)
 	AILang         string // --ai-lang: fr or en; empty follows $LANG
 	AIFrom         string // --ai-from: internet or internal; empty guesses from the addresses
+	AIDeep         bool   // --ai-deep: thorough analysis with read-only follow-up probes
 	DualStack      bool
 	EvidenceOutput string
 	EvidenceKey    string
@@ -480,6 +481,7 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.AI, "ai", false, "Let tcpcat's AI judge the results: what to fix, why, and how")
 	flag.StringVar(&opts.AILang, "ai-lang", "", "Language of the AI's answers: fr or en (default: from $LANG)")
 	flag.StringVar(&opts.AIFrom, "ai-from", "", "Where the scan runs from, for the AI: internet or internal (default: guessed)")
+	flag.BoolVar(&opts.AIDeep, "ai-deep", false, "Thorough AI analysis: verifies its hypotheses with read-only probes, profiles the machine, plans the fixes")
 	flag.BoolVar(&opts.DualStack, "dual-stack", false, "Also scan the IPv6 address published (DNS AAAA) for each IPv4 target and report ports open on IPv6 only")
 	flag.BoolVar(&opts.SmartBypass, "smart-bypass", false, "Enable advanced monitoring validation on filtered ports")
 	flag.BoolVar(&opts.SmartBypass, "spoof-agent", false, "Alias for --smart-bypass")
@@ -882,6 +884,7 @@ func shortHelp() {
 	opt("-O", "Operating-system detection")
 	opt("--exploit-intel", "Rank CVEs by real-world exploitation (CISA KEV + EPSS)")
 	opt("--ai", "tcpcat's AI: what to fix, why and how (--ai-lang fr|en)")
+	opt("--ai-deep", "The AI takes its time: verifies, profiles the machine, plans the fixes")
 	opt("-Pn", "Skip host discovery: treat every host as up")
 	opt("--rate <pps>", "Max packets per second (default 1000)")
 	fmt.Println(Bold + Red + "\nDECIDE: what should be reachable" + Reset)

@@ -70,6 +70,7 @@ type Finding struct {
 	Why      string         `json:"why,omitempty"`
 	Fix      string         `json:"fix,omitempty"`
 	Evidence []string       `json:"evidence"`
+	Checks   []Check        `json:"checks,omitempty"` // deep analysis only
 }
 
 // Report is the result of an analysis.
@@ -118,19 +119,7 @@ func (a *Analyzer) Analyze(results []scan.TargetResult, opt Options) Report {
 		}
 		rep.Findings = append(rep.Findings, f)
 	}
-	sort.SliceStable(rep.Findings, func(i, j int) bool {
-		fi, fj := rep.Findings[i], rep.Findings[j]
-		if vi, vj := verdictRank(fi.Verdict), verdictRank(fj.Verdict); vi != vj {
-			return vi > vj
-		}
-		if si, sj := kb.SeverityRank(fi.Severity), kb.SeverityRank(fj.Severity); si != sj {
-			return si > sj
-		}
-		if fi.Host != fj.Host {
-			return fi.Host < fj.Host
-		}
-		return fi.Port < fj.Port
-	})
+	sortFindings(rep.Findings)
 	for _, f := range rep.Findings {
 		switch f.Verdict {
 		case Fix:
@@ -325,7 +314,7 @@ func (a *Analyzer) judge(r scan.TargetResult, opt Options) Finding {
 	}
 	// A website on a port other than 80/443 is rarely meant for the public:
 	// judge it like any web service on an alternate port.
-	if (s.Protocol() == "http" || s.Protocol() == "https") && s.Exposure == kb.Public && r.Port != 80 && r.Port != 443 {
+	if (s.Protocol() == "http" || s.Protocol() == "https") && s.Exposure == kb.Public && r.Port != 80 && r.Port != 443 && !hasPort(s.Ports, r.Port) {
 		if alt := a.Dict.Get("http-alt"); alt != nil {
 			c := *s
 			c.Exposure, c.Risk, c.Why, c.Hint = alt.Exposure, alt.Risk, alt.Why, alt.Hint
@@ -564,4 +553,13 @@ func score(lang string, v float64) string {
 		s = strings.Replace(s, ".", ",", 1)
 	}
 	return s
+}
+
+func hasPort(ports []int, p int) bool {
+	for _, x := range ports {
+		if x == p {
+			return true
+		}
+	}
+	return false
 }

@@ -391,6 +391,7 @@ tcpcat -sT -sV --ai --ai-lang fr 203.0.113.10
 #    preuves  ce port a répondu en 7 ms, les autres ports de la machine en 97 ms environ
 # [ok] 203.0.113.10:25565  Serveur Minecraft est public, c'est normal
 
+tcpcat -sT -sV --ai-deep 203.0.113.10   # take the time: verify, profile the machine, plan the fixes
 tcpcat ai explain scan.json             # judge a saved scan (exits 1 if something must be fixed)
 tcpcat ai policy scan.json              # draft exposure.yaml for `tcpcat policy check`
 tcpcat ai identify "-NOAUTH Authentication required." --port 6390   # -> Redis, never public
@@ -587,6 +588,7 @@ pointed at an IPv6 target instead of silently misbehaving.
 --ot-probe            Read exact vendor/version from OT ports (Modbus...) via one read-only query (opt-in)
 --exploit-intel       Enrich correlated CVEs with CISA KEV + EPSS and prioritize by them (opt-in)
 --ai                  tcpcat's AI judges the results: what to fix, why, how (offline; see docs/AI.md)
+--ai-deep             Thorough AI analysis: read-only follow-up probes, machine profile, ordered plan
 --ai-lang <fr|en>     Language of the AI's answers (default: from $LANG)
 --ai-from <vantage>   internet or internal (default: internal when every target is private)
 --dual-stack          Also scan each target's DNS-published IPv6 address; flag ports open on IPv6 only
