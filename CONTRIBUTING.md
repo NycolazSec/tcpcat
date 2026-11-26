@@ -63,11 +63,17 @@ Existing entries are good models: `grafana`, `jenkins`, `minecraft`.
 
 ### Retrain the banner model
 
-If your entry has `banners`, retrain the model so it learns them (about
-fifteen seconds, reproducible):
+The model learns from the dictionary too (its banners, products and ports),
+so CI rebuilds it from scratch on every change to `internal/ai` and fails if
+the committed weights differ. If that check fails on your pull request,
+retrain (about fifteen seconds, reproducible) with the Go release named in
+`internal/ai/aitrain/recog.lock`:
 
 ```bash
-git clone --depth 1 https://github.com/rapid7/recog /tmp/recog
+commit=$(awk '/^recog_commit:/ {print $2}' internal/ai/aitrain/recog.lock)
+git init -q /tmp/recog
+git -C /tmp/recog fetch -q --depth 1 https://github.com/rapid7/recog "$commit"
+git -C /tmp/recog checkout -q FETCH_HEAD
 go run ./internal/ai/aitrain -recog /tmp/recog
 ```
 

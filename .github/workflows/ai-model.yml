@@ -1,0 +1,103 @@
+# The banner model of tcpcat's AI ships inside the binary
+# (internal/ai/model/weights.bin). This workflow proves it is exactly what the
+# trainer makes from the pinned public data, and nothing else:
+#
+#   1. fetch Rapid7 Recog at the commit pinned in internal/ai/aitrain/recog.lock;
+#   2. build the trainer;
+#   3. train in a network namespace with no interface but a downed loopback,
+#      as an unprivileged user: the training step cannot download or send
+#      anything, and the trainer itself refuses data whose digest is not the
+#      one in the lock;
+#   4. compare the result, byte for byte, with the committed weights and
+#      evaluation report;
+#   5. on main, publish a signed provenance attestation (Sigstore) for the
+#      weights, which anyone can check with
+#        gh attestation verify internal/ai/model/weights.bin --repo NycolazSec/tcpcat
+name: AI model
+
+on:
+  pull_request:
+    paths:
+      - "internal/ai/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/ai-model.yml"
+  push:
+    branches: [main]
+    paths:
+      - "internal/ai/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/ai-model.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  reproduce:
+    name: Rebuild the banner model offline and compare
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # sign the provenance attestation (main only)
+      attestations: write # store it (main only)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read the lock
+        id: lock
+        run: |
+          lock=internal/ai/aitrain/recog.lock
+          echo "commit=$(awk '/^recog_commit:/ {print $2}' "$lock")" >> "$GITHUB_OUTPUT"
+          echo "go=$(awk '/^go:/ {sub(/^go/, "", $2); print $2}' "$lock")" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Go (the release the reference weights were made with)
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: ${{ steps.lock.outputs.go }}
+          cache: false
+
+      - name: Fetch the pinned training data
+        env:
+          COMMIT: ${{ steps.lock.outputs.commit }}
+        run: |
+          git init -q "$RUNNER_TEMP/recog"
+          git -C "$RUNNER_TEMP/recog" fetch -q --depth 1 https://github.com/rapid7/recog "$COMMIT"
+          git -C "$RUNNER_TEMP/recog" checkout -q FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/recog" rev-parse HEAD)" = "$COMMIT"
+
+      - name: Build the trainer
+        run: go build -trimpath -o "$RUNNER_TEMP/aitrain" ./internal/ai/aitrain
+
+      - name: Train with no network, as an unprivileged user
+        run: |
+          offline() {
+            sudo unshare --net -- setpriv --reuid="$(id -u)" --regid="$(id -g)" --clear-groups -- "$@"
+          }
+          # The namespace really has no way out.
+          if offline curl -s -m 5 -o /dev/null https://github.com; then
+            echo "::error::the training namespace can reach the network"
+            exit 1
+          fi
+          offline "$RUNNER_TEMP/aitrain" -recog "$RUNNER_TEMP/recog" \
+            -out "$RUNNER_TEMP/weights.bin" -report "$RUNNER_TEMP/EVALUATION.md"
+
+      - name: Compare with the committed model
+        run: |
+          sha256sum internal/ai/model/weights.bin "$RUNNER_TEMP/weights.bin"
+          if ! cmp -s internal/ai/model/weights.bin "$RUNNER_TEMP/weights.bin" ||
+             ! diff -u internal/ai/model/EVALUATION.md "$RUNNER_TEMP/EVALUATION.md"; then
+            echo "::error::internal/ai/model differs from what the trainer makes from the pinned data. If you changed internal/ai (the dictionary, the trainer, the model), retrain with Go ${{ steps.lock.outputs.go }}: go run ./internal/ai/aitrain -recog <rapid7/recog at the locked commit>, and commit weights.bin and EVALUATION.md."
+            exit 1
+          fi
+          echo "The committed model is exactly what the trainer makes from the pinned data." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Attest the model's provenance
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: internal/ai/model/weights.bin

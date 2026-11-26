@@ -235,10 +235,14 @@ says it is sure (50 % or more), it is right 98.8 to 100 % of the time.
 The full table, regenerated at each training, is in
 [`internal/ai/model/EVALUATION.md`](../internal/ai/model/EVALUATION.md).
 
-To retrain:
+To retrain, fetch Recog at the commit pinned in
+[`internal/ai/aitrain/recog.lock`](../internal/ai/aitrain/recog.lock):
 
 ```bash
-git clone --depth 1 https://github.com/rapid7/recog /tmp/recog
+commit=$(awk '/^recog_commit:/ {print $2}' internal/ai/aitrain/recog.lock)
+git init -q /tmp/recog
+git -C /tmp/recog fetch -q --depth 1 https://github.com/rapid7/recog "$commit"
+git -C /tmp/recog checkout -q FETCH_HEAD
 go run ./internal/ai/aitrain -recog /tmp/recog
 ```
 
@@ -252,6 +256,28 @@ go run ./internal/ai/aitrain -recog /tmp/recog -confusion unusual-port -out /dev
 
 `-sweep` prints the accuracy on the calibration split, and `-confusion`
 prints the mistakes made there under one condition.
+
+### Checking the model you run
+
+The model is compiled into tcpcat, so you should not have to take its
+weights on trust. Three things make them checkable:
+- **Pinned data.** `recog.lock` records the Recog commit and the SHA-256 of
+  every file the trainer reads. The trainer refuses any other data;
+  `-update-lock` accepts newer data deliberately, in a reviewed change.
+- **Reproducible training.** For the same data, dictionary and Go release
+  (also in the lock), training gives the same bytes: the provenance written
+  into the model comes from the lock, not from the clock. Linux and macOS,
+  x86 and ARM, give the same file.
+- **An offline rebuild on every change.** The
+  [AI model workflow](../.github/workflows/ai-model.yml) fetches the pinned
+  data, trains in a network namespace with no network at all, as an
+  unprivileged user, and fails unless the result matches the committed
+  `weights.bin` and `EVALUATION.md` byte for byte. On `main` it also signs a
+  provenance attestation, which you can check:
+
+  ```bash
+  gh attestation verify internal/ai/model/weights.bin --repo NycolazSec/tcpcat
+  ```
 
 ## Limits
 
