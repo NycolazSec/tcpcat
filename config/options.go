@@ -32,7 +32,7 @@ const bannerTemplate = `
 %s             '-.-' \ )-'( , %s%so o%s%s)%s      %s%s  | || |   | |_) | |     / _ \ | |  %s
 %s                   '-    \'_'"'-%s      %s%s  | || |___|  __/| |___ / ___ \| |  %s
 %s    <--[SYN]--(sniffing)--[ACK]-->%s    %s%s  |_| \____|_|    \____/_/   \_\_|  %s
-                                        %s%sModular Security & Network Engine%s
+                                           %s%sKnow what your servers expose%s
                                          %s[ eBPF / AF_XDP ] %sby NycolazSec%s
 `
 
