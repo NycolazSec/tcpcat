@@ -406,6 +406,41 @@ sudo tcpcat \
 
 The baseline must be a non-empty JSON report created by tcpcat. A new, empty file cannot be used as a baseline.
 
+### Plain-language verdicts with tcpcat's AI (`--ai`)
+
+tcpcat has its own AI, which runs offline inside the binary. It reads a scan
+and says what to fix, why, and how, in English or French. Every statement
+comes with the evidence it rests on: the banner, the probe, the CVE, or "port
+number only".
+
+```bash
+tcpcat -sT -sV --ai --ai-lang fr 203.0.113.10
+# [MOYEN] 203.0.113.10:22  OpenSSH est joignable depuis Internet : limitez qui peut l'atteindre
+#    pourquoi SSH sur Internet est acceptable s'il est bien configuré, mais des robots y essaient...
+#    action   N'autorisez le port 22 que depuis des adresses de confiance (liste blanche du pare-feu)...
+#    preuves  bannière : SSH-2.0-OpenSSH_10.0p2 Debian-7+deb13u4 · 3 autres failles connues ne
+#             concernent que les programmes clients (ssh, scp, sftp), pas ce serveur · ...
+# [INFO] 203.0.113.10:21  Port 21 : la réponse vient probablement de votre propre réseau, pas de cette machine
+#    preuves  ce port a répondu en 7 ms, les autres ports de la machine en 97 ms environ
+# [ok] 203.0.113.10:25565  Serveur Minecraft est public, c'est normal
+
+tcpcat ai explain scan.json             # judge a saved scan (exits 1 if something must be fixed)
+tcpcat ai policy scan.json              # draft exposure.yaml for `tcpcat policy check`
+tcpcat ai identify "-NOAUTH Authentication required." --port 6390   # -> Redis, never public
+```
+
+The AI combines three things:
+- a dictionary of about a hundred services: what each is, whether it belongs
+  on the internet, why exposing it is dangerous and how to stop it;
+- a small banner model, trained under seven simulated network conditions
+  (truncated banners, noise, non-standard ports...). It names the right kind
+  of service in 91 % of cases on a non-standard port, against 20 % for port
+  conventions;
+- reasoning that weighs vulnerabilities, sets aside client-only CVEs and
+  spots answers from a middlebox.
+
+See [docs/AI.md](docs/AI.md).
+
 ### Continuous monitoring with alerts
 
 Point `-j` and `--baseline` at the same state file and run tcpcat on a schedule: each run compares against the previous one, then becomes the next baseline. Add `--notify-webhook` to be alerted only when something changes — a newly exposed port, a changed service/version, or a newly correlated CVE:
@@ -583,6 +618,9 @@ pointed at an IPv6 target instead of silently misbehaving.
 --jarm                Active JARM TLS fingerprint on TLS ports (opt-in: 10 extra probes/target)
 --ot-probe            Read exact vendor/version from OT ports (Modbus...) via one read-only query (opt-in)
 --exploit-intel       Enrich correlated CVEs with CISA KEV + EPSS and prioritize by them (opt-in)
+--ai                  tcpcat's AI judges the results: what to fix, why, how (offline; see docs/AI.md)
+--ai-lang <fr|en>     Language of the AI's answers (default: from $LANG)
+--ai-from <vantage>   internet or internal (default: internal when every target is private)
 --dual-stack          Also scan each target's DNS-published IPv6 address; flag ports open on IPv6 only
 ```
 On a `443`/`8443` port, `-sV` also runs an independent TLS/certificate
@@ -725,6 +763,10 @@ tcpcat evidence verify <bundle.json> [--pub <key.pub>]
 tcpcat replay <bundle.json> [--pub <key.pub>] [--finding <id>] [-j f] [--timeout ms]
 tcpcat inventory [-o inventory.json]
 tcpcat explain <inventory.json> [scan.json] [--expect 22,80,443,8000-8010] [--target ip] [--ports p] [-j f]
+tcpcat ai explain <scan.json> [--lang fr|en] [--from internet|internal] [-j f] [--policy f]
+tcpcat ai policy <scan.json> [-o exposure.yaml] [--lang fr|en]
+tcpcat ai identify "<banner>" [--port n]
+tcpcat ai model
 ```
 
 Exit status: `0` compliant / all fixed, `1` violation / still reproducing, `2` usage or configuration error.

@@ -912,6 +912,9 @@ func main() {
 		}
 	}
 
+	if opts.AI {
+		printAIAfterScan(results, opts.AILang, opts.AIFrom)
+	}
 	if opts.JsonOutput != "" {
 		err := output.ExportJSON(opts.JsonOutput, opts.Target, results, duration, reusedCerts, severitySummary)
 		if err != nil {

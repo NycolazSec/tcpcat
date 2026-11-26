@@ -10,6 +10,21 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Added
+- tcpcat's AI. It runs offline, inside the binary, and says what to fix, why
+  and how, in English or French. Every statement comes with its evidence.
+  Use it with `--ai` on a scan, or with
+  `tcpcat ai explain|policy|identify|model`. It is made of three parts:
+  - a dictionary of about a hundred services
+    (`internal/ai/kb/services.yaml`);
+  - a banner model trained on Rapid7 Recog under seven simulated network
+    conditions: on a non-standard port it names the right kind of service in
+    91 % of cases, against 20 % for port conventions;
+  - reasoning that weighs CVEs, sets aside client-only OpenSSH flaws and
+    spots replies from a middlebox.
+
+  See docs/AI.md.
+
 ## [1.8.1] - 2026-11-23
 
 ### Fixed
