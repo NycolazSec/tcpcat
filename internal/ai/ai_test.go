@@ -194,13 +194,16 @@ func TestClientSideFlawsDoNotCount(t *testing.T) {
 		{ID: "CVE-A", CVSS: 9.4, Title: "ssh in OpenSSH before 10.4 can have a use-after-free when a server changes its host key"},
 		{ID: "CVE-B", CVSS: 5.4, Title: "scp in OpenSSH before 10.4 may place a file in the parent directory"},
 		{ID: "CVE-C", CVSS: 7.5, Title: "sshd in OpenSSH before 10.4 allows remote attackers to cause a denial of service"},
+		{ID: "CVE-D", CVSS: 7.8, Title: "In ssh in OpenSSH before 10.6, a $ or \\ character can occur in a command-line argument"},
+		{ID: "CVE-E", CVSS: 6.5, Title: "In sshd and ssh in OpenSSH before 10.6, there is no check for whether the method is allowed"},
 	}
 	f := a.Analyze([]scan.TargetResult{r}, Options{Lang: "en"}).Findings[0]
 	if f.Severity != "medium" || f.Verdict != Review {
 		t.Fatalf("only the sshd flaw (7.5) counts: %+v", f)
 	}
 	ev := strings.Join(f.Evidence, "\n")
-	if !strings.Contains(ev, "2 other known flaws concern only the client") || !strings.Contains(ev, "known vulnerabilities for this version: 1") || strings.Contains(ev, "CVE-A") {
+	if !strings.Contains(ev, "3 other known flaws concern only the client") || !strings.Contains(ev, "known vulnerabilities for this version: 2") ||
+		strings.Contains(ev, "CVE-A") || strings.Contains(ev, "CVE-D") {
 		t.Errorf("evidence:\n%s", ev)
 	}
 }
