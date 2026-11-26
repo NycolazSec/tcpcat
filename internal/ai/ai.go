@@ -185,9 +185,13 @@ func (a *Analyzer) refineByPort(id Identification, s *kb.Service, port int) Iden
 	if s.ID != s.Protocol() {
 		return id
 	}
+	// "HTTP" is a transport as much as a service: on 10250 it is the
+	// kubelet, on 2375 the Docker API. Any HTTP-speaking service of the
+	// port is a more specific answer than "a web server".
+	web := s.Protocol() == "http" || s.Protocol() == "https"
 	var specific []*kb.Service
 	for _, c := range a.Dict.ByPort(port) {
-		if c.ID != s.ID && c.Protocol() == s.Protocol() {
+		if c.ID != s.ID && (c.Protocol() == s.Protocol() || web && c.SpeaksHTTP()) {
 			specific = append(specific, c)
 		}
 	}
@@ -318,6 +322,15 @@ func (a *Analyzer) judge(r scan.TargetResult, opt Options) Finding {
 		f.Fix = tr(lang, "fix-unknown", r.Port)
 		a.addVulns(&f, r, lang)
 		return f
+	}
+	// A website on a port other than 80/443 is rarely meant for the public:
+	// judge it like any web service on an alternate port.
+	if (s.Protocol() == "http" || s.Protocol() == "https") && s.Exposure == kb.Public && r.Port != 80 && r.Port != 443 {
+		if alt := a.Dict.Get("http-alt"); alt != nil {
+			c := *s
+			c.Exposure, c.Risk, c.Why, c.Hint = alt.Exposure, alt.Risk, alt.Why, alt.Hint
+			s = &c
+		}
 	}
 	f.Exposure = s.Exposure
 	name := id.Name

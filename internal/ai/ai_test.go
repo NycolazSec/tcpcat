@@ -204,3 +204,27 @@ func TestClientSideFlawsDoNotCount(t *testing.T) {
 		t.Errorf("evidence:\n%s", ev)
 	}
 }
+
+// A probe that only says "HTTPS" on 10250 found the kubelet's API, not a
+// website: the verdict must be the kubelet's.
+func TestHTTPIsATransportForAPIs(t *testing.T) {
+	a := analyzer(t)
+	rep := a.Analyze([]scan.TargetResult{open(10250, "https", ""), open(2375, "http", ""), open(443, "https", "")}, Options{Lang: "en"})
+	if f := find(t, rep, 10250); f.Service.ID != "kubelet" || f.Verdict != Fix {
+		t.Errorf("10250: %+v", f)
+	}
+	if f := find(t, rep, 2375); f.Service.ID != "docker-api" || f.Severity != "critical" {
+		t.Errorf("2375: %+v", f)
+	}
+	if f := find(t, rep, 443); f.Service.ID != "https" || f.Verdict != OK {
+		t.Errorf("443 stays a website: %+v", f)
+	}
+}
+
+func TestWebsiteOnAlternatePortIsReviewed(t *testing.T) {
+	a := analyzer(t)
+	f := a.Analyze([]scan.TargetResult{open(8090, "apache", "Apache/2.4.71 (Debian)")}, Options{Lang: "en"}).Findings[0]
+	if f.Service.ID != "apache" || f.Verdict != Review {
+		t.Fatalf("%+v", f)
+	}
+}

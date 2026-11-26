@@ -12,6 +12,9 @@
 #   risk      how bad it is when a private/restricted service is reachable
 #             from the internet: info, low, medium, high, critical
 #   insecure  the protocol itself sends credentials or data in clear text
+#   http      the service speaks HTTP(S): a probe that only says "HTTP" on its
+#             port is evidence for it (the kubelet, Docker and etcd APIs are
+#             HTTP APIs)
 #   products  product names (as Rapid7 Recog and tcpcat's detector write
 #             them) that identify this entry; matched case-insensitively
 #   banners   real-looking banners, as tcpcat stores them, used as extra
@@ -45,6 +48,7 @@ services:
       fr: Les courtiers de messages acceptent souvent des connexions sans authentification par défaut ; n'importe qui pourrait lire ou injecter des messages.
 
   - id: cluster
+    http: true
     abstract: true
     category: orchestration
     exposure: private
@@ -57,6 +61,7 @@ services:
       fr: Les ports du cluster n'ont besoin d'être joignables qu'entre les nœuds ; limitez-les aux adresses des nœuds ou au réseau privé.
 
   - id: monitoring
+    http: true
     abstract: true
     category: monitoring
     exposure: private
@@ -88,6 +93,7 @@ services:
       fr: Gardez les réseaux de contrôle isolés d'Internet ; l'accès distant passe par un VPN et une machine de rebond surveillée.
 
   - id: admin-web
+    http: true
     abstract: true
     category: administration
     exposure: private
@@ -330,6 +336,7 @@ services:
 
   # --------------------------------------------------------------------- web
   - id: http
+    http: true
     name: Web server (HTTP)
     name_fr: Serveur web (HTTP)
     category: web
@@ -347,6 +354,7 @@ services:
       en: Redirect every request to HTTPS and add Strict-Transport-Security.
       fr: Redirigez toutes les requêtes vers HTTPS et ajoutez Strict-Transport-Security.
   - id: https
+    http: true
     name: Web server (HTTPS)
     name_fr: Serveur web (HTTPS)
     category: web
@@ -416,6 +424,7 @@ services:
       en: Cloudflare edge server in front of the real host.
       fr: Serveur Cloudflare placé devant la vraie machine.
   - id: squid
+    http: true
     name: Squid proxy
     name_fr: Proxy Squid
     category: web
@@ -670,6 +679,7 @@ services:
       fr: Lancez-le avec -l 127.0.0.1 -U 0 (écoute locale, UDP désactivé).
     banners: ["VERSION 1.6.21", "VERSION 1.6.29"]
   - id: elasticsearch
+    http: true
     name: Elasticsearch
     parent: database
     ports: [9200, 9300]
@@ -686,6 +696,7 @@ services:
       en: "Set network.host to a private address and keep xpack.security.enabled: true."
       fr: "Réglez network.host sur une adresse privée et gardez xpack.security.enabled: true."
   - id: couchdb
+    http: true
     name: CouchDB
     parent: database
     ports: [5984]
@@ -702,6 +713,7 @@ services:
       en: Distributed database.
       fr: Base de données distribuée.
   - id: influxdb
+    http: true
     name: InfluxDB
     parent: database
     ports: [8086]
@@ -710,6 +722,7 @@ services:
       en: Time-series database.
       fr: Base de données de séries temporelles.
   - id: clickhouse
+    http: true
     name: ClickHouse
     parent: database
     ports: [8123, 9000]
@@ -718,6 +731,7 @@ services:
       en: Analytics database.
       fr: Base de données analytique.
   - id: neo4j
+    http: true
     name: Neo4j
     parent: database
     ports: [7474, 7687]
@@ -818,6 +832,7 @@ services:
     name_fr: Serveur d'API Kubernetes
     parent: cluster
     ports: [6443]
+    aliases: [kubernetes-api, kubernetes, k8s-api]
     risk: high
     what:
       en: Kubernetes control plane API (also used by k3s and RKE2).
@@ -971,6 +986,7 @@ services:
       en: Interface to Elasticsearch data.
       fr: Interface vers les données Elasticsearch.
   - id: snmp
+    http: false
     name: SNMP
     parent: monitoring
     udp: [161]
@@ -1034,6 +1050,7 @@ services:
       en: A notebook runs any code typed into it; an exposed Jupyter without a strong token is a remote shell.
       fr: Un notebook exécute tout code saisi ; un Jupyter exposé sans jeton solide est un accès shell à distance.
   - id: ollama
+    http: true
     name: Ollama
     category: ai
     ports: [11434]

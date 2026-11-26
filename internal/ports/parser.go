@@ -32,6 +32,14 @@ func ParsePorts(portStr string, topN int) ([]int, error) {
 			if len(bounds) != 2 {
 				return nil, fmt.Errorf("invalid port range format: %s", part)
 			}
+			// Open-ended ranges as in Nmap: "-" is every port, "1000-" up
+			// to 65535, "-1024" from 1.
+			if bounds[0] == "" {
+				bounds[0] = "1"
+			}
+			if bounds[1] == "" {
+				bounds[1] = "65535"
+			}
 			start, err1 := strconv.Atoi(bounds[0])
 			end, err2 := strconv.Atoi(bounds[1])
 			if err1 != nil || err2 != nil || start < 1 || end > 65535 || start > end {

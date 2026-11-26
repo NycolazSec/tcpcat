@@ -1,6 +1,10 @@
 package kb
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/NycolazSec/tcpcat/internal/ports"
+)
 
 func TestEmbeddedDictionaryIsValid(t *testing.T) {
 	d, err := Parse(servicesYAML)
@@ -73,6 +77,19 @@ func TestParseRejectsMistakes(t *testing.T) {
 	} {
 		if _, err := Parse([]byte(y)); err == nil {
 			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+// Every port the dictionary can judge is scanned by --top-ports 200.
+func TestDictionaryPortsAreInTheTopPorts(t *testing.T) {
+	top := map[int]bool{}
+	for _, p := range ports.GetTopPorts(200) {
+		top[p] = true
+	}
+	for _, p := range Default().Ports() {
+		if !top[p] {
+			t.Errorf("port %d is in the dictionary but not in the first 200 top ports: add it to internal/ports dictionaryPorts", p)
 		}
 	}
 }
