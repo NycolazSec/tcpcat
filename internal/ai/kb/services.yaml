@@ -1038,6 +1038,21 @@ services:
     why:
       en: Jenkins can run arbitrary code by design (script console, jobs); one weak account gives control of your build machines.
       fr: Jenkins peut exécuter du code arbitraire par conception (console de scripts, tâches) ; un seul compte faible donne le contrôle de vos machines de build.
+  - id: gitea
+    name: Gitea / Forgejo
+    parent: admin-web
+    ports: [3000]
+    products: [gitea, forgejo]
+    exposure: restricted
+    what:
+      en: Self-hosted Git service with a web interface.
+      fr: Service Git auto-hébergé avec une interface web.
+    why:
+      en: It holds your source code and access tokens; anyone who reaches it can probe for weak accounts and may read private repositories.
+      fr: Il contient votre code source et des jetons d'accès ; quiconque l'atteint peut tester des comptes faibles et lire des dépôts privés.
+    hint:
+      en: Restrict port 3000 to known addresses, or publish it through a reverse proxy that enforces HTTPS and login.
+      fr: Limitez le port 3000 à des adresses connues, ou publiez-le via un reverse proxy imposant HTTPS et la connexion.
   - id: jupyter
     name: Jupyter
     parent: admin-web
