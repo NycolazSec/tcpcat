@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/asavie/xdp v0.3.3
 	github.com/aws/aws-sdk-go-v2/config v1.33.18
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.347.0
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.350.0
 	github.com/cilium/ebpf v0.22.0
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/tetratelabs/wazero v1.12.0
