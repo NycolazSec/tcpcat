@@ -119,3 +119,44 @@ func (p NetProber) HTTPGet(host string, port int, useTLS bool, path string) (int
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	return resp.StatusCode, resp.Header, string(body), nil
 }
+
+// Diagnoser runs the checks that explain how a scan went: is a port still
+// reachable now, and how long does a service take to speak first. Both
+// open a plain TCP connection and close it; nothing is sent.
+type Diagnoser interface {
+	// Dial says whether a port answers now: "open", "closed" (refused) or
+	// "filtered" (no answer, or an ICMP error).
+	Dial(host string, port int, timeout time.Duration) string
+	// FirstBytes connects and waits up to wait for the service to send
+	// something. connected is false when the connection itself failed;
+	// otherwise delay is how long the first bytes took, and data is empty
+	// when nothing came in time.
+	FirstBytes(host string, port int, wait time.Duration) (connected bool, delay time.Duration, data string)
+}
+
+// Dial implements Diagnoser.
+func (p NetProber) Dial(host string, port int, timeout time.Duration) string {
+	c, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), timeout)
+	if err != nil {
+		if strings.Contains(err.Error(), "refused") {
+			return "closed"
+		}
+		return "filtered"
+	}
+	_ = c.Close()
+	return "open"
+}
+
+// FirstBytes implements Diagnoser.
+func (p NetProber) FirstBytes(host string, port int, wait time.Duration) (bool, time.Duration, string) {
+	c, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), p.timeout())
+	if err != nil {
+		return false, 0, ""
+	}
+	defer func() { _ = c.Close() }()
+	start := time.Now()
+	_ = c.SetReadDeadline(start.Add(wait))
+	buf := make([]byte, 512)
+	n, _ := c.Read(buf)
+	return true, time.Since(start), string(buf[:n])
+}

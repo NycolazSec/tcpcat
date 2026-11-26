@@ -51,7 +51,18 @@ type DeepReport struct {
 // Deep runs the analysis, the follow-up checks, and the synthesis. progress,
 // when not nil, is told what is being checked.
 func (a *Analyzer) Deep(results []scan.TargetResult, opt Options, p Prober, progress func(string)) DeepReport {
+	if opt.Lang != "fr" {
+		opt.Lang = "en"
+	}
+	// First, how the scan went: is the scanner blocked, are the silent
+	// services only slow? The banners this brings in feed the analysis.
+	var diagStory, diagAlerts []string
+	if d, ok := p.(Diagnoser); ok {
+		results, diagStory, diagAlerts = a.diagnose(results, opt.Lang, d, progress)
+	}
 	rep := a.Analyze(results, opt)
+	rep.Story = append(rep.Story, diagStory...)
+	rep.Alerts = append(rep.Alerts, diagAlerts...)
 	lang := rep.Lang
 	byAddr := map[string]scan.TargetResult{}
 	for _, r := range results {

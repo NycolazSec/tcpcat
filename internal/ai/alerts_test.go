@@ -6,6 +6,7 @@ import (
 
 	"github.com/NycolazSec/tcpcat/internal/ai/model"
 	"github.com/NycolazSec/tcpcat/internal/scan"
+	"github.com/NycolazSec/tcpcat/internal/service"
 )
 
 func filtered(port int) scan.TargetResult {
@@ -133,5 +134,22 @@ func TestProfileOfOneService(t *testing.T) {
 	rep := a.Deep([]scan.TargetResult{open(22, "openssh", "SSH-2.0-OpenSSH_9.6")}, Options{Lang: "fr"}, &fakeProber{ssh: map[int][]string{22: {"publickey"}}}, nil)
 	if len(rep.Profile) != 1 || !strings.Contains(rep.Profile[0], "une machine qui expose un seul service") {
 		t.Fatalf("profile: %q", rep.Profile)
+	}
+}
+
+// The detector names a silent port by its number (2222 is "ethernet-ip");
+// that is still a silent port. An HTTP answer without a Server header is not.
+func TestSilentMeansNothingAnswered(t *testing.T) {
+	byNumber := open(2222, "ethernet-ip", "")
+	if !isSilent(byNumber) {
+		t.Fatal("named by its port only, yet not silent")
+	}
+	web := open(80, "http", "")
+	web.HTTPPosture = &service.HTTPPostureInfo{}
+	if isSilent(web) {
+		t.Fatal("an HTTP server answered")
+	}
+	if isSilent(open(22, "", "")) {
+		t.Fatal("without -sV nothing was asked")
 	}
 }

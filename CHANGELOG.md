@@ -37,6 +37,18 @@ Full diffs for every release are available via GitHub's
   is FTP.
 
 ### Added
+- The AI tells how the scan went and what blocks it. Host by host, it
+  separates ports closed by the machine (RST), dropped silently, refused by
+  ICMP, and open but silent, and names the filtering: an allow-list
+  firewall, no firewall, forgotten opening rules, a rejecting firewall, or a
+  timeout too short for the latency. With `--ai-deep` it then checks this
+  on the network, read-only:
+  - whether the scanner was blocked during the scan;
+  - whether the block lifts after 15 s (a rate limit) or not (a ban);
+  - whether a host where everything was filtered answers one slow
+    connection;
+  - how long a silent service takes to send its banner. A banner that comes
+    late is used to identify the service.
 - A spinner while the AI works (`--ai`, `--ai-deep`, `ai explain --deep`):
   a twinkling star, what it is doing and for how long. It is drawn only on a
   terminal, and not at all for work that finishes at once.

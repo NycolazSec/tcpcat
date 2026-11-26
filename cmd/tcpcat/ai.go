@@ -417,14 +417,19 @@ func renderAIReport(rep ai.Report) {
 		ai.Internal: {"seen from inside the network", "vu depuis le réseau interne"},
 	}[rep.Vantage]
 	fmt.Printf("\n%s%s%s %s(%s)%s\n", config.Bold, title, config.Reset, config.Gray, msg(l, vantage[0], vantage[1]), config.Reset)
-	printAlerts(rep.Alerts)
+	if len(rep.Story) > 0 || len(rep.Alerts) > 0 {
+		fmt.Printf("\n  %s%s%s\n", config.Bold, msg(l, "How the scan went", "Comment le scan s'est déroulé"), config.Reset)
+		printStory(rep)
+	}
 	renderFindings(rep, false)
 }
 
-// printAlerts says what the scan as a whole cannot tell.
-func printAlerts(alerts []string) {
-	for _, a := range alerts {
-		fmt.Println()
+// printStory tells how the scan went, then what it cannot tell.
+func printStory(rep ai.Report) {
+	for _, s := range rep.Story {
+		printItem("  "+config.Gray+"·"+config.Reset+" ", s)
+	}
+	for _, a := range rep.Alerts {
 		printItem("  "+config.Yellow+"!"+config.Reset+" ", a)
 	}
 }
@@ -595,11 +600,9 @@ func runDeep(a *ai.Analyzer, results []scan.TargetResult, opt ai.Options) ai.Dee
 func renderDeepReport(d ai.DeepReport) {
 	l := d.Lang
 	section := func(en, fr string) { fmt.Printf("\n%s%s%s\n", config.Bold+config.Red, msg(l, en, fr), config.Reset) }
-	if len(d.Alerts) > 0 {
-		section("Before reading on", "Avant de lire la suite")
-		for _, a := range d.Alerts {
-			printItem("  "+config.Yellow+"!"+config.Reset+" ", a)
-		}
+	if len(d.Story) > 0 || len(d.Alerts) > 0 {
+		section("How the scan went", "Comment le scan s'est déroulé")
+		printStory(d.Report)
 	}
 	if len(d.Profile) > 0 {
 		section("What I understood", "Ce que j'ai compris")

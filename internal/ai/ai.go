@@ -80,6 +80,9 @@ type Finding struct {
 type Report struct {
 	Vantage string `json:"vantage"`
 	Lang    string `json:"lang"`
+	// Story tells how the scan went, host by host: what answered, what was
+	// dropped or refused, and what that says about the filtering.
+	Story []string `json:"story,omitempty"`
 	// Alerts are about the scan as a whole: what it cannot tell, and why.
 	Alerts   []string  `json:"alerts,omitempty"`
 	Findings []Finding `json:"findings"`
@@ -112,7 +115,7 @@ func (a *Analyzer) Analyze(results []scan.TargetResult, opt Options) Report {
 	if opt.Vantage != Internal {
 		opt.Vantage = Internet
 	}
-	rep := Report{Vantage: opt.Vantage, Lang: opt.Lang}
+	rep := Report{Vantage: opt.Vantage, Lang: opt.Lang, Story: scanStory(results, opt.Lang)}
 	for _, h := range blindHosts(results) {
 		rep.Alerts = append(rep.Alerts, tr(opt.Lang, "alert-blind", h.host, h.tested))
 	}
@@ -217,9 +220,21 @@ func muteHosts(results []scan.TargetResult) []blindHost {
 	return out
 }
 
-// isSilent reports a port where service detection ran and got nothing back.
+// isSilent reports a port where service detection ran and got nothing back:
+// no banner, no TLS, no HTTP answer, and at most the name the detector gives
+// a port by its number when nothing answers ("unknown", or "ethernet-ip" on
+// 2222).
 func isSilent(r scan.TargetResult) bool {
-	return strings.EqualFold(strings.TrimSpace(r.Service), "unknown") && strings.TrimSpace(r.Banner) == ""
+	if strings.TrimSpace(r.Banner) != "" || r.TLS != nil || r.HTTPPosture != nil || r.SSHPosture != nil ||
+		r.Version != "" || len(r.Findings) > 0 || strings.Contains(r.Reason, "UDP") {
+		return false
+	}
+	svc := strings.ToLower(strings.TrimSpace(r.Service))
+	if svc == "" {
+		return false // service detection did not run
+	}
+	byPort, _ := service.IdentifyStoredBanner("", r.Port)
+	return svc == "unknown" || svc == strings.ToLower(byPort)
 }
 
 func isOpen(state string) bool {

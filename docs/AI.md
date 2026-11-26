@@ -85,21 +85,50 @@ port. The SSH check leaves one failed login by user `tcpcat` in the server's
 log, with no password sent. Run it only against hosts you are allowed to
 scan.
 
-## When the scan itself cannot be trusted
+## How the scan went, and what blocks it
 
-Before the findings, both analyses say when the scan cannot tell what a
-machine exposes:
-- **Every port tested is filtered.** The machine is off, or it ignores the
-  scanner's address, for instance after an anti-scan or anti-DDoS protection
-  spotted the scan. Closed sensitive ports are then not reported as good
-  news.
-- **Every open port accepts connections, but no service answers.** Something
-  on the path (an anti-DDoS, a SYN proxy, a firewall) may be answering for
-  the machine. Each such port is marked "to be confirmed".
-- **The scan runs from a Kubernetes node** (`--ai` and `--ai-deep` after a
-  scan). The cluster's firewall may trust that node and show it ports that
-  are closed to the internet. Cluster ports found open are then "to be
-  confirmed" from a machine outside the cluster, rather than critical.
+Both analyses start with how the scan went, host by host. A port that does
+not answer is not one fact but several: the machine said it is closed (a
+reset), a firewall threw the packet away (no answer), a firewall refused it
+out loud (an ICMP error), or something accepted the connection and then
+said nothing. Read together, they say what filters the machine:
+- a firewall that lets only the open ports through and drops the rest (the
+  right setup);
+- no firewall in front of the closed ports;
+- a firewall with ports left open to nothing (maybe forgotten rules);
+- a firewall that rejects instead of dropping;
+- open ports answering close to the timeout, so "filtered" ports may only be
+  slow (`-T2` waits longer).
+
+It also says when the scan cannot be trusted:
+- **every port tested is filtered**: the machine is off, or it ignores the
+  scanner's address. Closed sensitive ports are then not reported as good
+  news;
+- **every open port accepts connections, but no service answers**: something
+  on the path (an anti-DDoS, a SYN proxy) may be answering for the machine;
+- **the scan runs from a Kubernetes node**: the cluster's firewall may trust
+  that node, so cluster ports found open are "to be confirmed" from outside
+  the cluster rather than critical.
+
+The thorough analysis (`--ai-deep`) then checks this on the network,
+read-only, before verifying anything else:
+1. It connects again to the ports that were open. If none answers any more,
+   the machine or its protection (fail2ban, CrowdSec, an anti-DDoS) blocked
+   the scanner's address during the scan.
+2. It waits 15 seconds and tries again. An answer means a temporary limit
+   set off by the pace of the scan (scan more slowly, or allow-list the
+   scanner); no answer means a ban.
+3. On a host where everything was filtered, it tries a few common ports one
+   slow connection at a time. An answer means it was the pace that got
+   blocked.
+4. On a silent open port, it waits up to 8 seconds for the service to
+   speak. A banner that comes late is reported with its delay (for SSH:
+   `UseDNS`, `MaxStartups`, or an anti-DDoS holding connections back) and
+   then used to identify the service. A server that should speak first and
+   never does is reported too.
+
+These checks add up to about 30 seconds on a blocked host, and nothing on a
+normal one beyond one connection per open port.
 
 ## How it works
 
