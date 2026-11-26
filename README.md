@@ -47,7 +47,7 @@ written authorization.
 
 <div align="center">
 
-![tcpcat scanning scanme.nmap.org — open ports, service and version detection, weak-crypto findings, and CVE correlation](docs/demo.gif)
+![tcpcat scanning scanme.nmap.org with --ai-deep: open ports, versions, weak crypto and CVEs, then its AI tells how the scan went, what the machine is, and the fixes in order](docs/demo.gif)
 
 </div>
 

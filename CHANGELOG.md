@@ -61,6 +61,11 @@ Full diffs for every release are available via GitHub's
     only, so they are "to be confirmed" rather than critical.
 
 ### Fixed
+- The thorough analysis' plan listed every weak SSH algorithm and the whole
+  `sshd_config` fix inline, which buried the other steps. The plan now names
+  the first few algorithms, and points to the port's detail, which shows each
+  verified issue's fix. The `sshd_config` lines are printed one per line, to
+  copy as they are (`lines` in the JSON).
 - A flaw of OpenSSH's client titled "In ssh in OpenSSH ..." was counted
   against the server and listed among its most serious flaws. Client-only
   flaws are now recognized with or without the leading "In".

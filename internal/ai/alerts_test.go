@@ -153,3 +153,26 @@ func TestSilentMeansNothingAnswered(t *testing.T) {
 		t.Fatal("without -sV nothing was asked")
 	}
 }
+
+// The sshd_config lines of a fix are carried as lines, to copy as they are,
+// and the plan points to them instead of repeating them.
+func TestWeakSSHFixCarriesConfigLines(t *testing.T) {
+	a := analyzer(t)
+	r := open(22, "openssh", "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13")
+	r.SSHPosture = &service.SSHPostureInfo{Warnings: []string{
+		"weak key exchange offered: diffie-hellman-group14-sha1", "weak MAC offered: hmac-sha1, hmac-sha1-96, umac-64@openssh.com, hmac-md5"}}
+	rep := a.Deep([]scan.TargetResult{r}, Options{Lang: "en"}, &fakeProber{ssh: map[int][]string{22: {"publickey"}}}, nil)
+	var weak Check
+	for _, c := range find(t, rep.Report, 22).Checks {
+		if strings.Contains(c.Text, "weak algorithms") {
+			weak = c
+		}
+	}
+	want := []string{"KexAlgorithms -diffie-hellman-group14-sha1", "MACs -hmac-sha1,hmac-sha1-96,umac-64@openssh.com,hmac-md5"}
+	if strings.Join(weak.Lines, "\n") != strings.Join(want, "\n") || !strings.Contains(weak.Text, "(+1 more)") {
+		t.Fatalf("check: %+v", weak)
+	}
+	if p := planText(rep); !strings.Contains(p, "the full fix is in the port's detail below") || strings.Contains(p, "KexAlgorithms") {
+		t.Fatalf("plan: %s", p)
+	}
+}

@@ -665,5 +665,14 @@ func printChecks(l string, checks []ai.Check) {
 			mark = config.Yellow + "•" + config.Reset
 		}
 		printItem("     "+config.Gray+fmt.Sprintf("%-8s", msg(l, "check", "contrôle"))+config.Reset+" "+mark+" ", c.Text)
+		if c.Kind == ai.CheckIssue && c.Fix != "" {
+			// What to do about it, under it: the plan refers here for the
+			// long fixes (exact sshd_config lines).
+			printItem("                "+config.Gray+"→"+config.Reset+" ", c.Fix)
+			// Configuration lines are printed as they are, to be copied.
+			for _, line := range c.Lines {
+				fmt.Printf("                  %s\n", line)
+			}
+		}
 	}
 }
