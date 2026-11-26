@@ -31,6 +31,25 @@ Full diffs for every release are available via GitHub's
 
 ### Changed
 - The default `--rate` is 1000 packets/s (it was 500).
+- `tcpcat -h` prints a short help, ordered by what tcpcat is for (see,
+  decide, prove). `--help-all` prints every option.
+- Subcommands (`ai`, `policy`, `explain`, ...) no longer print the ASCII
+  banner before their report.
+
+### Deprecated
+- The IDS/IPS evasion and packet-debugging options print a warning and will
+  be removed in 2.0: `--evasion`, `--jitter`, `--ttl-jitter`, `--ttl-mode`,
+  `--probe-ttl`, `--window-size`, `--source-port-mode`, `--frag`, `--decoy`,
+  `--smart-bypass`, `--relay-server`, `-sI`, and the `--deep-inspect`
+  family. They do not help check your own exposure.
+  `--decoy auto` spoofs public DNS resolvers' addresses. See
+  docs/IDS_VISIBILITY.md.
+
+### Removed
+- `-oS` (export in "leetspeak").
+- The internal phase reports, test scripts and roadmap that were in
+  `docs/`. Some of them still quoted speed figures that had been withdrawn.
+  Git history keeps them.
 
 ### Added
 - `-p-` (and `-p 1-`, `-p -1024`) for open-ended port ranges, as in Nmap.

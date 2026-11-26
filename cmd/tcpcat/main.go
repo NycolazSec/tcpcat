@@ -80,13 +80,8 @@ func main() {
 	// flag parsing, which would otherwise read "policy" as a target name.
 	if len(os.Args) > 1 {
 		if run, ok := subcommands[os.Args[1]]; ok {
-			// `scripts` writes machine-facing output to stdout -- JSON, and a
-			// bare path from `scripts dir` meant for --scripts "$(...)" -- so it
-			// must not be preceded by the banner. Other subcommands print a
-			// human report (their JSON goes to a -j file), so they keep it.
-			if !isHelpRequest(os.Args[2:]) && os.Args[1] != "scripts" {
-				fmt.Println(config.RenderBanner(""))
-			}
+			// Subcommands print a report, not the banner: it is the scanner's
+			// greeting, and repeated before every report it is noise.
 			os.Exit(run(os.Args[2:]))
 		}
 	}
@@ -954,7 +949,6 @@ func main() {
 		{"HTML", opts.HTMLOutput, output.ExportHTML},
 		{"grepable", opts.GrepableOutput, output.ExportGrepable},
 		{"normal", opts.NormalOutput, output.ExportNormal},
-		{"leetspeak", opts.KiddieOutput, output.ExportScriptKiddie},
 	} {
 		if export.path == "" {
 			continue
