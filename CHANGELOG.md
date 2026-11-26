@@ -10,26 +10,30 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
-### Fixed
-- `--top-ports 1000` scanned only 59 ports. The list was rebuilt and now
-  holds 1,361 ports, in this order: the ports most often open, every port
-  the AI dictionary can judge, common service ports, then 1 to 1024. It is
-  tcpcat's own list, not copied from another scanner.
-- Hosts that silently drop most ports are no longer scanned at about 170
-  probes/s whatever `--rate` said. Each silent probe holds its slot for
-  every retry, so the probe window now grows on silence, up to what
-  `--rate` needs. It only does so while no congestion is visible, and
-  `--rate` stays the ceiling.
-- Service detection asks silent ports over HTTP, then over TLS when the
-  server says it speaks TLS. This catches a web server on an unusual port
-  (an Apache on 8090 used to show as `unknown`) and TLS APIs on any port.
-- The Kubernetes API is recognised from its JSON `Status` answer
-  (`kubernetes-api`).
-- tcpcat's AI treats "HTTP" as a transport. HTTPS on 10250 is judged as the
-  kubelet and HTTP on 2375 as the Docker API, not as a public website. A
-  website on a port other than 80/443 is flagged for review.
+## [1.9.0] - 2026-11-26
+
+### Added
+- tcpcat's AI. It runs offline, inside the binary, and says what to fix, why
+  and how, in English or French. Every statement comes with its evidence.
+  Use it with `--ai` on a scan, or with
+  `tcpcat ai explain|policy|identify|model`. It is made of three parts:
+  - a dictionary of about a hundred services
+    (`internal/ai/kb/services.yaml`);
+  - a banner model trained on Rapid7 Recog under seven simulated network
+    conditions: on a non-standard port it names the right kind of service in
+    91 % of cases, against 20 % for port conventions;
+  - reasoning that weighs CVEs, sets aside client-only OpenSSH flaws and
+    spots replies from a middlebox.
+
+  See docs/AI.md.
+- `-p-` (and `-p 1-`, `-p -1024`) for open-ended port ranges, as in Nmap.
+- Minecraft servers are recognised with the server-list status ping, which
+  is read-only and reports the version and player count.
 
 ### Changed
+- tcpcat now says what it is for: know what your servers expose (see,
+  decide, prove). The README, the `--help` banner, the package descriptions
+  and CITATION.cff were rewritten around it.
 - The default `--rate` is 1000 packets/s (it was 500).
 - `tcpcat -h` prints a short help, ordered by what tcpcat is for (see,
   decide, prove). `--help-all` prints every option.
@@ -51,23 +55,24 @@ Full diffs for every release are available via GitHub's
   `docs/`. Some of them still quoted speed figures that had been withdrawn.
   Git history keeps them.
 
-### Added
-- `-p-` (and `-p 1-`, `-p -1024`) for open-ended port ranges, as in Nmap.
-- Minecraft servers are recognised with the server-list status ping, which
-  is read-only and reports the version and player count.
-- tcpcat's AI. It runs offline, inside the binary, and says what to fix, why
-  and how, in English or French. Every statement comes with its evidence.
-  Use it with `--ai` on a scan, or with
-  `tcpcat ai explain|policy|identify|model`. It is made of three parts:
-  - a dictionary of about a hundred services
-    (`internal/ai/kb/services.yaml`);
-  - a banner model trained on Rapid7 Recog under seven simulated network
-    conditions: on a non-standard port it names the right kind of service in
-    91 % of cases, against 20 % for port conventions;
-  - reasoning that weighs CVEs, sets aside client-only OpenSSH flaws and
-    spots replies from a middlebox.
-
-  See docs/AI.md.
+### Fixed
+- `--top-ports 1000` scanned only 59 ports. The list was rebuilt and now
+  holds 1,361 ports, in this order: the ports most often open, every port
+  the AI dictionary can judge, common service ports, then 1 to 1024. It is
+  tcpcat's own list, not copied from another scanner.
+- Hosts that silently drop most ports are no longer scanned at about 170
+  probes/s whatever `--rate` said. Each silent probe holds its slot for
+  every retry, so the probe window now grows on silence, up to what
+  `--rate` needs. It only does so while no congestion is visible, and
+  `--rate` stays the ceiling.
+- Service detection asks silent ports over HTTP, then over TLS when the
+  server says it speaks TLS. This catches a web server on an unusual port
+  (an Apache on 8090 used to show as `unknown`) and TLS APIs on any port.
+- The Kubernetes API is recognised from its JSON `Status` answer
+  (`kubernetes-api`).
+- tcpcat's AI treats "HTTP" as a transport. HTTPS on 10250 is judged as the
+  kubelet and HTTP on 2375 as the Docker API, not as a public website. A
+  website on a port other than 80/443 is flagged for review.
 
 ## [1.8.1] - 2026-11-23
 
@@ -1073,7 +1078,8 @@ Full diffs for every release are available via GitHub's
   visibility-testing controls, and a WASM-based scripting engine for custom
   detectors and exploit modules.
 
-[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.8.1...HEAD
+[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/NycolazSec/tcpcat/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/NycolazSec/tcpcat/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/NycolazSec/tcpcat/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/NycolazSec/tcpcat/compare/v1.6.0...v1.7.0
