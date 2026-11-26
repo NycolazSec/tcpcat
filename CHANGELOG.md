@@ -61,6 +61,9 @@ Full diffs for every release are available via GitHub's
     only, so they are "to be confirmed" rather than critical.
 
 ### Fixed
+- A flaw of OpenSSH's client titled "In ssh in OpenSSH ..." was counted
+  against the server and listed among its most serious flaws. Client-only
+  flaws are now recognized with or without the leading "In".
 - The thorough analysis said nothing when a follow-up probe got no answer.
   It now reports "could not be verified".
 - A port where service detection got nothing back was judged on its number

@@ -620,7 +620,9 @@ func (a *Analyzer) addVulns(f *Finding, r scan.TargetResult, lang string) {
 // clientTool matches vulnerability titles about a product's client programs
 // rather than its server ("scp in OpenSSH before 10.4 ...").
 var clientTool = map[string]*regexp.Regexp{
-	"ssh": regexp.MustCompile(`(?i)^\s*(ssh|scp|sftp|ssh-agent|ssh-add|ssh-keygen|ssh-keyscan|ssh-pkcs11-helper)\s+(in|of|from)\s+openssh\b`),
+	// "ssh in OpenSSH ...", or "In ssh in OpenSSH ..."; "In sshd and ssh in
+	// OpenSSH" concerns the server too and does not match.
+	"ssh": regexp.MustCompile(`(?i)^\s*(in\s+)?(ssh|scp|sftp|ssh-agent|ssh-add|ssh-keygen|ssh-keyscan|ssh-pkcs11-helper)\s+(in|of|from)\s+openssh\b`),
 }
 
 func isClientSide(id, title string) bool {
