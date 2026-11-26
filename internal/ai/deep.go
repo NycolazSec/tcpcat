@@ -31,6 +31,9 @@ type Check struct {
 	Text     string `json:"text"`
 	Severity string `json:"severity,omitempty"` // issues only
 	Fix      string `json:"fix,omitempty"`      // issues only
+	// Lines are the exact lines the fix adds to a configuration file, to
+	// copy as they are.
+	Lines []string `json:"lines,omitempty"`
 }
 
 // Action is one step of the plan.
@@ -209,9 +212,10 @@ func (a *Analyzer) verify(f *Finding, r scan.TargetResult, vantage, lang string,
 			noAnswer("SSH")
 		}
 		if kex, macs, ciphers := weakSSH(r); len(kex)+len(macs)+len(ciphers) > 0 {
+			fix, lines := sshWeakFix(lang, openssh, kex, macs, ciphers)
 			add(Check{Kind: CheckIssue, Severity: "low",
-				Text: tr(lang, "chk-ssh-weak", strings.Join(append(append(kex, macs...), ciphers...), ", ")),
-				Fix:  sshWeakFix(lang, openssh, kex, macs, ciphers)})
+				Text: tr(lang, "chk-ssh-weak", capList(lang, append(append(kex, macs...), ciphers...), 4)),
+				Fix:  fix, Lines: lines})
 		}
 
 	case f.Service.ID == "kubelet":
@@ -397,9 +401,11 @@ func weakSSH(r scan.TargetResult) (kex, macs, ciphers []string) {
 	return
 }
 
-func sshWeakFix(lang string, openssh bool, kex, macs, ciphers []string) string {
+// sshWeakFix says how to stop offering weak algorithms, and for OpenSSH
+// the sshd_config lines that do it.
+func sshWeakFix(lang string, openssh bool, kex, macs, ciphers []string) (string, []string) {
 	if !openssh {
-		return tr(lang, "fix-ssh-weak-go")
+		return tr(lang, "fix-ssh-weak-go"), nil
 	}
 	var lines []string
 	if len(kex) > 0 {
@@ -411,7 +417,7 @@ func sshWeakFix(lang string, openssh bool, kex, macs, ciphers []string) string {
 	if len(ciphers) > 0 {
 		lines = append(lines, "Ciphers -"+strings.Join(ciphers, ","))
 	}
-	return tr(lang, "fix-ssh-weak-openssh", strings.Join(lines, " ; "))
+	return tr(lang, "fix-ssh-weak-openssh"), lines
 }
 
 // profile works out what the machine is from everything that answered.
@@ -576,7 +582,13 @@ func (a *Analyzer) plan(rep Report) []Action {
 		for _, c := range f.Checks {
 			if c.Kind == CheckIssue {
 				issues++
-				plan = append(plan, Action{Severity: c.Severity, Where: where, Text: c.Text + " → " + c.Fix})
+				fix := c.Fix
+				if len(c.Lines) > 0 || len([]rune(fix)) > 300 {
+					// A long fix (a list of sshd_config lines) is in the port's
+					// detail; the plan stays readable.
+					fix = tr(lang, "plan-see-below")
+				}
+				plan = append(plan, Action{Severity: c.Severity, Where: where, Text: c.Text + " → " + fix})
 			}
 		}
 		if f.Verdict != OK && f.Fix != "" && (issues == 0 || f.Verdict == Fix) {
@@ -640,6 +652,14 @@ func firstSentence(s string) string {
 		return s[:i+1]
 	}
 	return s
+}
+
+// capList joins the first n items and says how many more there are.
+func capList(lang string, items []string, n int) string {
+	if len(items) <= n {
+		return strings.Join(items, ", ")
+	}
+	return strings.Join(items[:n], ", ") + " " + tr(lang, "more-items", len(items)-n)
 }
 
 // answeredLate reports a finding whose silent service answered a follow-up

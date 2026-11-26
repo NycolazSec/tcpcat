@@ -16,8 +16,8 @@ func init() {
 			"Wings vérifie les mots de passe SFTP auprès du panneau, les joueurs en ont donc besoin : gardez-les, mais exigez des mots de passe solides et la double authentification sur le panneau, ou faites passer les joueurs aux clés SSH (Pterodactyl 1.11 et plus)."},
 		"chk-ssh-keys": {"only accepts key-based logins: nothing to guess", "n'accepte que les clés : rien à deviner"},
 		"chk-ssh-weak": {"still offers weak algorithms: %s", "propose encore des algorithmes faibles : %s"},
-		"fix-ssh-weak-openssh": {"Add to /etc/ssh/sshd_config: %s, then systemctl reload ssh.",
-			"Ajoutez dans /etc/ssh/sshd_config : %s, puis systemctl reload ssh."},
+		"fix-ssh-weak-openssh": {"Add these lines to /etc/ssh/sshd_config, then run systemctl reload ssh:",
+			"Ajoutez ces lignes dans /etc/ssh/sshd_config, puis lancez systemctl reload ssh :"},
 		"fix-ssh-weak-go": {"Remove them from the server's algorithm lists (with Go's x/crypto/ssh: ServerConfig.KeyExchanges and ServerConfig.MACs).",
 			"Retirez-les des listes d'algorithmes du serveur (avec x/crypto/ssh en Go : ServerConfig.KeyExchanges et ServerConfig.MACs)."},
 
@@ -71,8 +71,10 @@ func init() {
 			"le seul port sensible testé (base de données, Docker, Kubernetes, outil d'administration…) n'est pas joignable"},
 		"good-private-closed": {"none of the %d sensitive ports tested (databases, Docker, Kubernetes, admin tools...) is reachable",
 			"aucun des %d ports sensibles testés (bases de données, Docker, Kubernetes, outils d'administration…) n'est joignable"},
-		"prof-machine": {"a machine", "une machine"},
-		"colon":        {": ", " : "},
+		"prof-machine":   {"a machine", "une machine"},
+		"more-items":     {"(+%d more)", "(+%d autres)"},
+		"plan-see-below": {"the full fix is in the port's detail below", "le correctif complet est dans le détail du port, plus bas"},
+		"colon":          {": ", " : "},
 
 		"alert-blind": {"%s: all %d ports tested are filtered. Either the machine is off, or it (or a firewall on the way) is ignoring your address, for instance after spotting the scan. This scan cannot tell what the machine exposes: check again from another connection (a phone's hotspot, for instance).",
 			"%s : les %d ports testés sont tous filtrés. Soit la machine est éteinte, soit elle (ou un pare-feu sur le chemin) ignore votre adresse, par exemple après avoir repéré le scan. Ce scan ne permet pas de savoir ce qu'elle expose : revérifiez depuis une autre connexion (le partage de connexion d'un téléphone, par exemple)."},
