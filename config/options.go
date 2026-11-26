@@ -32,7 +32,7 @@ const bannerTemplate = `
 %s             '-.-' \ )-'( , %s%so o%s%s)%s      %s%s  | || |   | |_) | |     / _ \ | |  %s
 %s                   '-    \'_'"'-%s      %s%s  | || |___|  __/| |___ / ___ \| |  %s
 %s    <--[SYN]--(sniffing)--[ACK]-->%s    %s%s  |_| \____|_|    \____/_/   \_\_|  %s
-                                        %s%sModular Security & Network Engine%s
+                                           %s%sKnow what your servers expose%s
                                          %s[ eBPF / AF_XDP ] %sby NycolazSec%s
 `
 
@@ -118,12 +118,16 @@ type Options struct {
 	PayloadAnalysis bool
 	ProtocolTracing bool
 
-	Timing         int
-	RateLimit      int
-	AdaptiveRate   bool
-	MaxRetries     int
-	NoRandomize    bool
-	MaxWorkers     int
+	Timing       int
+	RateLimit    int
+	AdaptiveRate bool
+	MaxRetries   int
+	NoRandomize  bool
+	MaxWorkers   int
+	// WorkersAuto is set when -w was not given and MaxWorkers was derived
+	// from the CPU count: the raw packet paths then adapt how many probes
+	// are in flight (see internal/scan/probe_window.go).
+	WorkersAuto    bool
 	BatchSize      int
 	ConnPoolSize   int
 	UnsafeNoLimits bool
@@ -144,10 +148,13 @@ type Options struct {
 	HTMLOutput     string
 	GrepableOutput string
 	NormalOutput   string
-	KiddieOutput   string
 	ScriptPath     string
 	VulnersAPIKey  string
 	ExploitIntel   bool
+	AI             bool   // --ai: tcpcat's AI judges the results (internal/ai)
+	AILang         string // --ai-lang: fr or en; empty follows $LANG
+	AIFrom         string // --ai-from: internet or internal; empty guesses from the addresses
+	AIDeep         bool   // --ai-deep: thorough analysis with read-only follow-up probes
 	DualStack      bool
 	EvidenceOutput string
 	EvidenceKey    string
@@ -319,12 +326,13 @@ func ParseFlags() (*Options, error) {
 		"--evidence":          true,
 		"--evidence-key":      true,
 		"--fingerprints-out":  true,
+		"--ai-lang":           true,
+		"--ai-from":           true,
 		"--exclude":           true,
 		"-oX":                 true,
 		"-oH":                 true,
 		"-oG":                 true,
 		"-oN":                 true,
-		"-oS":                 true,
 
 		"--jitter":           true,
 		"--evasion":          true,
@@ -339,6 +347,14 @@ func ParseFlags() (*Options, error) {
 	for i := 0; i < len(rawArgs); i++ {
 		arg := rawArgs[i]
 		if strings.HasPrefix(arg, "-") {
+			// Nmap's "-p-" (and "-p -") means every port.
+			if arg == "-p-" || arg == "-p" && i+1 < len(rawArgs) && rawArgs[i+1] == "-" {
+				if arg == "-p" {
+					i++
+				}
+				flagsArgs = append(flagsArgs, "-p", "1-65535")
+				continue
+			}
 			if arg == "--decoy" {
 				flagsArgs = append(flagsArgs, arg)
 				if i+1 < len(rawArgs) && looksLikeFlagValue(rawArgs[i+1]) {
@@ -385,11 +401,11 @@ func ParseFlags() (*Options, error) {
 
 	flag.BoolVar(&opts.AckScan, "sA", false, "ACK Scan (Firewall mapping)")
 	flag.BoolVar(&opts.WindowScan, "sW", false, "TCP Window Scan")
-	flag.BoolVar(&opts.SynScan, "sS", false, "SYN Stealth Scan")
+	flag.BoolVar(&opts.SynScan, "sS", false, "TCP SYN scan (half-open; needs root)")
 	flag.BoolVar(&opts.ConnectScan, "sT", false, "TCP Connect Scan")
-	flag.BoolVar(&opts.NullScan, "sN", false, "TCP NULL Stealth Scan")
-	flag.BoolVar(&opts.FinScan, "sF", false, "TCP FIN Stealth Scan")
-	flag.BoolVar(&opts.XmasScan, "sX", false, "TCP Xmas Stealth Scan")
+	flag.BoolVar(&opts.NullScan, "sN", false, "TCP NULL scan")
+	flag.BoolVar(&opts.FinScan, "sF", false, "TCP FIN scan")
+	flag.BoolVar(&opts.XmasScan, "sX", false, "TCP Xmas scan")
 	flag.StringVar(&opts.ZombieHost, "sI", "", "Idle scan using <zombie_host>")
 	flag.BoolVar(&opts.UdpScan, "sU", false, "UDP Port Scan")
 	flag.IntVar(&opts.TopPorts, "top-ports", 0, "Scan <number> most common ports")
@@ -421,7 +437,7 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.PoliteMode, "timing", false, "Enable polite/paranoid timing (synonym for slower -T)")
 	flag.IntVar(&opts.ProbeTTL, "probe-ttl", 64, "TTL value for probe packets")
 
-	flag.BoolVar(&opts.DeepInspect, "deep-inspect", false, "ADVANCED: Surgical packet-level analysis (slower, detailed)")
+	flag.BoolVar(&opts.DeepInspect, "deep-inspect", false, "Deprecated: packet-level analysis of each open port")
 	flag.IntVar(&opts.OSIVerbosity, "osi-verbosity", 4, "OSI layer detail level (1=L3 only, 7=full stack analysis)")
 	flag.BoolVar(&opts.HexDump, "hex-dump", false, "Display packet hex dump + ASCII representation")
 	flag.BoolVar(&opts.TimingAnalysis, "timing-analysis", false, "Show inter-packet timing and latency metrics")
@@ -429,11 +445,11 @@ func ParseFlags() (*Options, error) {
 	flag.BoolVar(&opts.ProtocolTracing, "protocol-trace", false, "Trace full protocol negotiation sequence (3-way handshake, etc)")
 
 	flag.IntVar(&opts.Timing, "T", 3, "Set timing template (0-5, higher is faster)")
-	flag.IntVar(&opts.MaxWorkers, "w", 0, "Number of parallel workers (default: auto-scaled to CPU cores × 32)")
+	flag.IntVar(&opts.MaxWorkers, "w", 0, "Number of parallel workers (default: CPU cores × 32, adapted to the network on SYN/raw scans)")
 	flag.IntVar(&opts.MaxWorkers, "workers", 0, "Number of parallel workers (alias for -w)")
 	flag.IntVar(&opts.BatchSize, "batch-size", 1000, "Number of jobs dispatched per batch")
 	flag.IntVar(&opts.ConnPoolSize, "conn-pool", 64, "Max idle TCP connections kept per address (for -sT scans)")
-	flag.IntVar(&opts.RateLimit, "rate", 500, "Max packets per second for discovery and scans")
+	flag.IntVar(&opts.RateLimit, "rate", 1000, "Max packets per second for discovery and scans")
 	flag.BoolVar(&opts.AdaptiveRate, "adaptive-rate", false, "Adjust send rate automatically from observed RTT/loss (AIMD) instead of a fixed --rate")
 	flag.IntVar(&opts.MaxRetries, "max-retries", 2, "Resend a probe this many times before marking a port filtered (0 disables retries)")
 	flag.BoolVar(&opts.NoRandomize, "no-randomize", false, "Dispatch probes in target/port list order instead of a randomized permutation")
@@ -459,10 +475,13 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.HTMLOutput, "oH", "", "Export results as a self-contained HTML report")
 	flag.StringVar(&opts.GrepableOutput, "oG", "", "Export results in grepable format")
 	flag.StringVar(&opts.NormalOutput, "oN", "", "Export results as a plain-text report")
-	flag.StringVar(&opts.KiddieOutput, "oS", "", "Export results in leetspeak (script kiddie format)")
 	flag.StringVar(&opts.ScriptPath, "scripts", "", "Directory of WebAssembly detection modules (*.wasm); see docs/WASM_SDK.md")
 	flag.StringVar(&opts.VulnersAPIKey, "vulners-apikey", "", "Vulners.com API key for CVE lookup")
 	flag.BoolVar(&opts.ExploitIntel, "exploit-intel", false, "Enrich CVEs with CISA KEV (known-exploited) + EPSS scores and prioritize by them")
+	flag.BoolVar(&opts.AI, "ai", false, "Let tcpcat's AI judge the results: what to fix, why, and how")
+	flag.StringVar(&opts.AILang, "ai-lang", "", "Language of the AI's answers: fr or en (default: from $LANG)")
+	flag.StringVar(&opts.AIFrom, "ai-from", "", "Where the scan runs from, for the AI: internet or internal (default: guessed)")
+	flag.BoolVar(&opts.AIDeep, "ai-deep", false, "Thorough AI analysis: verifies its hypotheses with read-only probes, profiles the machine, plans the fixes")
 	flag.BoolVar(&opts.DualStack, "dual-stack", false, "Also scan the IPv6 address published (DNS AAAA) for each IPv4 target and report ports open on IPv6 only")
 	flag.BoolVar(&opts.SmartBypass, "smart-bypass", false, "Enable advanced monitoring validation on filtered ports")
 	flag.BoolVar(&opts.SmartBypass, "spoof-agent", false, "Alias for --smart-bypass")
@@ -478,7 +497,8 @@ func ParseFlags() (*Options, error) {
 
 	flag.BoolVar(&opts.InsecureTLS, "insecure", false, "Allow insecure server connections")
 
-	flag.Usage = func() {
+	helpAll := flag.Bool("help-all", false, "Show every option")
+	fullHelp := func() {
 		fmt.Println(Banner)
 		fmt.Printf("%sUsage:%s tcpcat <target> [options]\n\n", Bold, Reset)
 		fmt.Println(Bold + Red + "TARGET & DISCOVERY SPECIFICATION:" + Reset)
@@ -498,14 +518,14 @@ func ParseFlags() (*Options, error) {
 		fmt.Println(Bold + Red + "\nPORT & SCAN SPECIFICATION:" + Reset)
 		fmt.Printf("  %s-p <ports>%s      Ports to scan (e.g. 80,443 | 1-1024)\n", White, Reset)
 		fmt.Printf("  %s--top-ports <n>%s Scan n most common ports\n", White, Reset)
-		fmt.Printf("  %s-sS%s             TCP SYN Stealth Scan\n", White, Reset)
+		fmt.Printf("  %s-sS%s             TCP SYN scan (half-open; needs root)\n", White, Reset)
 		fmt.Printf("  %s-sT%s             TCP Connect Scan\n", White, Reset)
 		fmt.Printf("  %s-sA%s             TCP ACK Scan (Firewall rules detection)\n", White, Reset)
 		fmt.Printf("  %s-sW%s             TCP Window Scan\n", White, Reset)
-		fmt.Printf("  %s-sN%s             TCP NULL Stealth Scan\n", White, Reset)
-		fmt.Printf("  %s-sF%s             TCP FIN Stealth Scan\n", White, Reset)
-		fmt.Printf("  %s-sX%s             TCP Xmas Stealth Scan\n", White, Reset)
-		fmt.Printf("  %s-sI <zombie>%s   TCP Idle Scan (fully blind)\n", White, Reset)
+		fmt.Printf("  %s-sN%s             TCP NULL scan\n", White, Reset)
+		fmt.Printf("  %s-sF%s             TCP FIN scan\n", White, Reset)
+		fmt.Printf("  %s-sX%s             TCP Xmas scan\n", White, Reset)
+		fmt.Printf("  %s-sI <zombie>%s   TCP idle scan (deprecated, removed in 2.0)\n", White, Reset)
 		fmt.Printf("  %s-sU%s             UDP Port Scan\n", White, Reset)
 		fmt.Printf("  %s--open%s          Show only open ports\n", White, Reset)
 		fmt.Printf("  %s--show-closed%s   Show CLOSED ports individually instead of a per-host summary count\n", White, Reset)
@@ -516,32 +536,33 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--scripts <dir>%s Run scripts from directory for advanced detection\n", White, Reset)
 		fmt.Printf("  %s--vulners-apikey <key>%s Perform CVE lookup for detected services\n", White, Reset)
 		fmt.Printf("  %s--exploit-intel%s Enrich CVEs with CISA KEV + EPSS and prioritize by real-world exploitation\n", White, Reset)
+		fmt.Printf("  %s--ai%s            tcpcat's AI judges the results: what to fix, why, how (offline; --ai-lang fr|en)\n", White, Reset)
 		fmt.Printf("  %s--fingerprints-out <file>%s With -sV: export unknown-service groups as anonymized templates + suggested signatures\n", White, Reset)
 		fmt.Printf("  %s--dual-stack%s    Scan each target's IPv6 address (DNS AAAA) too; flag ports open on IPv6 but not IPv4\n", White, Reset)
 		fmt.Printf("  %s-O%s              Enable OS detection\n", White, Reset)
 		fmt.Printf("  %s--mptcp%s         Detect Multipath-TCP-capable hosts (MP_CAPABLE in SYN; needs -sS or --ebpf)\n", White, Reset)
 		fmt.Printf("  %s--jarm%s          Compute an active JARM TLS fingerprint on TLS ports (10 extra probes/target)\n", White, Reset)
 		fmt.Printf("  %s--ot-probe%s      Read exact vendor/version from OT ports (Modbus...) via one well-formed read-only query\n", White, Reset)
-		fmt.Println(Bold + Red + "\nEVASION & OPTIONS:" + Reset)
+		fmt.Println(Bold + Red + "\nPACKET OPTIONS:" + Reset)
 		fmt.Printf("  %s-g <port>%s       Use specified source port\n", White, Reset)
 		fmt.Printf("  %s--ttl <val>%s     Set custom IP Time-To-Live\n", White, Reset)
 		fmt.Printf("  %s--data-string%s   Append custom ASCII payload\n", White, Reset)
 		fmt.Printf("  %s--data%s          Append custom HEX payload\n", White, Reset)
 		fmt.Printf("  %s--traceroute%s    Trace hop path to target (uses the first -p port, default 80)\n", White, Reset)
 		fmt.Printf("  %s--max-hops <n>%s   Maximum hops for --traceroute (default 30)\n", White, Reset)
+		fmt.Println(Bold + Red + "\nIDS/IPS VISIBILITY TESTING (deprecated, removed in 2.0; see docs/IDS_VISIBILITY.md):" + Reset)
+		fmt.Printf("  %s--evasion <mode>%s       Packet variation mode: off, light, moderate, aggressive, stealthy\n", White, Reset)
 		fmt.Printf("  %s--relay-server <ip>%s Use a relay server for IP-in-IP encapsulation\n", White, Reset)
 		fmt.Printf("  %s--decoy <ips>%s   Comma-separated list of decoy IPs\n", White, Reset)
 		fmt.Printf("  %s--frag%s              Fragment packets for authorized monitoring validation\n", White, Reset)
 		fmt.Printf("  %s--smart-bypass%s  Enable advanced validation on filtered ports\n", White, Reset)
-		fmt.Println(Bold + Red + "\nADVANCED IDS/IPS VISIBILITY TESTING:" + Reset)
-		fmt.Printf("  %s--evasion <mode>%s       Packet variation mode: off, light, moderate, aggressive, stealthy\n", White, Reset)
 		fmt.Printf("  %s--jitter <0.0-1.0>%s    Timing jitter for authorized monitoring validation\n", White, Reset)
 		fmt.Printf("  %s--ttl-mode <mode>%s     TTL mode: fixed, random, probe (default: fixed)\n", White, Reset)
 		fmt.Printf("  %s--probe-ttl <val>%s     Probe TTL value (default: 64)\n", White, Reset)
 		fmt.Printf("  %s--window-size <bytes>%s TCP window size manipulation (0=auto)\n", White, Reset)
 		fmt.Printf("  %s--source-port-mode <mode>%s Source port: fixed, random\n", White, Reset)
-		fmt.Println(Bold + Red + "\nDEEP PACKET INSPECTION & SURGICAL SCANNING:" + Reset)
-		fmt.Printf("  %s--deep-inspect%s         ADVANCED: Surgical packet-level analysis\n", White, Reset)
+		fmt.Println(Bold + Red + "\nPACKET DEBUGGING (deprecated, removed in 2.0):" + Reset)
+		fmt.Printf("  %s--deep-inspect%s         Packet-level analysis of each open port\n", White, Reset)
 		fmt.Println("                             Shows L2-L7 OSI stack details, hex dumps, timing analysis")
 		fmt.Printf("                             %sWARNING: Significantly slower, for network professionals only%s\n", White, Reset)
 		fmt.Printf("  %s--osi-verbosity <1-7>%s OSI detail level (1=L3, 4=default, 7=full protocol dissection)\n", White, Reset)
@@ -552,7 +573,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Println(Bold + Red + "\nTIMING & OUTPUT:" + Reset)
 		fmt.Printf("  %s-T <0-5>%s        Set timing template\n", White, Reset)
 		fmt.Printf("  %s--rate <pps>%s    Set max packets per second for discovery and scans\n", White, Reset)
-		fmt.Printf("  %s-w, --workers <n>%s Number of parallel workers (default: auto CPU×32)\n", White, Reset)
+		fmt.Printf("  %s-w, --workers <n>%s Parallel workers (default: auto, adapts on raw scans)\n", White, Reset)
 		fmt.Printf("  %s--batch-size <n>%s  Jobs dispatched per batch (default: 1000)\n", White, Reset)
 		fmt.Printf("  %s--conn-pool <n>%s   Max idle TCP connections per address (default: 64)\n", White, Reset)
 		fmt.Printf("  %s-v%s              Enable verbose output\n", White, Reset)
@@ -565,7 +586,6 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s-oH <file>%s      Export a self-contained HTML report (shareable; shows KEV/EPSS when enabled)\n", White, Reset)
 		fmt.Printf("  %s-oG <file>%s      Export results in grepable format\n", White, Reset)
 		fmt.Printf("  %s-oN <file>%s      Export results as a plain-text report\n", White, Reset)
-		fmt.Printf("  %s-oS <file>%s      Export results in leetspeak\n", White, Reset)
 		fmt.Printf("  %s--audit-log <file>%s Append an audit record in JSONL\n", White, Reset)
 		fmt.Printf("  %s--baseline <file>%s Compare with a prior JSON report\n", White, Reset)
 		fmt.Printf("  %s--config <file>%s  Load flag defaults from a file (key: value); CLI flags override it\n", White, Reset)
@@ -580,8 +600,14 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--max-retries <n>%s Resend a probe up to <n> times before marking filtered (default 2)\n", White, Reset)
 		fmt.Printf("  %s--no-randomize%s  Dispatch probes in list order instead of a randomized permutation\n", White, Reset)
 	}
+	flag.Usage = shortHelp
 
 	flag.Parse()
+	if *helpAll {
+		fullHelp()
+		os.Exit(0)
+	}
+	warnDeprecated()
 
 	if opts.Interface != "" {
 		if _, err := net.InterfaceByName(opts.Interface); err != nil {
@@ -606,6 +632,7 @@ func ParseFlags() (*Options, error) {
 			cpuBased = 100
 		}
 		opts.MaxWorkers = cpuBased
+		opts.WorkersAuto = true
 	}
 
 	if opts.TTLJitter {
@@ -757,6 +784,7 @@ func ApplyProfile(opts *Options) {
 		opts.DecoyIPs = ""
 		opts.SmartBypass = false
 		opts.ServiceDetect = true
+		opts.WorkersAuto = false // a fixed worker count, no adaptive window
 
 	case "ot":
 		// Industrial control gear (PLCs, RTUs, field controllers) can fault
@@ -776,6 +804,7 @@ func ApplyProfile(opts *Options) {
 		opts.XmasScan = false
 		opts.UseXDP = false
 		opts.MaxWorkers = 1
+		opts.WorkersAuto = false
 		opts.BatchSize = 1
 		opts.Timing = 1
 		opts.RateLimit = 5
@@ -837,4 +866,70 @@ func ValidateScanCompatibility(opts *Options) error {
 	}
 
 	return nil
+}
+
+// shortHelp is what `tcpcat` and `tcpcat -h` print: the options that answer
+// the tool's purpose, in its order (see, decide, prove). --help-all prints
+// every option.
+func shortHelp() {
+	fmt.Println(Banner)
+	opt := func(name, desc string) { fmt.Printf("  %s%-20s%s %s\n", White, name, Reset, desc) }
+	cmd := func(name, desc string) { fmt.Printf("  %s%-50s%s %s\n", White, name, Reset, desc) }
+	fmt.Printf("%sUsage:%s tcpcat <targets> [options]   (hosts, IPs, CIDRs; -iL <file> for a list)\n", Bold, Reset)
+	fmt.Println(Bold + Red + "\nSEE: what is reachable" + Reset)
+	opt("-p <ports>", "Ports: 22,80,443 | 1-1024 | - (all 65,535)")
+	opt("--top-ports <n>", "The n most useful ports (default without -p: 100)")
+	opt("-sS | -sT | -sU", "SYN scan (needs root) | connect scan | UDP scan")
+	opt("-sV", "Service and version detection, with known CVEs")
+	opt("-O", "Operating-system detection")
+	opt("--exploit-intel", "Rank CVEs by real-world exploitation (CISA KEV + EPSS)")
+	opt("--ai", "tcpcat's AI: what to fix, why and how (--ai-lang fr|en)")
+	opt("--ai-deep", "The AI takes its time: verifies, profiles the machine, plans the fixes")
+	opt("-Pn", "Skip host discovery: treat every host as up")
+	opt("--rate <pps>", "Max packets per second (default 1000)")
+	fmt.Println(Bold + Red + "\nDECIDE: what should be reachable" + Reset)
+	cmd("tcpcat policy check <rules.yaml> --from internet", "check exposure rules (exit 1 on a gap)")
+	cmd("tcpcat ai policy <scan.json>", "draft those rules from a scan")
+	cmd("tcpcat inventory | tcpcat explain", "who listens behind each port")
+	opt("--scope-file <file>", "Refuse to scan anything outside an authorized scope")
+	fmt.Println(Bold + Red + "\nPROVE: that it is fixed, and stays fixed" + Reset)
+	opt("--evidence <file>", "Signed record of every open port (re-check: tcpcat replay)")
+	opt("--baseline <file>", "Compare with the previous run (alert: --notify-webhook <url>)")
+	fmt.Println(Bold + Red + "\nOUTPUT" + Reset)
+	opt("-j <file>", "JSON report")
+	opt("--sarif <file>", "SARIF 2.1.0, for CI and code scanning")
+	opt("-oH <file>", "HTML report to share")
+	opt("-v", "Verbose")
+	fmt.Printf("\n  %stcpcat --help-all%s  every option (timing, eBPF engine, WASM scripts, OT, UDP...)\n", Bold, Reset)
+	fmt.Printf("  %stcpcat ai --help%s   tcpcat's AI. Docs: https://github.com/NycolazSec/tcpcat\n", Bold, Reset)
+}
+
+// deprecatedFlags will be removed in tcpcat 2.0 (see docs/IDS_VISIBILITY.md).
+var deprecatedFlags = []string{
+	"evasion", "jitter", "ttl-jitter", "ttl-mode", "probe-ttl", "window-size", "source-port-mode",
+	"frag", "fragment", "decoy", "smart-bypass", "spoof-agent", "relay-server", "sI",
+	"deep-inspect", "osi-verbosity", "hex-dump", "timing-analysis", "payload-analysis", "protocol-trace",
+}
+
+// warnDeprecated names the deprecated options this run uses.
+func warnDeprecated() {
+	deprecated := map[string]bool{}
+	for _, f := range deprecatedFlags {
+		deprecated[f] = true
+	}
+	var used []string
+	flag.Visit(func(f *flag.Flag) {
+		if !deprecated[f.Name] {
+			return
+		}
+		if len(f.Name) <= 2 {
+			used = append(used, "-"+f.Name)
+		} else {
+			used = append(used, "--"+f.Name)
+		}
+	})
+	if len(used) > 0 {
+		fmt.Printf("%s[!] Deprecated, removed in tcpcat 2.0: %s. tcpcat checks what your own servers expose; see docs/IDS_VISIBILITY.md.%s\n",
+			Yellow, strings.Join(used, ", "), Reset)
+	}
 }

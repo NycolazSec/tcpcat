@@ -64,6 +64,7 @@ func ScanSYNPort(targetIP string, port int, opts *config.Options, timeout time.D
 			rtt.Sample(res.Latency)
 		}
 
+		res.Attempts = attempt + 1
 		if resp.Flags&0x12 == 0x12 {
 			res.State = StateOpen
 			res.Reason = "SYN-ACK Received"

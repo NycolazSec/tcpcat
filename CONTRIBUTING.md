@@ -22,6 +22,68 @@ by its terms.
 - **Do not** file security vulnerabilities as public issues — see
   [SECURITY.md](SECURITY.md) for the private disclosure process.
 
+## Your first contribution in ten minutes
+
+You do not need to know eBPF to help. The easiest place to start is tcpcat's
+AI, whose knowledge lives in one readable file.
+
+### Teach the AI a service
+
+[`internal/ai/kb/services.yaml`](internal/ai/kb/services.yaml) describes
+about a hundred network services: what each one is, whether it belongs on the
+internet, and why. Adding one you know (a self-hosted app, a game server, a
+database) takes one entry:
+
+```yaml
+  - id: gitea
+    name: Gitea
+    parent: admin-web          # inherit "why" and "how to fix" from a group
+    ports: [3000]
+    exposure: restricted       # public, restricted or private
+    products: [gitea]          # names a banner or Server header may carry
+    what:
+      en: Self-hosted Git forge.
+      fr: Forge Git auto-hébergée.
+    why:
+      en: Holds your source code and deploy keys; keep it behind a login and up to date.
+      fr: Contient votre code source et vos clés de déploiement ; gardez-la derrière une connexion et à jour.
+    banners: ["Gitea"]          # optional: a real banner, to train the model on
+```
+
+Then check it:
+
+```bash
+go test ./internal/ai/...
+go run ./cmd/tcpcat ai identify "Gitea" --port 3000
+```
+
+Every statement in the file is shown to users as the reason behind a
+finding, so write what you would tell a colleague, in English and French.
+Existing entries are good models: `grafana`, `jenkins`, `minecraft`.
+
+### Retrain the banner model
+
+If your entry has `banners`, retrain the model so it learns them (about
+fifteen seconds, reproducible):
+
+```bash
+git clone --depth 1 https://github.com/rapid7/recog /tmp/recog
+go run ./internal/ai/aitrain -recog /tmp/recog
+```
+
+Commit `internal/ai/model/weights.bin` and `EVALUATION.md` with your change.
+How the model is trained and judged is in [docs/AI.md](docs/AI.md).
+
+### Other good first issues
+
+Issues labelled
+[`good first issue`](https://github.com/NycolazSec/tcpcat/labels/good%20first%20issue)
+are scoped for a first pull request, and
+[`help wanted`](https://github.com/NycolazSec/tcpcat/labels/help%20wanted)
+ones are larger. Ask in
+[Discussions](https://github.com/NycolazSec/tcpcat/discussions) if you are
+unsure where to start: a question is a contribution too.
+
 ## Development setup
 
 Requirements:

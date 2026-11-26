@@ -37,3 +37,37 @@ func BenchmarkParsePortsLargeRange(b *testing.B) {
 		}
 	}
 }
+
+func TestOpenEndedRanges(t *testing.T) {
+	for spec, want := range map[string][2]int{"-": {1, 65535}, "60000-": {60000, 65535}, "-1024": {1, 1024}} {
+		got, err := ParsePorts(spec, 0)
+		if err != nil {
+			t.Fatalf("%q: %v", spec, err)
+		}
+		if got[0] != want[0] || got[len(got)-1] != want[1] || len(got) != want[1]-want[0]+1 {
+			t.Errorf("%q: %d..%d (%d ports)", spec, got[0], got[len(got)-1], len(got))
+		}
+	}
+}
+
+func TestTopPortsIsARealThousand(t *testing.T) {
+	if n := len(TopPortsList); n < 1000 {
+		t.Fatalf("TopPortsList has %d ports", n)
+	}
+	got := GetTopPorts(1000)
+	seen := map[int]bool{}
+	for _, p := range got {
+		if seen[p] || p < 1 || p > 65535 {
+			t.Fatalf("duplicate or invalid port %d", p)
+		}
+		seen[p] = true
+	}
+	if len(got) != 1000 {
+		t.Fatalf("--top-ports 1000 gave %d ports", len(got))
+	}
+	for _, p := range []int{22, 80, 443, 3306, 6379, 6443, 10250, 25565} {
+		if !seen[p] {
+			t.Errorf("port %d missing from the top 1000", p)
+		}
+	}
+}

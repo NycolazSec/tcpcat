@@ -231,7 +231,7 @@ func (s *server) handleScan(w http.ResponseWriter, r *http.Request) {
 		request.Workers = 64
 	}
 	if request.RateLimit == 0 {
-		request.RateLimit = 500
+		request.RateLimit = 1000
 	}
 	if request.Workers < 1 || request.Workers > 4096 {
 		writeError(w, http.StatusBadRequest, "workers must be between 1 and 4096")

@@ -42,6 +42,32 @@ func decoyCount(opts *config.Options) int {
 	return len(decoys)
 }
 
+// adaptsProbeWindow reports whether a scan sizes its in-flight probes with a
+// probeWindow (see probe_window.go) instead of a fixed worker count: only
+// when -w was not given, and only on paths whose probes share one socket
+// (raw TCP, AF_XDP). A connect or kernel UDP scan opens a socket per probe,
+// so its concurrency stays at the CPU-based default, and so does an idle
+// scan, which is paced by its zombie.
+func adaptsProbeWindow(opts *config.Options, targets []string) bool {
+	if !opts.WorkersAuto || opts.ZombieHost != "" || opts.UdpScan || opts.ConnectScan {
+		return false
+	}
+	if opts.SynScan || opts.AckScan || opts.WindowScan || opts.NullScan || opts.FinScan || opts.XmasScan {
+		return true
+	}
+	if GlobalXsk == nil {
+		return false
+	}
+	// AF_XDP without a raw scan flag: a target that is not XDP-eligible
+	// (loopback) would fall through to a connect scan.
+	for _, ip := range targets {
+		if !xdpEligible(ip, opts) {
+			return false
+		}
+	}
+	return true
+}
+
 type ScanJob struct {
 	IP   string
 	Port int
@@ -120,6 +146,19 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	workerCount := e.opts.MaxWorkers
 	if workerCount < 1 {
 		workerCount = 1
+	}
+	// Without -w, raw scans start at the CPU-based worker count and let a
+	// congestion window decide how many probes are in flight: enough workers
+	// are started for the largest window, and each takes a slot before it
+	// probes. With -w, the count is fixed as before.
+	var window *probeWindow
+	if adaptsProbeWindow(e.opts, targets) && workerCount < maxProbeWindow {
+		ratePPS := 0
+		if e.limiter != nil {
+			ratePPS = int(e.limiter.maxPPS)
+		}
+		window = newProbeWindow(workerCount, maxProbeWindow, ratePPS, e.rtt)
+		workerCount = maxProbeWindow
 	}
 	queueSize := workerCount * 2
 	jobs := make(chan ScanJob, queueSize)
@@ -201,6 +240,10 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 					resultsChan <- TargetResult{IP: job.IP, Port: job.Port, State: StateFiltered, Reason: "OT circuit breaker: scan aborted (target health degraded)"}
 					continue
 				}
+				if window != nil {
+					window.acquire()
+				}
+				held := time.Now()
 				res := func() (r TargetResult) {
 					defer func() {
 						if p := recover(); p != nil {
@@ -209,6 +252,9 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 					}()
 					return e.dispatchScan(job.IP, job.Port, e.opts)
 				}()
+				if window != nil {
+					window.release(res.Attempts, res.Latency, time.Since(held))
+				}
 				lost := res.State == StateFiltered || res.State == StateOpenFiltered
 				if !lost && res.Latency > 0 {
 					e.rtt.Sample(res.Latency)
@@ -315,6 +361,10 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	if adaptive && limiter != nil && !e.opts.Quiet {
 		fmt.Printf("%s[*] Adaptive timing: final rate %d pps, SRTT %v%s\n",
 			config.White, limiter.CurrentRate(), e.rtt.SRTT(), config.Reset)
+	}
+
+	if window != nil && !e.opts.Quiet {
+		printProbeWindowSummary(window.stats())
 	}
 
 	if e.otGuard != nil {

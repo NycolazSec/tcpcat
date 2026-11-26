@@ -10,6 +10,205 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Changed
+- A stronger banner model for tcpcat's AI. It is a logistic regression over
+  the banner (n-grams, words, first characters, shape) with a calibrated
+  port table, in place of naive Bayes. It is trained on 9,878 banners
+  instead of 2,043: Recog's examples, banners generated from Recog's
+  patterns, MySQL error packets and binary noise. Training covers two more
+  network conditions: rebranded banners, and servers that keep talking
+  after the banner. On the same held-out banners:
+  - non-standard port: 95.7 % right instead of 87.2 %;
+  - truncated, noisy and on a non-standard port: 91.1 % instead of 79.9 %;
+  - exact product on a non-standard port: 92.9 % instead of 79.4 %.
+
+  It stays at 100 % on standard ports and takes 375 KB.
+  `go run ./internal/ai/aitrain -sweep` tunes the training on the
+  calibration split, never on the test split.
+- With `--ai-lang fr`, everything the AI quotes from the scanner is in
+  French: the port's reason ("SYN-ACK reçu") and the probes' SSH, TLS and SMB
+  warnings. The help of `tcpcat ai`, its error messages, the service names
+  in `ai identify` and `tcpcat ai model` are in French too.
+- `tcpcat ai model` shows the model's scores per network condition.
+- `tcpcat ai identify` adds up its guesses by kind of service when it is
+  unsure of the product. When it cannot decide, it says so ("FTP or SMTP?")
+  instead of saying the dictionary does not know the service. The analysis
+  uses the same sums: a banner that is surely FTP but of an unknown product
+  is FTP.
+
+### Added
+- The AI tells how the scan went and what blocks it. Host by host, it
+  separates ports closed by the machine (RST), dropped silently, refused by
+  ICMP, and open but silent, and names the filtering: an allow-list
+  firewall, no firewall, forgotten opening rules, a rejecting firewall, or a
+  timeout too short for the latency. With `--ai-deep` it then checks this
+  on the network, read-only:
+  - whether the scanner was blocked during the scan;
+  - whether the block lifts after 15 s (a rate limit) or not (a ban);
+  - whether a host where everything was filtered answers one slow
+    connection;
+  - how long a silent service takes to send its banner. A banner that comes
+    late is used to identify the service.
+- A spinner while the AI works (`--ai`, `--ai-deep`, `ai explain --deep`):
+  a twinkling star, what it is doing and for how long. It is drawn only on a
+  terminal, and not at all for work that finishes at once.
+- The AI says when the scan cannot be trusted, before its findings:
+  - every port filtered: the machine is off or ignores the scanner. This is
+    no longer reported as "no sensitive port reachable";
+  - every open port silent: something on the path may be answering for the
+    machine;
+  - a scan run from a Kubernetes node: cluster ports may be open to that node
+    only, so they are "to be confirmed" rather than critical.
+
+### Fixed
+- A flaw of OpenSSH's client titled "In ssh in OpenSSH ..." was counted
+  against the server and listed among its most serious flaws. Client-only
+  flaws are now recognized with or without the leading "In".
+- The thorough analysis said nothing when a follow-up probe got no answer.
+  It now reports "could not be verified".
+- A port where service detection got nothing back was judged on its number
+  as if confirmed. It is now marked "to be confirmed", with that evidence.
+- The machine profile could read "Serving websites." without a subject. It
+  now reads "a machine serving websites".
+
+## [1.9.0] - 2026-11-26
+
+### Added
+- tcpcat's AI. It runs offline, inside the binary, and says what to fix, why
+  and how, in English or French. Every statement comes with its evidence.
+  Use it with `--ai` on a scan, or with
+  `tcpcat ai explain|policy|identify|model`. It is made of three parts:
+  - a dictionary of about a hundred services
+    (`internal/ai/kb/services.yaml`);
+  - a banner model trained on Rapid7 Recog under seven simulated network
+    conditions: on a non-standard port it names the right kind of service in
+    91 % of cases, against 20 % for port conventions;
+  - reasoning that weighs CVEs, sets aside client-only OpenSSH flaws and
+    spots replies from a middlebox.
+
+  See docs/AI.md.
+- `-p-` (and `-p 1-`, `-p -1024`) for open-ended port ranges, as in Nmap.
+- Minecraft servers are recognised with the server-list status ping, which
+  is read-only and reports the version and player count.
+- A thorough analysis mode for tcpcat's AI: `--ai-deep` on a scan, or
+  `tcpcat ai explain --deep`. It verifies its own hypotheses with read-only
+  follow-up probes, and never sends a credential:
+  - SSH login methods and weak algorithms;
+  - whether the kubelet, the Kubernetes API, the Docker API, Elasticsearch
+    and Redis answer anonymous clients;
+  - whether an alternate web port is Pterodactyl Wings;
+  - whether port 80 redirects to HTTPS;
+  - certificate problems.
+
+  It then works out what the machine is, says what is fine, and ends with a
+  plan ordered by severity, with the exact setting to change.
+
+### Changed
+- tcpcat now says what it is for: know what your servers expose (see,
+  decide, prove). The README, the `--help` banner, the package descriptions
+  and CITATION.cff were rewritten around it.
+- The default `--rate` is 1000 packets/s (it was 500).
+- `tcpcat -h` prints a short help, ordered by what tcpcat is for (see,
+  decide, prove). `--help-all` prints every option.
+- Subcommands (`ai`, `policy`, `explain`, ...) no longer print the ASCII
+  banner before their report.
+
+### Deprecated
+- The IDS/IPS evasion and packet-debugging options print a warning and will
+  be removed in 2.0: `--evasion`, `--jitter`, `--ttl-jitter`, `--ttl-mode`,
+  `--probe-ttl`, `--window-size`, `--source-port-mode`, `--frag`, `--decoy`,
+  `--smart-bypass`, `--relay-server`, `-sI`, and the `--deep-inspect`
+  family. They do not help check your own exposure.
+  `--decoy auto` spoofs public DNS resolvers' addresses. See
+  docs/IDS_VISIBILITY.md.
+
+### Removed
+- `-oS` (export in "leetspeak").
+- The internal phase reports, test scripts and roadmap that were in
+  `docs/`. Some of them still quoted speed figures that had been withdrawn.
+  Git history keeps them.
+
+### Fixed
+- `--top-ports 1000` scanned only 59 ports. The list was rebuilt and now
+  holds 1,361 ports, in this order: the ports most often open, every port
+  the AI dictionary can judge, common service ports, then 1 to 1024. It is
+  tcpcat's own list, not copied from another scanner.
+- Hosts that silently drop most ports are no longer scanned at about 170
+  probes/s whatever `--rate` said. Each silent probe holds its slot for
+  every retry, so the probe window now grows on silence, up to what
+  `--rate` needs. It only does so while no congestion is visible, and
+  `--rate` stays the ceiling.
+- Service detection asks silent ports over HTTP, then over TLS when the
+  server says it speaks TLS. This catches a web server on an unusual port
+  (an Apache on 8090 used to show as `unknown`) and TLS APIs on any port.
+- The Kubernetes API is recognised from its JSON `Status` answer
+  (`kubernetes-api`).
+- tcpcat's AI treats "HTTP" as a transport. HTTPS on 10250 is judged as the
+  kubelet and HTTP on 2375 as the Docker API, not as a public website. A
+  website on a port other than 80/443 is flagged for review.
+
+## [1.8.1] - 2026-11-23
+
+### Fixed
+- Homebrew: the release now updates `Formula/tcpcat.rb` in the tap. v1.8.0
+  wrote its formula to the tap's root, which Homebrew ignores, so
+  `brew install nycolazsec/tap/tcpcat` kept installing 1.7.0.
+- CVE lookups no longer report vulnerabilities that were fixed before the
+  detected version. A lookup by name returns every ecosystem's view of a CVE,
+  and tcpcat matched the version against all of them: an Ubuntu release that
+  never shipped a fix, or another package listed in the same record, made
+  every version "affected" (OpenSSH 10.0p2 was flagged with CVE-2023-38408,
+  fixed in 9.3p2). Upstream versions are now compared with the release that
+  fixed the CVE, and only the scanned package's own entries count.
+- On Debian, the distro's own answer is used: a banner such as
+  `OpenSSH_10.0p2 Debian-7+deb13u4` is matched against Debian's records for
+  that release (the lookup used to send the whole banner as the version and
+  silently fell back to the upstream match), so backported fixes are no
+  longer reported, nor issues Debian rates `unimportant` for its build.
+- OSV `last_affected` range events are honoured.
+
+## [1.8.0] - 2026-11-22
+
+### Added
+- Homebrew: `brew install nycolazsec/tap/tcpcat` on macOS and Linux. Each
+  release publishes the formula to
+  [NycolazSec/homebrew-tap](https://github.com/NycolazSec/homebrew-tap).
+- Benchmark results across a real network (two servers 11 ms apart, through
+  a WireGuard tunnel) in `docs/BENCHMARK_RESULTS.md`, and how to run the
+  benchmark through a tunnel interface in `benchmarks/README.md`.
+
+### Changed
+- Raw scans (`-sS`, `-sA`, `-sW`, `-sN`, `-sF`, `-sX`, and AF_XDP) adapt how
+  many probes are in flight when `-w` is not given. Each worker waits for its
+  probe's reply, so throughput is about workers ÷ round trip: the old fixed
+  default (CPU cores × 32) capped a scan across a real network well below
+  `--rate` (128 workers at 11 ms is about 11,700 probes/s). The count now
+  starts at that default and moves like a TCP congestion window: it grows
+  while probes are answered on their first attempt, up to twice what `--rate`
+  needs in flight (rate × round trip) and at most 4,096; it stops growing
+  while the round trip is above twice the fastest one seen, the sign of a
+  queue building before it overflows; and it drops to 70% when a reply only
+  came after a retransmission, the congestion signal Nmap uses. A port that
+  never answers (a firewall) does not slow the scan, and the window never
+  goes below the old default. `-w` still fixes the count, and connect, UDP
+  and idle scans and the `safe-production` and `ot` profiles are unchanged.
+  A scan says how the window moved, and warns when 1% or more of the replies
+  needed a retransmission. Across a real network this took a full-range
+  scan of two hosts from 11.95 s to 5.38 s at 25,000 pps and from 12.07 s
+  to 3.75 s at 100,000 pps (Nmap: 13.4 s), every run finding every open
+  port; on a LAN it is unchanged.
+- Kali packaging metadata (`debian/`) and the BlackArch PKGBUILD follow
+  v1.7.0.
+
+### Fixed
+- `benchmarks/lab/report.py` quotes speed ratios against tcpcat's raw-socket
+  engine when the AF_XDP engine was not run, instead of reporting that it had
+  no valid run.
+
+### Removed
+- `docs/COMPETITIVE_ANALYSIS.md` and `docs/COMPETITOR_MATRIX.md`, which still
+  quoted the withdrawn speed figures.
+
 ## [1.7.0] - 2026-11-17
 
 ### Added
@@ -952,7 +1151,10 @@ Full diffs for every release are available via GitHub's
   visibility-testing controls, and a WASM-based scripting engine for custom
   detectors and exploit modules.
 
-[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/NycolazSec/tcpcat/compare/v1.8.1...v1.9.0
+[1.8.1]: https://github.com/NycolazSec/tcpcat/compare/v1.8.0...v1.8.1
+[1.8.0]: https://github.com/NycolazSec/tcpcat/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/NycolazSec/tcpcat/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/NycolazSec/tcpcat/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/NycolazSec/tcpcat/compare/v1.4.4...v1.5.0

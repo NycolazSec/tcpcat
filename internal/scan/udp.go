@@ -95,6 +95,7 @@ func ScanUDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 				Latency:   duration,
 				LatencyMs: float64(duration.Microseconds()) / 1000.0,
 				Reason:    reason,
+				Attempts:  attempt + 1,
 			}
 			if probe.Name != "" && (probe.Match == nil || probe.Match(resp)) {
 				result.Service = probe.Name

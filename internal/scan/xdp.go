@@ -1076,6 +1076,7 @@ func ScanXDPPort(ip string, port int, opts *config.Options, timeout time.Duratio
 			return TargetResult{
 				IP: ip, Port: port, State: state, Reason: reason, MPTCP: resp.mptcp,
 				OS: osName, OSConfidence: resp.osConfidence, Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
+				Attempts: attempt + 1,
 			}
 		case <-time.After(attemptTimeout):
 			lastLatency = time.Since(t0)
@@ -1210,6 +1211,7 @@ func ScanXDPUDPPort(ip string, port int, opts *config.Options, timeout time.Dura
 			return TargetResult{
 				IP: ip, Port: port, State: state, Reason: reason,
 				Latency: latency, LatencyMs: float64(latency.Microseconds()) / 1000.0,
+				Attempts: attempt + 1,
 			}
 		case <-time.After(attemptTimeout):
 			lastLatency = time.Since(t0)

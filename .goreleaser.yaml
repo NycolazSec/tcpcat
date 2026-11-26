@@ -113,8 +113,12 @@ brews:
       owner: NycolazSec
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    # The tap keeps its formulae in Formula/, and Homebrew reads only that
+    # directory when it exists: without this, the formula lands at the
+    # repository root and `brew install` keeps the previous version.
+    directory: Formula
     homepage: "https://tcpcat.io"
-    description: "Network scanner with an AF_XDP engine, service detection and CVE lookup"
+    description: "Checks what your servers expose, explains it with an offline AI, proves fixes"
     license: "AGPL-3.0-only"
     commit_author:
       name: NycolazSec
@@ -131,7 +135,7 @@ brews:
 # aurs:
 #   - name: tcpcat-bin
 #     homepage: "https://tcpcat.io"
-#     description: "Network scanner with an AF_XDP engine, service detection and CVE lookup"
+#     description: "Checks what your servers expose, explains it with an offline AI, proves fixes"
 #     maintainers:
 #       - "NycolazSec <support@tcpcat.io>"
 #     license: "AGPL-3.0-only"

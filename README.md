@@ -1,4 +1,4 @@
-# tcpcat — a fast network scanner in Go, with an eBPF/AF_XDP engine
+# tcpcat — know what your servers expose
 
 <div align="center">
 
@@ -7,10 +7,12 @@
   <img src="docs/assets/brand/tcpcat-logo.png" alt="tcpcat" width="300">
 </picture>
 
-*eBPF/AF_XDP kernel-space I/O · service & OS detection · CVE correlation · WASM detection scripting*
+*See what is reachable · decide what should be · prove it is fixed*
 
 [![CI](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml/badge.svg)](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14561/badge)](https://www.bestpractices.dev/projects/14561)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/NycolazSec/tcpcat/badge)](https://scorecard.dev/viewer/?uri=github.com/NycolazSec/tcpcat)
+[![Go Reference](https://pkg.go.dev/badge/github.com/NycolazSec/tcpcat.svg)](https://pkg.go.dev/github.com/NycolazSec/tcpcat)
 [![License: AGPL-3.0 or Commercial](https://img.shields.io/badge/License-AGPL--3.0%20or%20Commercial-blue.svg)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/releases)
 [![WASM dissector hub](https://img.shields.io/badge/WASM%20dissectors-hub-3ddc84?logo=webassembly&logoColor=white)](https://github.com/NycolazSec/tcpcat-scripts)
@@ -19,9 +21,29 @@
 [![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/NycolazSec/badge.svg)](https://hub.xerj.org/contributors/NycolazSec)
 </div>
 
-Fast network scanner in Go with an eBPF/AF_XDP engine, service and OS
-detection, CVE correlation, and JSON/SARIF reports. Built for **authorized**
-security assessments.
+**tcpcat looks at your servers from the outside, the way an attacker would. It
+tells you which open ports and services are dangerous, and it proves when they
+are fixed.** It is one open-source binary, for the hosts and networks you are
+responsible for.
+
+### Why scan your own servers?
+
+Docker, Kubernetes, a cloud security group or a package installed in a hurry
+can open a port without telling you. Your configuration says what *should* be
+reachable; only a look from the outside says what *is*. tcpcat takes that look,
+then tells you what to do about it.
+
+### What it does, in three steps
+
+| Step | What you get | Command |
+|---|---|---|
+| **1. See** | The open ports, the service and version behind each one, and the vulnerabilities that really apply to it. For Debian and Ubuntu packages, they are checked against the distribution's own patches, not just the version number. | `tcpcat -sV --exploit-intel <host>` |
+| **2. Decide** | You write down what should be reachable, and from where, in a short YAML file. tcpcat checks reality against it and fails your CI on the first gap. | `tcpcat policy check exposure.yaml --from internet` |
+| **3. Prove** | A signed record of every finding, a replay that confirms each fix, and an alert when a new port or CVE appears. | `--evidence`, `tcpcat replay`, `--baseline` |
+
+**Who it is for:** system administrators, DevOps and hosting teams, and small
+companies without a security team. Penetration testers can use it too, with
+written authorization.
 
 <div align="center">
 
@@ -37,7 +59,7 @@ security assessments.
 # Install (Go 1.26+)
 go install github.com/NycolazSec/tcpcat/cmd/tcpcat@latest
 
-# Scan an authorized host with service + version detection
+# 1. See: what does this host expose, and is any of it dangerous?
 sudo tcpcat -sV -p 22,80,443 scanme.nmap.org
 ```
 
@@ -84,8 +106,38 @@ Binaries and packages are on the
     ... (trimmed)
 ```
 
-Add `-j report.json` for a full JSON report or `--sarif report.sarif` for
-SARIF 2.1.0 output.
+Add `-j report.json` for a full JSON report, `--sarif report.sarif` for
+SARIF 2.1.0 output, or `-oH report.html` for a report you can send to someone.
+
+Then turn what you saw into a rule, and keep proof of it:
+
+```bash
+# 2. Decide: what should the internet be able to reach?
+cat > exposure.yaml <<'EOF'
+version: 1
+name: public exposure of web-01
+zones:
+  web: [203.0.113.10]
+rules:
+  - name: only SSH and the website are public
+    from: internet
+    to: web
+    ports: "1-1024"
+    allow: [22/tcp, 80/tcp, 443/tcp]   # anything else reachable is a violation
+    require: [443]                     # must stay reachable
+EOF
+tcpcat policy check exposure.yaml --from internet   # exits 1 on any gap, so it can gate CI
+
+# 3. Prove: record what was open, then check it again after the fix
+sudo tcpcat -sV -p 22,80,443 --evidence audit.json 203.0.113.10
+tcpcat replay audit.json                            # FIXED or STILL OPEN for each finding
+```
+
+Each step has its own section below:
+[segmentation testing as code](#segmentation-testing-as-code),
+[verifiable evidence](#verifiable-evidence-and-fix-verification---evidence-tcpcat-replay),
+[continuous monitoring](#continuous-monitoring-with-alerts) and
+[who is behind each open port](#explaining-exposure-who-is-behind-each-open-port-tcpcat-inventory--tcpcat-explain).
 
 > Only scan hosts and networks you own or have explicit written permission to
 > test. `scanme.nmap.org` is a public host Nmap provides for scan testing. See
@@ -98,7 +150,7 @@ scripts, AWS discovery — are in [examples/](examples/).
 
 ## Overview
 
-**tcpcat** is a next-generation network reconnaissance engine built in Go, engineered for high-throughput, authorized network assessment. It provides configurable packet and timing behavior for evaluating IDS/IPS monitoring visibility across multiple OSI layers.
+**tcpcat** checks what the servers and networks you are responsible for expose. Under the hood it is a complete network scanner written in Go: SYN, connect and UDP scans, service, version and OS detection, and an eBPF/AF_XDP engine. The scan is only the first step, though. tcpcat also ties each open port to the program behind it, checks it against the exposure you declared, and keeps signed evidence that you can replay after a fix.
 
 ### Project Status
 
@@ -106,26 +158,33 @@ tcpcat is a dual-licensed project (AGPL-3.0 or commercial) maintained by Nicolas
 
 ### Core Capabilities
 
-**L2-L7 Reconnaissance**
-- Multi-protocol port enumeration (TCP, UDP, ICMP)
-- L3/L4 service topology mapping with version fingerprinting
-- L7 vulnerability intelligence integration
+**1. See: what is reachable**
+- Port scanning: TCP SYN, connect, ACK, Window, FIN, NULL and Xmas, UDP and ICMP, plus host discovery
+- Service, version and operating-system detection
+- Vulnerability correlation (OSV, Vulners, offline database). Debian and Ubuntu packages are checked against the distribution's own fixes, and `--exploit-intel` adds CISA KEV and EPSS to show what is exploited for real
+- The program behind each port: process, systemd unit, Docker container or Kubernetes pod (`tcpcat inventory` + `tcpcat explain`)
 - Asynchronous DNS/mDNS/NetBIOS service discovery
 
-**Advanced Assessment Controls** (Phase 4 - 29 Techniques)
-- **Timing Variation**: Configurable jitter (0.0-1.0 variance coefficient)
-- **Fragmentation Controls**: IPv4 datagram fragmentation for monitoring validation
-- **Decoy Traffic**: Configurable source patterns for authorized visibility testing
-- **Protocol Controls**: TCP/UDP window tuning and source-port selection
-- **Traffic Modeling**: Configurable traffic-pattern behavior for assessment scenarios
+**2. Decide: what should be reachable**
+- Exposure and segmentation rules in YAML, checked from each vantage point (`tcpcat policy check`), with exit codes and SARIF for CI
+- Fixes to review: the nftables rule, systemd drop-in or NetworkPolicy that closes an exposure (`--remediate`). tcpcat applies nothing itself
 
-**Programmable Intelligence**
+**3. Prove: that it is fixed, and stays fixed**
+- Evidence bundles signed with Ed25519, and `tcpcat replay` to confirm each fix
+- Scheduled runs that compare with the previous one (`--baseline`) and alert on change (`--notify-webhook`)
+- JSON, SARIF and HTML reports
+
+**Under the hood**
+- eBPF/AF_XDP engine for high-throughput scans on Linux
 - WebAssembly (WASM) detection engine with sandboxed execution
 - Custom protocol dissectors in TinyGo, Rust, C, or Zig: a dissector can only
   talk to the port being scanned, through one host function. Start from the
   30-line template in [examples/wasm-dissector](examples/wasm-dissector)
   ([SDK and ABI](docs/WASM_SDK.md))
-- Concurrent detection rules without memory overhead
+
+**Deprecated: IDS/IPS visibility testing.** The packet-variation, fragmentation
+and decoy options do not help you check your own exposure. They still work, print
+a warning, and will be removed in 2.0. See [docs/IDS_VISIBILITY.md](docs/IDS_VISIBILITY.md).
 
 ---
 
@@ -143,6 +202,9 @@ be honest about where the others are strong, not a scoreboard.
 | CVE correlation built in | ✅ OSV/Vulners/offline | ↪ vulners NSE | ❌ | ❌ | ❌ |
 | Custom detection scripts | ✅ **sandboxed WASM** | ✅ Lua (NSE) | ❌ | ❌ | ❌ |
 | SARIF output (CI/DevSecOps) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Exposure rules checked from each vantage | ✅ `policy check` | ❌ | ❌ | ❌ | ❌ |
+| Program/container/pod behind each port | ✅ `inventory` + `explain` | ❌ | ❌ | ❌ | ❌ |
+| Signed evidence + replay after a fix | ✅ `--evidence` + `replay` | ❌ | ❌ | ❌ | ❌ |
 | Signed releases + SBOM | ✅ cosign + CycloneDX | — | — | — | — |
 | License | AGPL-3.0 / commercial | NPSL | GPL/MIT | MIT | AGPL-3.0 |
 
@@ -155,7 +217,10 @@ using a fraction of the CPU of a raw-socket SYN scan; its advantage grows on a
 real NIC in native/zero-copy mode. **We publish only numbers you can reproduce
 with one command** — see [benchmarks/](benchmarks/).
 
-**What's genuinely unique:** writing detection logic in **sandboxed
+**What's genuinely unique** is what comes after the scan: checking exposure
+against rules you wrote, from several vantage points; naming the program,
+container or pod behind each port; and keeping signed evidence that you can
+replay to prove a fix. Detection logic can also be written in **sandboxed
 WebAssembly** (Rust/Zig/TinyGo/C) that can only talk to the port being scanned.
 See [docs/WASM_SDK.md](docs/WASM_SDK.md).
 
@@ -164,15 +229,7 @@ See [docs/WASM_SDK.md](docs/WASM_SDK.md).
 ## Architecture
 
 ### Kernel-Space Operations (eBPF/AF_XDP)
-Direct packet I/O at the network driver level, bypassing the socket layer entirely. Achieves wire-speed performance (~1M pps per core) with minimal CPU overhead.
-
-### Modular Evasion Pipeline
-```
-Network Layer    → Fragmentation Orchestrator
-Transport Layer  → TCP/UDP Fingerprint Randomization
-Session Layer    → Timing Jitter & Behavioral Spoofing  
-Application Layer → Decoy Swarm Coordination
-```
+With `--ebpf`, an XDP hook redirects replies into AF_XDP sockets, which skips most of the per-packet kernel work. The gain needs a network card with zero-copy support; in copy mode (virtual interfaces) tcpcat uses its raw-socket engine instead, which is as fast there. See [Performance](#performance).
 
 ### Detection Integration
 Real-time CVE correlation across multiple intelligence feeds (Vulners API, Google OSV, offline database).
@@ -237,28 +294,6 @@ sudo tcpcat -sS --top-ports 1000 --rate 100000 target.domain
 ### Service Enumeration with Fingerprinting
 ```bash
 sudo tcpcat -sV -p 22,80,443,3306,5432,27017 192.168.0.0/24 -j results.json
-```
-
-### IDS/IPS Visibility Validation (Authorized Audits Only)
-```bash
-# Conservative timing variation for an approved assessment
-sudo tcpcat -Pn -sT -p 1-65535 \
-  --evasion light \
-  --jitter 0.3 \
-  --rate 5000 \
-  target
-
-# Validate how approved monitoring controls record fragmented and decoy traffic.
-# These controls do not guarantee detection avoidance or IDS/IPS bypass.
-sudo tcpcat -Pn -sT -p 1-10000 \
-  --evasion aggressive \
-  --jitter 0.8 \
-  --frag \
-  --ttl-mode random \
-  --window-size 512 \
-  --source-port-mode random \
-  --decoy 8.8.8.8,1.1.1.1 \
-  target
 ```
 
 ### Ultra-Fast Enumeration (eBPF Mode)
@@ -342,6 +377,42 @@ sudo tcpcat \
 ```
 
 The baseline must be a non-empty JSON report created by tcpcat. A new, empty file cannot be used as a baseline.
+
+### Plain-language verdicts with tcpcat's AI (`--ai`)
+
+tcpcat has its own AI, which runs offline inside the binary. It reads a scan
+and says what to fix, why, and how, in English or French. Every statement
+comes with the evidence it rests on: the banner, the probe, the CVE, or "port
+number only".
+
+```bash
+tcpcat -sT -sV --ai --ai-lang fr 203.0.113.10
+# [MOYEN] 203.0.113.10:22  OpenSSH est joignable depuis Internet : limitez qui peut l'atteindre
+#    pourquoi SSH sur Internet est acceptable s'il est bien configuré, mais des robots y essaient...
+#    action   N'autorisez le port 22 que depuis des adresses de confiance (liste blanche du pare-feu)...
+#    preuves  bannière : SSH-2.0-OpenSSH_10.0p2 Debian-7+deb13u4 · 3 autres failles connues ne
+#             concernent que les programmes clients (ssh, scp, sftp), pas ce serveur · ...
+# [INFO] 203.0.113.10:21  Port 21 : la réponse vient probablement de votre propre réseau, pas de cette machine
+#    preuves  ce port a répondu en 7 ms, les autres ports de la machine en 97 ms environ
+# [ok] 203.0.113.10:25565  Serveur Minecraft est public, c'est normal
+
+tcpcat -sT -sV --ai-deep 203.0.113.10   # take the time: verify, profile the machine, plan the fixes
+tcpcat ai explain scan.json             # judge a saved scan (exits 1 if something must be fixed)
+tcpcat ai policy scan.json              # draft exposure.yaml for `tcpcat policy check`
+tcpcat ai identify "-NOAUTH Authentication required." --port 6390   # -> Redis, never public
+```
+
+The AI combines three things:
+- a dictionary of about a hundred services: what each is, whether it belongs
+  on the internet, why exposing it is dangerous and how to stop it;
+- a small banner model, trained on nearly 10,000 banners under nine
+  simulated network conditions (truncated banners, noise, rebranded banners,
+  non-standard ports...). It names the right kind of service in 96 % of
+  cases on a non-standard port, against 21 % for port conventions;
+- reasoning that weighs vulnerabilities, sets aside client-only CVEs and
+  spots answers from a middlebox.
+
+See [docs/AI.md](docs/AI.md).
 
 ### Continuous monitoring with alerts
 
@@ -494,7 +565,7 @@ pointed at an IPv6 target instead of silently misbehaving.
 
 ### Scan Techniques
 ```
--sS                   TCP SYN reconnaissance (stealth, partial 3-way)
+-sS                   TCP SYN scan (half-open; needs root)
 -sT                   TCP Connect() scan (full 3-way handshake)
 -sA                   TCP ACK scan (firewall state detection)
 -sW                   TCP Window scan (packet filtering inference)
@@ -506,8 +577,9 @@ pointed at an IPv6 target instead of silently misbehaving.
 
 ### Port Specification
 ```
--p <list>             Explicit ports (e.g., 80,443,1000-2000)
---top-ports <n>       First n IANA-ranked common ports
+-p <list>             Explicit ports (e.g., 80,443,1000-2000); -p- or -p 1- for all 65,535
+--top-ports <n>       First n of tcpcat's port list (up to 1,361): the ports most often open,
+                      every port the AI dictionary can judge, common service ports, then 1-1024
 --open                Filter results to established/open state only
 ```
 
@@ -520,6 +592,10 @@ pointed at an IPv6 target instead of silently misbehaving.
 --jarm                Active JARM TLS fingerprint on TLS ports (opt-in: 10 extra probes/target)
 --ot-probe            Read exact vendor/version from OT ports (Modbus...) via one read-only query (opt-in)
 --exploit-intel       Enrich correlated CVEs with CISA KEV + EPSS and prioritize by them (opt-in)
+--ai                  tcpcat's AI judges the results: what to fix, why, how (offline; see docs/AI.md)
+--ai-deep             Thorough AI analysis: read-only follow-up probes, machine profile, ordered plan
+--ai-lang <fr|en>     Language of the AI's answers (default: from $LANG)
+--ai-from <vantage>   internet or internal (default: internal when every target is private)
 --dual-stack          Also scan each target's DNS-published IPv6 address; flag ports open on IPv6 only
 ```
 On a `443`/`8443` port, `-sV` also runs an independent TLS/certificate
@@ -576,45 +652,20 @@ reachable from an untrusted network is itself worth flagging). These join the
 existing UDP probes (DNS, SNMP, NTP, SSDP, mDNS, SIP, IKE, QUIC, …) and OT
 control-port naming.
 
-### IDS/IPS Visibility Controls (Phase 4)
-```
---evasion <mode>          Coordinated packet-variation level for authorized testing:
-                          • off      — baseline traffic (0% overhead)
-                          • light    — limited variation (+5% latency)
-                          • moderate — standard variation (+15%)
-                          • aggressive — extensive variation (+30%)
-                          • stealthy  — high-variation testing profile (+50%)
-
---jitter <0.0-1.0>        Temporal variation coefficient
-                          (0.0=deterministic, 1.0=random intervals)
-
---frag                     Enable IPv4 fragmentation for monitoring validation
-
---ttl-mode <mode>         TTL mutation strategy:
-                          • fixed   — static TTL value
-                          • random  — per-packet randomization
-                          • probe   — adaptive per-target measurement
-
---probe-ttl <1-255>       Probe packet TTL (default: 64)
-
---window-size <0-65535>   TCP advertised window (0=auto-negotiate)
-                          Use only to evaluate flow-state inspection visibility
-
---source-port-mode        Ephemeral port allocation:
-                          • fixed   — static source port
-                          • random  — per-packet randomization
-
--g <port>                 Bind to specific source port
-
---decoy <ips>             Comma-separated decoy source IPs for an authorized assessment
-                          (requires raw socket privileges; no bypass is guaranteed)
-```
+### Deprecated: IDS/IPS visibility options
+`--evasion`, `--jitter`, `--frag`, `--ttl-mode`, `--probe-ttl`, `--window-size`,
+`--source-port-mode`, `--decoy`, `--smart-bypass`, `--relay-server`, `-sI`, and the
+`--deep-inspect` family still work, print a deprecation warning, and will be removed
+in tcpcat 2.0. See [docs/IDS_VISIBILITY.md](docs/IDS_VISIBILITY.md).
 
 ### Performance Tuning
 ```
 -T <0-5>               Timing template (0=paranoid, 5=insane)
--w <count>             Concurrent worker threads (default: 32)
---rate <pps>           Maximum probe rate (packets/sec), 0=unlimited
+-w <count>             Probes in flight at once. Default: CPU cores x 32, and on raw
+                       scans (-sS, -sA, ...) a congestion window that grows while the
+                       network answers cleanly and backs off on retransmissions.
+                       Giving -w fixes the count.
+--rate <pps>           Maximum probe rate (packets/sec, default 1000), 0=unlimited
 --adaptive-rate        Adjust send rate from observed RTT/loss (AIMD) instead of a fixed --rate
 --max-retries <n>      Resend a probe up to <n> times before marking it filtered (default 2)
 --no-randomize         Dispatch probes in target/port list order instead of a randomized permutation
@@ -628,7 +679,6 @@ control-port naming.
 -oH <file>              Export a self-contained HTML report (shareable; shows KEV/EPSS when enabled)
 -oG <file>              Export grepable output (one line per host)
 -oN <file>              Export a plain-text report
--oS <file>              Export leetspeak
 --sarif <file>          Export open-port and CVE findings as SARIF 2.1.0
 --audit-log <file>      Append one scan audit record per line (JSONL)
 --baseline <file>       Load a previous tcpcat JSON report for comparison
@@ -659,6 +709,10 @@ tcpcat evidence verify <bundle.json> [--pub <key.pub>]
 tcpcat replay <bundle.json> [--pub <key.pub>] [--finding <id>] [-j f] [--timeout ms]
 tcpcat inventory [-o inventory.json]
 tcpcat explain <inventory.json> [scan.json] [--expect 22,80,443,8000-8010] [--target ip] [--ports p] [-j f]
+tcpcat ai explain <scan.json> [--lang fr|en] [--from internet|internal] [-j f] [--policy f]
+tcpcat ai policy <scan.json> [-o exposure.yaml] [--lang fr|en]
+tcpcat ai identify "<banner>" [--port n]
+tcpcat ai model
 ```
 
 Exit status: `0` compliant / all fixed, `1` violation / still reproducing, `2` usage or configuration error.
@@ -713,19 +767,7 @@ Without `--vulners-apikey`, tcpcat uses its embedded offline vulnerability datab
 
 ---
 
-## IDS/IPS Visibility Testing
-
-Packet variation, fragmentation, and decoy traffic can help an authorized team assess how its monitoring controls record different scan patterns. Results depend on the network, endpoint protections, IDS/IPS configuration, and operator behavior. tcpcat does not guarantee reduced detection, bypass of controls, or access to a target.
-
-| Mode | Variation | Overhead | Recommended Use |
-|------|-----------|----------|-----------------|
-| **off** | Baseline traffic | 0% | Authorized inventory and fast reconnaissance |
-| **light** | Limited timing and packet variation | +5% | Approved production assessments |
-| **moderate** | Standard variation | +15% | Monitoring validation in controlled environments |
-| **aggressive** | Extensive variation | +30% | Lab validation with an approved test plan |
-| **stealthy** | High-variation profile | +50% | Controlled monitoring-validation scenarios |
-
-**Performance vs. Nmap and naabu (full port range):**
+## Performance
 
 A speed figure is only worth something next to the conditions it was measured
 in and proof that nothing was missed, so the benchmark is a script rather than
@@ -820,11 +862,38 @@ or a compliance certification.
 
 ## Contributing
 
-Bug reports and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
-for the development setup, coding guidelines, and pre-PR checklist, and
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations. Security
-vulnerabilities should be reported privately per [SECURITY.md](SECURITY.md),
-not as public issues. See [CHANGELOG.md](CHANGELOG.md) for release history.
+Bug reports and pull requests are welcome. The quickest way in is to teach
+tcpcat's AI a service you know: one entry in a YAML file, explained in
+[CONTRIBUTING.md](CONTRIBUTING.md#your-first-contribution-in-ten-minutes).
+Issues labelled
+[good first issue](https://github.com/NycolazSec/tcpcat/labels/good%20first%20issue)
+are scoped for a first pull request, and questions are welcome in
+[Discussions](https://github.com/NycolazSec/tcpcat/discussions).
+
+[CONTRIBUTING.md](CONTRIBUTING.md) also covers the development setup, coding
+guidelines and pre-PR checklist, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+the community expectations. Report security vulnerabilities privately, as
+[SECURITY.md](SECURITY.md) explains, not as public issues. Release history is
+in [CHANGELOG.md](CHANGELOG.md).
+
+### Contributors
+
+[![Contributors](https://contrib.rocks/image?repo=NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/graphs/contributors)
+
+### Built on
+
+tcpcat stands on the work of these projects:
+- [Rapid7 Recog](https://github.com/rapid7/recog) (BSD-2-Clause): the banner
+  examples and patterns the AI's model is trained on;
+- [cilium/ebpf](https://github.com/cilium/ebpf) and
+  [asavie/xdp](https://github.com/asavie/xdp): the eBPF and AF_XDP engine;
+- [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto): the SSH
+  posture and login-method checks;
+- [wazero](https://github.com/tetratelabs/wazero): the WebAssembly runtime of
+  the dissector modules;
+- [OSV](https://osv.dev), [Vulners](https://vulners.com),
+  [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
+  and [FIRST EPSS](https://www.first.org/epss/): vulnerability data.
 
 ---
 

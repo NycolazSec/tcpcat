@@ -29,6 +29,10 @@ import (
 // returns real DEBIAN-CVE-* entries for a matching version.
 var debianSuffixPattern = regexp.MustCompile(`\+deb(\d+)u\d+`)
 
+// debianRevisionPattern matches a whole Debian package revision carrying a
+// backport suffix, e.g. "7+deb13u4" in "OpenSSH_10.0p2 Debian-7+deb13u4".
+var debianRevisionPattern = regexp.MustCompile(`[0-9][0-9A-Za-z.~]*\+deb\d+u\d+`)
+
 // ubuntuSuffixPattern matches the "~ubuYYMM" convention some upstream
 // projects (MariaDB's own official builds, among others) use to tag an
 // Ubuntu-targeted release directly with its version, e.g. "~ubu2004" ->
@@ -120,6 +124,12 @@ func dpkgVersionFromBanner(upstreamVersion, banner string) string {
 	const marker = "-MariaDB-"
 	i := strings.Index(banner, marker)
 	if i == -1 {
+		// Other services state the package revision after the upstream
+		// version, e.g. OpenSSH's "SSH-2.0-OpenSSH_10.0p2 Debian-7+deb13u4":
+		// the dpkg version is "<upstream>-<revision>" ("10.0p2-7+deb13u4").
+		if m := debianRevisionPattern.FindString(banner); m != "" && upstreamVersion != "" {
+			return upstreamVersion + "-" + m
+		}
 		return banner
 	}
 	suffix := banner[i+len(marker):]

@@ -40,6 +40,10 @@ type TargetResult struct {
 	// Scripts holds what each WASM detection module (--scripts) reported for
 	// this port, keyed by module name.
 	Scripts map[string]map[string]string `json:"scripts,omitempty"`
+	// Attempts is the 1-based attempt whose reply settled the port, or 0
+	// when no reply came. The engine's probe window reads it: a reply that
+	// needed a retransmission is its congestion signal.
+	Attempts int `json:"-"`
 }
 
 // DualStackInfo marks an IPv6 result whose port is open on IPv6 but not on

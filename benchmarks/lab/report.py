@@ -126,7 +126,11 @@ lines += ["", "A run is **valid** only if it found every open port of the ground
           f"Packets dropped: the scanner interface's drop and error counters over the tool's runs, plus, for "
           f"tcpcat-ebpf, the replies its AF_XDP sockets report as dropped by the kernel. The loss rate is that "
           f"count over the probes sent ({probes_per_run} per run).", ""]
-base = next((r for r in valid if r["tool"] == "tcpcat-ebpf"), None)
+# Ratios are quoted against tcpcat: its AF_XDP engine when that ran and was
+# valid, else its raw-socket engine (a run without tcpcat-ebpf, such as one
+# over a tunnel interface, has no AF_XDP row at all).
+tcpcat_rows = [r for r in rows if r["tool"] in ("tcpcat-ebpf", "tcpcat-syn")]
+base = next((r for name in ("tcpcat-ebpf", "tcpcat-syn") for r in valid if r["tool"] == name), None)
 if base:
     for r in valid:
         if r is not base:
@@ -137,10 +141,11 @@ if base:
                 verdict = "on par with"
             else:
                 verdict = f"{ratio:.2f}× faster than" if ratio > 1 else f"{1 / ratio:.2f}× slower than"
-            lines.append(f"- tcpcat-ebpf is **{verdict}** {r['tool']} "
+            lines.append(f"- {base['tool']} is **{verdict}** {r['tool']} "
                          f"(CPU time {base['user'] + base['system']:.1f} s vs {r['user'] + r['system']:.1f} s)")
-elif rows:
-    lines.append("- tcpcat-ebpf did not produce a valid run here, so no speed ratio is reported.")
+elif tcpcat_rows:
+    names = " and ".join(r["tool"] for r in tcpcat_rows)
+    lines.append(f"- {names} did not produce a valid run here, so no speed ratio is reported.")
 # masscan 1.3.2 sometimes never exits after its scan (inside.sh stops it with
 # a watchdog); say so, rather than leave its invalid runs unexplained.
 hung = sum(1 for log in glob.glob(str(out / "logs" / "masscan.*.log"))
