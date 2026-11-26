@@ -44,8 +44,17 @@ const probeWindowGrowth = 1.0 / 64
 //     was lost or delayed past its timeout, the congestion signal Nmap also
 //     relies on. The window drops to 70%, at most once per round trip, so
 //     one burst of losses counts as one event;
-//   - a port that never answers says nothing: a firewall that drops probes is
-//     not congestion, so silence leaves the window alone.
+//   - a port that never answers is not a congestion signal either: a
+//     firewall that drops probes is not a full queue. But each silent probe
+//     holds its slot for every attempt's timeout, so on a host that drops
+//     most ports a window sized for replies starves the scan (128 slots
+//     held 750 ms each is about 170 probes/s, whatever --rate says). So
+//     while no congestion is visible (no cut in the last few round trips,
+//     no queueing delay), silence grows the window by one slot per silent
+//     probe, up to what --rate needs when every probe waits its full time
+//     (rate x the smoothed time a silent probe holds its slot). The --rate
+//     pacer stays the real ceiling: the window only stops being the
+//     bottleneck. Without a --rate ceiling, silence leaves the window alone.
 //
 // The window never shrinks below its starting size, which is what tcpcat
 // always used, so a lossy path is scanned no slower than before. It never
@@ -65,6 +74,9 @@ type probeWindow struct {
 	minRTT   time.Duration // fastest first-attempt reply seen; 0 until one
 	lastCut  time.Time
 	now      func() time.Time
+	// silentHold is the smoothed time a probe that got no reply held its
+	// slot (all attempts and their timeouts); 0 until one.
+	silentHold time.Duration
 
 	peak     float64
 	cuts     int
@@ -112,12 +124,14 @@ func (w *probeWindow) acquire() {
 
 // release returns a probe's slot. attempt is the 1-based attempt whose reply
 // settled the port, or 0 when no reply came at all (or the scan path does
-// not report it), which leaves the window as it is. latency is that reply's
-// round trip.
-func (w *probeWindow) release(attempt int, latency time.Duration) {
+// not report it). latency is that reply's round trip, held how long the
+// probe kept its slot.
+func (w *probeWindow) release(attempt int, latency, held time.Duration) {
 	w.mu.Lock()
 	w.inflight--
 	switch {
+	case attempt == 0:
+		w.growOnSilence(held)
 	case attempt == 1:
 		w.answered++
 		if latency > 0 && (w.minRTT == 0 || latency < w.minRTT) {
@@ -162,6 +176,33 @@ func (w *probeWindow) release(attempt int, latency time.Duration) {
 	}
 }
 
+// growOnSilence: see the type's comment. Called with mu held.
+func (w *probeWindow) growOnSilence(held time.Duration) {
+	if w.ratePPS <= 0 || held <= 0 {
+		return
+	}
+	if w.silentHold == 0 {
+		w.silentHold = held
+	} else {
+		w.silentHold += (held - w.silentHold) / 8
+	}
+	if w.queueing() || (!w.lastCut.IsZero() && w.now().Sub(w.lastCut) < 4*w.cutInterval()) {
+		return
+	}
+	lim := w.ratePPS * w.silentHold.Seconds()
+	if lim > w.ceil {
+		lim = w.ceil
+	}
+	if w.size+1 <= lim {
+		w.size++
+	} else if w.size < lim {
+		w.size = lim
+	}
+	if w.size > w.peak {
+		w.peak = w.size
+	}
+}
+
 // queueing reports whether replies are slowed by a queue on the path: the
 // smoothed round trip is more than twice the fastest seen, plus 2 ms so that
 // scheduling noise on a sub-millisecond LAN is not mistaken for one. Called
@@ -177,7 +218,13 @@ func (w *probeWindow) queueing() bool {
 func (w *probeWindow) limit() float64 {
 	lim := w.ceil
 	if w.ratePPS > 0 && w.rtt != nil && w.rtt.HasSamples() {
-		if need := 2 * w.ratePPS * float64(w.rtt.SRTT()) / float64(time.Second); need < lim {
+		need := 2 * w.ratePPS * float64(w.rtt.SRTT()) / float64(time.Second)
+		// Silent probes hold their slot far longer than a round trip: the
+		// rate needs that many in flight too (see growOnSilence).
+		if silent := w.ratePPS * w.silentHold.Seconds(); silent > need {
+			need = silent
+		}
+		if need < lim {
 			lim = need
 		}
 	}

@@ -604,8 +604,9 @@ pointed at an IPv6 target instead of silently misbehaving.
 
 ### Port Specification
 ```
--p <list>             Explicit ports (e.g., 80,443,1000-2000)
---top-ports <n>       First n IANA-ranked common ports
+-p <list>             Explicit ports (e.g., 80,443,1000-2000); -p- or -p 1- for all 65,535
+--top-ports <n>       First n of tcpcat's port list (up to 1,361): the ports most often open,
+                      every port the AI dictionary can judge, common service ports, then 1-1024
 --open                Filter results to established/open state only
 ```
 
@@ -718,7 +719,7 @@ control-port naming.
                        scans (-sS, -sA, ...) a congestion window that grows while the
                        network answers cleanly and backs off on retransmissions.
                        Giving -w fixes the count.
---rate <pps>           Maximum probe rate (packets/sec), 0=unlimited
+--rate <pps>           Maximum probe rate (packets/sec, default 1000), 0=unlimited
 --adaptive-rate        Adjust send rate from observed RTT/loss (AIMD) instead of a fixed --rate
 --max-retries <n>      Resend a probe up to <n> times before marking it filtered (default 2)
 --no-randomize         Dispatch probes in target/port list order instead of a randomized permutation

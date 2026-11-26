@@ -243,6 +243,7 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 				if window != nil {
 					window.acquire()
 				}
+				held := time.Now()
 				res := func() (r TargetResult) {
 					defer func() {
 						if p := recover(); p != nil {
@@ -252,7 +253,7 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 					return e.dispatchScan(job.IP, job.Port, e.opts)
 				}()
 				if window != nil {
-					window.release(res.Attempts, res.Latency)
+					window.release(res.Attempts, res.Latency, time.Since(held))
 				}
 				lost := res.State == StateFiltered || res.State == StateOpenFiltered
 				if !lost && res.Latency > 0 {

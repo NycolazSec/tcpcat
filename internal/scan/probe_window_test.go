@@ -30,7 +30,7 @@ func newTestWindow(start, ceil, rate int, srtt time.Duration) (*probeWindow, *fa
 // attempt that answered it and a round trip that shows no queueing.
 func cycle(w *probeWindow, attempt int) {
 	w.acquire()
-	w.release(attempt, 10*time.Millisecond)
+	w.release(attempt, 10*time.Millisecond, 10*time.Millisecond)
 }
 
 func TestProbeWindowSlowStartGrowsOnePerFirstAttemptReply(t *testing.T) {
@@ -43,7 +43,7 @@ func TestProbeWindowSlowStartGrowsOnePerFirstAttemptReply(t *testing.T) {
 	}
 }
 
-func TestProbeWindowSilenceLeavesItAlone(t *testing.T) {
+func TestProbeWindowSilenceWithoutRateCeilingLeavesItAlone(t *testing.T) {
 	w, _ := newTestWindow(100, 4096, 0, 10*time.Millisecond)
 	for i := 0; i < 500; i++ {
 		cycle(w, 0) // filtered port: no reply on any attempt
@@ -150,7 +150,7 @@ func TestProbeWindowBoundsConcurrency(t *testing.T) {
 				}
 				time.Sleep(50 * time.Microsecond)
 				inflight.Add(-1)
-				w.release(1, 0)
+				w.release(1, 0, 0)
 			}
 		}()
 	}
@@ -167,7 +167,7 @@ func TestProbeWindowStopsGrowingWhenDelayShowsAQueue(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		rtt.Sample(11 * time.Millisecond)
 		w.acquire()
-		w.release(1, 11*time.Millisecond)
+		w.release(1, 11*time.Millisecond, 11*time.Millisecond)
 	}
 	if got := w.stats().Final; got != 300 {
 		t.Fatalf("slow start: window = %d, want 300", got)
@@ -178,7 +178,7 @@ func TestProbeWindowStopsGrowingWhenDelayShowsAQueue(t *testing.T) {
 	for i := 0; i < 500; i++ {
 		rtt.Sample(40 * time.Millisecond)
 		w.acquire()
-		w.release(1, 40*time.Millisecond)
+		w.release(1, 40*time.Millisecond, 40*time.Millisecond)
 	}
 	s := w.stats()
 	held := s.Final
@@ -193,7 +193,7 @@ func TestProbeWindowStopsGrowingWhenDelayShowsAQueue(t *testing.T) {
 	for i := 0; i < 320; i++ {
 		rtt.Sample(11 * time.Millisecond)
 		w.acquire()
-		w.release(1, 11*time.Millisecond)
+		w.release(1, 11*time.Millisecond, 11*time.Millisecond)
 	}
 	if got := w.stats().Final; got != held+5 {
 		t.Fatalf("after the queue drained: window = %d, want %d (congestion avoidance)", got, held+5)
@@ -211,7 +211,7 @@ func TestProbeWindowIgnoresSubMillisecondJitter(t *testing.T) {
 		}
 		rtt.Sample(lat)
 		w.acquire()
-		w.release(1, lat)
+		w.release(1, lat, lat)
 	}
 	if got := w.stats().Final; got != 400 {
 		t.Fatalf("window = %d, want 400 (slow start undisturbed)", got)
@@ -240,5 +240,58 @@ func TestAdaptsProbeWindowOnlyForSharedSocketScans(t *testing.T) {
 				t.Fatalf("adaptsProbeWindow() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// A host that drops most ports: every silent probe holds its slot for all its
+// attempts. The window grows until it can sustain --rate, and stops there.
+func TestProbeWindowSilenceGrowsUpToWhatTheRateNeeds(t *testing.T) {
+	w, _ := newTestWindow(128, 4096, 1000, 10*time.Millisecond)
+	for i := 0; i < 2000; i++ {
+		w.acquire()
+		w.release(0, 0, 750*time.Millisecond)
+	}
+	s := w.stats()
+	if s.Final != 750 || s.Cuts != 0 {
+		t.Fatalf("window = %d, want 750 (1000 probes/s x 0.75 s per silent probe): %+v", s.Final, s)
+	}
+}
+
+// Silence right after a congestion cut is not trusted: losses look like
+// silence too.
+func TestProbeWindowSilenceDoesNotGrowRightAfterACut(t *testing.T) {
+	w, clock := newTestWindow(100, 4096, 1000, 10*time.Millisecond)
+	for i := 0; i < 300; i++ {
+		cycle(w, 1)
+	}
+	clock.advance(time.Second)
+	cycle(w, 2) // a retransmitted reply: congestion
+	after := w.stats().Final
+	for i := 0; i < 100; i++ {
+		w.acquire()
+		w.release(0, 0, 750*time.Millisecond)
+	}
+	if got := w.stats().Final; got != after {
+		t.Fatalf("silence grew the window from %d to %d right after a cut", after, got)
+	}
+	clock.advance(time.Second)
+	w.acquire()
+	w.release(0, 0, 750*time.Millisecond)
+	if got := w.stats().Final; got != after+1 {
+		t.Fatalf("after a quiet period silence should grow it again: %d -> %d", after, got)
+	}
+}
+
+// A few replies on a mostly-filtered host must not clamp back the window
+// that silence grew for the rate.
+func TestProbeWindowRepliesKeepTheRoomSilenceNeeds(t *testing.T) {
+	w, _ := newTestWindow(128, 4096, 1000, 10*time.Millisecond)
+	for i := 0; i < 2000; i++ {
+		w.acquire()
+		w.release(0, 0, 750*time.Millisecond)
+	}
+	cycle(w, 1) // an open port answers
+	if got := w.stats().Final; got < 750 {
+		t.Fatalf("one reply clamped the window to %d", got)
 	}
 }

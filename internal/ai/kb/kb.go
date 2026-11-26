@@ -68,6 +68,7 @@ type Service struct {
 	Exposure string   `yaml:"exposure"`
 	Risk     string   `yaml:"risk"`
 	Insecure *bool    `yaml:"insecure"`
+	HTTP     *bool    `yaml:"http"`
 	What     Text     `yaml:"what"`
 	Why      Text     `yaml:"why"`
 	Hint     Text     `yaml:"hint"`
@@ -83,6 +84,9 @@ func (s *Service) DisplayName(lang string) string {
 	}
 	return s.Name
 }
+
+// SpeaksHTTP reports whether the service is an HTTP(S) API or site.
+func (s *Service) SpeaksHTTP() bool { return s.HTTP != nil && *s.HTTP }
 
 // IsInsecure reports whether the protocol sends data in clear text.
 func (s *Service) IsInsecure() bool { return s.Insecure != nil && *s.Insecure }
@@ -205,6 +209,9 @@ func resolve(raw map[string]*Service, id string, seen map[string]bool) (*Service
 	}
 	if out.Insecure == nil {
 		out.Insecure = p.Insecure
+	}
+	if out.HTTP == nil {
+		out.HTTP = p.HTTP
 	}
 	if out.What.empty() {
 		out.What = p.What

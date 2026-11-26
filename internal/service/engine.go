@@ -352,6 +352,17 @@ func DetectService(ip string, port int, timeout time.Duration, insecureSkipVerif
 		if probed, ok := activeProbe(port, conn, timeout); ok {
 			return probed
 		}
+		// Silent, and no port-specific probe used the connection: try
+		// HTTP, then TLS (see fallback.go). Web ports were handled above.
+		if _, used := activeProbes[port]; n == 0 && !used && !isWebPort {
+			if probed, ok := probeHTTPFallback(conn, ip, port, hostname, timeout, insecureSkipVerify, tlsInfo); ok {
+				if probed.TLS == nil {
+					probed.TLS = tlsInfo
+				}
+				probed.JARM = info.JARM
+				return probed
+			}
+		}
 		info.Name = resolveDefaultPortName(port)
 	}
 
@@ -579,23 +590,25 @@ func parseMySQLHandshake(b []byte) (version string, ok bool) {
 // until spoken to (unlike SSH/FTP/SMTP/MySQL/VNC, which all greet first).
 // Each prober fails closed: a wrong or rejected probe just returns false,
 // which falls back to resolveDefaultPortName -- never worse than before.
+// activeProbes are the protocol queries sent on a port's conventional number
+// when the service did not speak first.
+var activeProbes = map[int]func(net.Conn, time.Duration) (ServiceInfo, bool){
+	6379:  probeRedis,
+	11211: probeMemcached,
+	5432:  probePostgres,
+	445:   probeSMB,
+	3389:  probeRDP,
+	1883:  probeMQTT,
+	25565: probeMinecraft,
+	25566: probeMinecraft,
+	25567: probeMinecraft,
+}
+
 func activeProbe(port int, conn net.Conn, timeout time.Duration) (ServiceInfo, bool) {
-	switch port {
-	case 6379:
-		return probeRedis(conn, timeout)
-	case 11211:
-		return probeMemcached(conn, timeout)
-	case 5432:
-		return probePostgres(conn, timeout)
-	case 445:
-		return probeSMB(conn, timeout)
-	case 3389:
-		return probeRDP(conn, timeout)
-	case 1883:
-		return probeMQTT(conn, timeout)
-	default:
-		return ServiceInfo{}, false
+	if probe, ok := activeProbes[port]; ok {
+		return probe(conn, timeout)
 	}
+	return ServiceInfo{}, false
 }
 
 // probeMQTT sends an MQTT CONNECT and expects a CONNACK (fixed-header byte

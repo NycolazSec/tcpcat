@@ -348,6 +348,14 @@ func ParseFlags() (*Options, error) {
 	for i := 0; i < len(rawArgs); i++ {
 		arg := rawArgs[i]
 		if strings.HasPrefix(arg, "-") {
+			// Nmap's "-p-" (and "-p -") means every port.
+			if arg == "-p-" || arg == "-p" && i+1 < len(rawArgs) && rawArgs[i+1] == "-" {
+				if arg == "-p" {
+					i++
+				}
+				flagsArgs = append(flagsArgs, "-p", "1-65535")
+				continue
+			}
 			if arg == "--decoy" {
 				flagsArgs = append(flagsArgs, arg)
 				if i+1 < len(rawArgs) && looksLikeFlagValue(rawArgs[i+1]) {
@@ -442,7 +450,7 @@ func ParseFlags() (*Options, error) {
 	flag.IntVar(&opts.MaxWorkers, "workers", 0, "Number of parallel workers (alias for -w)")
 	flag.IntVar(&opts.BatchSize, "batch-size", 1000, "Number of jobs dispatched per batch")
 	flag.IntVar(&opts.ConnPoolSize, "conn-pool", 64, "Max idle TCP connections kept per address (for -sT scans)")
-	flag.IntVar(&opts.RateLimit, "rate", 500, "Max packets per second for discovery and scans")
+	flag.IntVar(&opts.RateLimit, "rate", 1000, "Max packets per second for discovery and scans")
 	flag.BoolVar(&opts.AdaptiveRate, "adaptive-rate", false, "Adjust send rate automatically from observed RTT/loss (AIMD) instead of a fixed --rate")
 	flag.IntVar(&opts.MaxRetries, "max-retries", 2, "Resend a probe this many times before marking a port filtered (0 disables retries)")
 	flag.BoolVar(&opts.NoRandomize, "no-randomize", false, "Dispatch probes in target/port list order instead of a randomized permutation")
