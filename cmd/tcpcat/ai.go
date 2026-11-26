@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/NycolazSec/tcpcat/config"
@@ -20,11 +22,13 @@ const aiUsage = `tcpcat's AI: reads a scan and tells you, in plain words, what i
 how serious it is, why, and what to do. It runs offline, inside tcpcat.
 
   tcpcat ai explain <scan.json>     judge every open port of a scan (-j scan.json)
+  tcpcat ai explain --deep <scan>   take the time: verify each hypothesis with read-only
+                                    follow-up probes, profile the machine, plan the fixes
   tcpcat ai policy <scan.json>      draft the exposure policy for tcpcat policy check
   tcpcat ai identify "<banner>"     name the service behind a banner
   tcpcat ai model                   what the AI knows and how it was trained
 
-  Or add --ai to a scan: tcpcat -sV --ai <target>
+  Or add --ai (quick) or --ai-deep (thorough) to a scan: tcpcat -sV --ai-deep <target>
 
   --lang fr|en        language of the answers (default: from $LANG)
   --from internet|internal
@@ -108,43 +112,60 @@ func vantageFor(results []scan.TargetResult, given string) string {
 }
 
 func loadAnalysis(f aiFlags, args []string) (*ai.Analyzer, ai.Report, int) {
+	a, results, opt, code := loadScan(f, args)
+	if code != exitOK {
+		return nil, ai.Report{}, code
+	}
+	return a, a.Analyze(results, opt), exitOK
+}
+
+func loadScan(f aiFlags, args []string) (*ai.Analyzer, []scan.TargetResult, ai.Options, int) {
 	file, rest := splitPositional(args)
 	if err := f.fs.Parse(rest); err != nil {
-		return nil, ai.Report{}, exitError
+		return nil, nil, ai.Options{}, exitError
 	}
 	if file == "" {
 		fmt.Printf("%s[!] Give the JSON report of a scan (tcpcat -sV -j scan.json <target>).%s\n\n%s", config.Red, config.Reset, aiUsage)
-		return nil, ai.Report{}, exitError
+		return nil, nil, ai.Options{}, exitError
 	}
 	if *f.from != "" && *f.from != ai.Internet && *f.from != ai.Internal {
 		fmt.Printf("%s[!] --from must be internet or internal.%s\n", config.Red, config.Reset)
-		return nil, ai.Report{}, exitError
+		return nil, nil, ai.Options{}, exitError
 	}
 	results, err := compare.LoadBaseline(file)
 	if err != nil {
 		fmt.Printf("%s[!] %v%s\n", config.Red, err, config.Reset)
-		return nil, ai.Report{}, exitError
+		return nil, nil, ai.Options{}, exitError
 	}
 	a, err := ai.New()
 	if err != nil {
 		fmt.Printf("%s[!] %v%s\n", config.Red, err, config.Reset)
-		return nil, ai.Report{}, exitError
+		return nil, nil, ai.Options{}, exitError
 	}
-	rep := a.Analyze(results, ai.Options{Lang: *f.lang, Vantage: vantageFor(results, *f.from)})
-	return a, rep, exitOK
+	return a, results, ai.Options{Lang: *f.lang, Vantage: vantageFor(results, *f.from)}, exitOK
 }
 
 func runAIExplain(args []string) int {
 	f := newAIFlags("explain")
 	f.jsonOut = f.fs.String("j", "", "Also write the findings as JSON")
 	f.polOut = f.fs.String("policy", "", "Also write the draft exposure policy")
-	a, rep, code := loadAnalysis(f, args)
+	deep := f.fs.Bool("deep", false, "Verify each hypothesis with read-only follow-up probes (contacts the scanned hosts)")
+	a, results, opt, code := loadScan(f, args)
 	if code != exitOK {
 		return code
 	}
-	renderAIReport(rep)
+	var rep ai.Report
+	var out any
+	if *deep {
+		d := runDeep(a, results, opt)
+		rep, out = d.Report, d
+	} else {
+		rep = a.Analyze(results, opt)
+		out = rep
+		renderAIReport(rep)
+	}
 	if *f.jsonOut != "" {
-		data, _ := json.MarshalIndent(rep, "", "  ")
+		data, _ := json.MarshalIndent(out, "", "  ")
 		if err := os.WriteFile(*f.jsonOut, data, 0o600); err != nil {
 			fmt.Printf("%s[!] %v%s\n", config.Red, err, config.Reset)
 			return exitError
@@ -269,6 +290,11 @@ func renderAIReport(rep ai.Report) {
 		ai.Internal: {"seen from inside the network", "vu depuis le réseau interne"},
 	}[rep.Vantage]
 	fmt.Printf("\n%s%s%s %s(%s)%s\n", config.Bold, title, config.Reset, config.Gray, msg(l, vantage[0], vantage[1]), config.Reset)
+	renderFindings(rep, false)
+}
+
+func renderFindings(rep ai.Report, withChecks bool) {
+	l := rep.Lang
 	if len(rep.Findings) == 0 {
 		fmt.Printf("  %s\n", msg(l, "No open port in this scan.", "Aucun port ouvert dans ce scan."))
 		return
@@ -278,6 +304,9 @@ func renderAIReport(rep ai.Report) {
 		addr := net.JoinHostPort(f.Host, fmt.Sprint(f.Port))
 		if f.Verdict == ai.OK {
 			fmt.Printf("  %s[ok]%s %-22s %s\n", config.Green, config.Reset, addr, f.Title)
+			if withChecks {
+				printChecks(l, f.Checks)
+			}
 			continue
 		}
 		fmt.Printf("\n  %s[%s]%s %s  %s%s%s\n", color, strings.ToUpper(severityLabel(l, f.Severity)), config.Reset, addr, config.Bold, f.Title, config.Reset)
@@ -288,6 +317,9 @@ func renderAIReport(rep ai.Report) {
 			printWrapped(msg(l, "fix", "action"), f.Fix)
 		}
 		printWrapped(msg(l, "proof", "preuves"), strings.Join(f.Evidence, " · "))
+		if withChecks {
+			printChecks(l, f.Checks)
+		}
 	}
 	color := config.Green
 	if rep.ToFix > 0 {
@@ -363,7 +395,7 @@ func msg(lang, en, fr string) string {
 
 // printAIAfterScan is the --ai flag: the same analysis, on the results the
 // scan just produced.
-func printAIAfterScan(results []scan.TargetResult, lang, from string) {
+func printAIAfterScan(results []scan.TargetResult, lang, from string, deep bool) {
 	a, err := ai.New()
 	if err != nil {
 		fmt.Printf("%s[!] AI: %v%s\n", config.Red, err, config.Reset)
@@ -372,5 +404,90 @@ func printAIAfterScan(results []scan.TargetResult, lang, from string) {
 	if lang == "" {
 		lang = defaultLang()
 	}
-	renderAIReport(a.Analyze(results, ai.Options{Lang: lang, Vantage: vantageFor(results, from)}))
+	opt := ai.Options{Lang: lang, Vantage: vantageFor(results, from)}
+	if deep {
+		runDeep(a, results, opt)
+		return
+	}
+	renderAIReport(a.Analyze(results, opt))
+}
+
+// runDeep runs the thorough analysis, showing what it checks, and prints it.
+func runDeep(a *ai.Analyzer, results []scan.TargetResult, opt ai.Options) ai.DeepReport {
+	l := opt.Lang
+	if l != "fr" {
+		l = "en"
+	}
+	fmt.Printf("\n%s%s%s\n", config.Bold, msg(l, "tcpcat AI: thorough analysis", "IA de tcpcat : analyse approfondie"), config.Reset)
+	d := a.Deep(results, opt, ai.NetProber{Timeout: 5 * time.Second}, func(line string) {
+		fmt.Printf("  %s%s%s\n", config.Gray, line, config.Reset)
+	})
+	renderDeepReport(d)
+	return d
+}
+
+// renderDeepReport: what the machine is, what is fine, the plan, then the
+// detail of every port with what was verified.
+func renderDeepReport(d ai.DeepReport) {
+	l := d.Lang
+	section := func(en, fr string) { fmt.Printf("\n%s%s%s\n", config.Bold+config.Red, msg(l, en, fr), config.Reset) }
+	section("What I understood", "Ce que j'ai compris")
+	for _, p := range d.Profile {
+		printItem("  ", p)
+	}
+	if len(d.Good) > 0 {
+		section("What is fine", "Ce qui va bien")
+		for _, g := range d.Good {
+			printItem("  "+config.Green+"✓"+config.Reset+" ", g)
+		}
+	}
+	if len(d.Plan) > 0 {
+		section("What I would do, in order", "Ce que je ferais, dans l'ordre")
+		for i, act := range d.Plan {
+			tag := fmt.Sprintf("%s[%s]%s", severityColor(act.Severity), strings.ToUpper(severityLabel(l, act.Severity)), config.Reset)
+			printItem(fmt.Sprintf("  %d. %s ", i+1, tag), act.Where+"  "+act.Text)
+		}
+	}
+	section("Port by port", "Port par port")
+	renderFindings(d.Report, true)
+}
+
+// printItem prints text after prefix, wrapped at 92 columns with a hanging
+// indent under the text.
+func printItem(prefix, text string) {
+	visible := len([]rune(stripANSI(prefix)))
+	pad := strings.Repeat(" ", visible)
+	line, n := prefix, visible
+	for _, w := range strings.Fields(text) {
+		k := len([]rune(w))
+		if n > visible && n+1+k > 92 {
+			fmt.Println(line)
+			line, n = pad, visible
+		}
+		if n > visible {
+			line += " "
+			n++
+		}
+		line += w
+		n += k
+	}
+	fmt.Println(line)
+}
+
+var ansiRE = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
+
+// printChecks lists what a deep analysis verified on a finding.
+func printChecks(l string, checks []ai.Check) {
+	for _, c := range checks {
+		mark := config.Green + "✓" + config.Reset
+		switch c.Kind {
+		case ai.CheckIssue:
+			mark = config.Red + "✗" + config.Reset
+		case ai.CheckNote:
+			mark = config.Yellow + "•" + config.Reset
+		}
+		printItem("     "+config.Gray+fmt.Sprintf("%-8s", msg(l, "checked", "vérifié"))+config.Reset+" "+mark+" ", c.Text)
+	}
 }

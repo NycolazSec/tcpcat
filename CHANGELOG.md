@@ -10,6 +10,20 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Added
+- A thorough analysis mode for tcpcat's AI: `--ai-deep` on a scan, or
+  `tcpcat ai explain --deep`. It verifies its own hypotheses with read-only
+  follow-up probes, and never sends a credential:
+  - SSH login methods and weak algorithms;
+  - whether the kubelet, the Kubernetes API, the Docker API, Elasticsearch
+    and Redis answer anonymous clients;
+  - whether an alternate web port is Pterodactyl Wings;
+  - whether port 80 redirects to HTTPS;
+  - certificate problems.
+
+  It then works out what the machine is, says what is fine, and ends with a
+  plan ordered by severity, with the exact setting to change.
+
 ## [1.9.0] - 2026-11-26
 
 ### Added

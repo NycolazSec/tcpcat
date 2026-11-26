@@ -39,6 +39,46 @@ network is expected. The default vantage is `internal` when every scanned
 address is private, and `internet` otherwise. Change it with `--from` (or with
 `--ai-from` on a scan).
 
+## Thorough analysis (`--ai-deep`)
+
+The quick analysis judges what the scan saw. The thorough one takes the time
+a careful administrator would:
+
+```bash
+sudo tcpcat -sV --ai-deep 203.0.113.10       # scan, then analyse in depth
+tcpcat ai explain scan.json --deep           # or analyse a saved scan in depth
+```
+
+1. **It verifies its hypotheses** with read-only follow-up probes on the
+   ports that were open. A probe asks what any client may ask and never sends
+   a credential:
+   - SSH: which login methods are offered, so it can tell whether bots can
+     guess passwords. It also lists the weak algorithms and gives the exact
+     `sshd_config` lines to remove them. Pterodactyl's SFTP is the exception:
+     players log in there with their panel password by design, so the advice
+     changes.
+   - The kubelet and the Kubernetes API: does it answer anonymous requests?
+   - The Docker API, Elasticsearch and Redis: does it answer without
+     authentication?
+   - An alternate web port: is it Pterodactyl Wings? Wings answers with its
+     own error message.
+   - Port 80: does it redirect to HTTPS?
+   - Certificates: self-signed, expiring, or Traefik's default certificate.
+2. **It works out what the machine is** from everything that answered, for
+   example: "a web server, under Kubernetes (k3s), behind the Traefik reverse
+   proxy, on Debian 12".
+3. **It says what is fine**, for example that none of the sensitive ports it
+   tested is reachable, or that TLS 1.3 is used with a post-quantum key
+   exchange.
+4. **It ends with a plan**, ordered by severity, with the exact command or
+   setting for each step. The plan also covers patterns across ports, such
+   as three SSH entry points facing the internet.
+
+The thorough analysis contacts the scanned hosts again, a few seconds per
+port. The SSH check leaves one failed login by user `tcpcat` in the server's
+log, with no password sent. Run it only against hosts you are allowed to
+scan.
+
 ## How it works
 
 The AI has three parts.
