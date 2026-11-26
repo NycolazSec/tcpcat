@@ -99,10 +99,15 @@ The AI has three parts.
    behind a finding.
 
 2. **The banner model** ([`internal/ai/model`](../internal/ai/model)). This is
-   a small trained classifier: naive Bayes over character n-grams of the
-   banner, plus a separate, learned weight for the port number. It names the
-   service behind a port and says how sure it is. It weighs 165 KB and
-   answers in microseconds.
+   a small trained classifier with two parts:
+   - a logistic regression over the banner: its character n-grams, its
+     words, its first characters and its shape (`SSH-2.0-` around any
+     product);
+   - a table of the ports each service was seen on, with a weight fitted on
+     held-out data: how much a port number says once the banner has spoken.
+
+   It names the service behind a port and says how sure it is. It weighs
+   375 KB and answers in microseconds.
 
 3. **The reasoning** ([`internal/ai/ai.go`](../internal/ai/ai.go)). It joins
    the scan, the dictionary and the model:
@@ -122,13 +127,20 @@ The AI has three parts.
 
 ## Training under network conditions
 
-The model was trained on the 1,991 banner examples of
-[Rapid7 Recog](https://github.com/rapid7/recog) (BSD-2-Clause, see
-[NOTICE](../NOTICE)), plus the examples in the dictionary. Each example is
-framed the way its protocol presents it: Recog's `OpenSSH_9.6` reaches tcpcat
-as `SSH-2.0-OpenSSH_9.6`.
+The model learns from four sources:
+- the 2,097 banner examples of
+  [Rapid7 Recog](https://github.com/rapid7/recog) (BSD-2-Clause, see
+  [NOTICE](../NOTICE)), each framed the way its protocol presents it: Recog's
+  `OpenSSH_9.6` reaches tcpcat as `SSH-2.0-OpenSSH_9.6`, a MySQL error as the
+  packet that carries it;
+- about 7,300 banners generated from the patterns of Recog's fingerprints:
+  new versions, hostnames and free text around what each pattern fixes, so
+  the model learns what identifies the software rather than one example's
+  version number;
+- the examples in the dictionary;
+- binary noise, as examples of a service the dictionary does not know.
 
-Every example is degraded under each of seven **network conditions** before
+Every example is degraded under each of nine **network conditions** before
 tcpcat's own sanitizer stores it:
 - the whole banner;
 - a banner cut by a read deadline;
@@ -136,25 +148,39 @@ tcpcat's own sanitizer stores it:
 - binary noise (Telnet negotiation, framing);
 - different formatting;
 - a non-standard port;
-- all of these at once.
+- a rebranded banner: the product name replaced (a custom SSH version
+  string, an SMTP greeting with only the hostname);
+- a server that keeps talking in the same read (the SSH key exchange right
+  after the banner, a legal notice before the FTP greeting);
+- truncated, noisy and on a non-standard port at once.
+
+During training, a random 70 % of each banner's features are hidden at
+every pass (dropout), so the model cannot rely on one memorized detail. An
+L1 penalty removes the weights that do not help, which keeps the model
+small.
 
 The split is by fingerprint, so near-identical banners never sit on both
 sides:
-- 60 % train;
-- 20 % calibrate the port weight and the confidence;
-- 20 % are held out.
+- 60 % train (and only these fingerprints feed the generator);
+- 20 % stop the training, and calibrate the port weight and the confidence.
+  The training settings were also chosen on this part;
+- 20 % are held out: only real banners, judged once.
 
-On held-out banners, the model names the right kind of service in 100 % of
-cases on standard ports, under every degradation. Here it is compared with
-the scanner's signatures and port fallback:
+Results on held-out banners, compared with the previous model (naive Bayes,
+tcpcat 1.9.0) and with the scanner's signatures and port fallback, on the
+same banners:
 
-| Condition | AI | Detector alone |
-|---|---:|---:|
-| Clean, truncated, first bytes, noise, reformatted | 100 % | 96 % |
-| Non-standard port | 91 % | 20 % |
-| Truncated + noisy + non-standard port | 82 % | 16 % |
+| Condition | AI | Previous model | Detector alone |
+|---|---:|---:|---:|
+| Standard port: clean, truncated, first bytes, noise, reformatted | 100 % | 99.8 to 100 % | 96 % |
+| Server keeps talking after the banner | 100 % | 97.4 % | 96 % |
+| Rebranded banner | 99.6 % | 100 % | 96 % |
+| Non-standard port | 95.7 % | 87.2 % | 21 % |
+| Truncated + noisy + non-standard port | 91.1 % | 79.9 % | 16 % |
 
-When it says it is sure (50 % or more), it is right 96 to 100 % of the time.
+It also names the exact product more often: 98.9 % instead of 96.5 % on a
+clean banner, and 92.9 % instead of 79.4 % on a non-standard port. When it
+says it is sure (50 % or more), it is right 98.8 to 100 % of the time.
 The full table, regenerated at each training, is in
 [`internal/ai/model/EVALUATION.md`](../internal/ai/model/EVALUATION.md).
 
@@ -164,6 +190,17 @@ To retrain:
 git clone --depth 1 https://github.com/rapid7/recog /tmp/recog
 go run ./internal/ai/aitrain -recog /tmp/recog
 ```
+
+Training takes about 15 seconds. To change the training settings (`-l1`,
+`-dropout`, `-generate`...) without looking at the test split:
+
+```bash
+go run ./internal/ai/aitrain -recog /tmp/recog -sweep -out /dev/null -report /dev/null
+go run ./internal/ai/aitrain -recog /tmp/recog -confusion unusual-port -out /dev/null -report /dev/null
+```
+
+`-sweep` prints the accuracy on the calibration split, and `-confusion`
+prints the mistakes made there under one condition.
 
 ## Limits
 

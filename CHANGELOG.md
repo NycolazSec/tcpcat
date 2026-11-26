@@ -10,6 +10,22 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Changed
+- A stronger banner model for tcpcat's AI. It is a logistic regression over
+  the banner (n-grams, words, first characters, shape) with a calibrated
+  port table, in place of naive Bayes. It is trained on 9,878 banners
+  instead of 2,043: Recog's examples, banners generated from Recog's
+  patterns, MySQL error packets and binary noise. Training covers two more
+  network conditions: rebranded banners, and servers that keep talking
+  after the banner. On the same held-out banners:
+  - non-standard port: 95.7 % right instead of 87.2 %;
+  - truncated, noisy and on a non-standard port: 91.1 % instead of 79.9 %;
+  - exact product on a non-standard port: 92.9 % instead of 79.4 %.
+
+  It stays at 100 % on standard ports and takes 375 KB.
+  `go run ./internal/ai/aitrain -sweep` tunes the training on the
+  calibration split, never on the test split.
+
 ## [1.9.0] - 2026-11-26
 
 ### Added

@@ -14,6 +14,7 @@ import (
 	"github.com/NycolazSec/tcpcat/config"
 	"github.com/NycolazSec/tcpcat/internal/ai"
 	"github.com/NycolazSec/tcpcat/internal/ai/kb"
+	"github.com/NycolazSec/tcpcat/internal/ai/model"
 	"github.com/NycolazSec/tcpcat/internal/compare"
 	"github.com/NycolazSec/tcpcat/internal/scan"
 )
@@ -273,10 +274,10 @@ func runAIModel() int {
 		return exitError
 	}
 	fmt.Printf("%sDictionary%s  %d services, %d known ports\n", config.Bold, config.Reset, len(a.Dict.All()), len(a.Dict.Ports()))
-	fmt.Printf("%sModel%s       naive Bayes over banner n-grams + port, %d classes, %d weights\n", config.Bold, config.Reset, len(a.Model.Classes), a.Model.Size())
-	fmt.Printf("            temperature %.0f, port weight %.0f\n", a.Model.Temperature, a.Model.PortWeight)
+	fmt.Printf("%sModel%s       logistic regression over banner n-grams, words, prefixes and shape, plus the port\n", config.Bold, config.Reset)
+	fmt.Printf("            %d classes, %d weights, port weight %.2f, temperature %.2f\n", len(a.Model.Classes), a.Model.Size(), a.Model.PortWeight, a.Model.Temperature)
 	fmt.Printf("%sTrained%s     %s\n", config.Bold, config.Reset, a.Model.Trained)
-	fmt.Printf("%sEvaluation%s  internal/ai/model/EVALUATION.md (accuracy under 7 network conditions)\n", config.Bold, config.Reset)
+	fmt.Printf("%sEvaluation%s  internal/ai/model/EVALUATION.md (accuracy under %d network conditions)\n", config.Bold, config.Reset, len(model.Conditions))
 	return exitOK
 }
 

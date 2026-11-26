@@ -14,6 +14,10 @@ type Condition struct {
 	// Why is shown in the evaluation report.
 	Why   string
 	Apply func(raw string, port int, r *rand.Rand) (string, int)
+	// ProtocolOnly conditions remove what names the product: an example
+	// degraded by one is labelled with its protocol only, and only the
+	// protocol is judged.
+	ProtocolOnly bool
 }
 
 // Store is what tcpcat keeps of a raw banner: carriage returns dropped, line
@@ -89,6 +93,17 @@ var Conditions = []Condition{
 		},
 	},
 	{
+		Name:         "rebranded",
+		Why:          "the administrator or vendor replaced the product name (a custom SSH version string, a hostname-only SMTP greeting, a home-made Server header)",
+		Apply:        rebrand,
+		ProtocolOnly: true,
+	},
+	{
+		Name:  "pipelined",
+		Why:   "the server kept talking in the same read: the SSH key exchange right after the banner, a multi-line greeting that starts with a legal notice",
+		Apply: pipeline,
+	},
+	{
 		Name: "worst-case",
 		Why:  "truncated, noisy and on an unusual port at once",
 		Apply: func(raw string, port int, r *rand.Rand) (string, int) {
@@ -145,4 +160,107 @@ func addNoise(raw string, port int, r *rand.Rand) (string, int) {
 	default:
 		return junk() + raw + junk(), port
 	}
+}
+
+// keepWords are a protocol's own words, which a rebranded banner keeps.
+var keepWords = map[string]bool{}
+
+func init() {
+	for _, w := range strings.Fields(`ssh sftp ftp ftpd smtp esmtp lmtp pop imap imapd mail mailer server servers
+		service services ready welcome login user username password http httpd www web rtsp telnet version
+		access verification authorized unauthorized system the and for are you not has been this with your
+		auth capability capabilities starttls imap rev plain connection port host network closing gateway
+		protocol transmission channel please enter account name use only prohibited monitored`) {
+		keepWords[w] = true
+	}
+}
+
+func isLetter(c byte) bool { return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' }
+
+// rebrand replaces the words that are not the protocol's own with made-up
+// ones of the same length and case.
+func rebrand(raw string, port int, r *rand.Rand) (string, int) {
+	var b strings.Builder
+	for i := 0; i < len(raw); {
+		if !isLetter(raw[i]) {
+			b.WriteByte(raw[i])
+			i++
+			continue
+		}
+		j := i
+		for j < len(raw) && isLetter(raw[j]) {
+			j++
+		}
+		w := raw[i:j]
+		if len(w) >= 3 && !keepWords[strings.ToLower(w)] {
+			w = pseudoWord(w, r)
+		}
+		b.WriteString(w)
+		i = j
+	}
+	return b.String(), port
+}
+
+func pseudoWord(like string, r *rand.Rand) string {
+	const consonants, vowels = "bcdfghjklmnprstvz", "aeiou"
+	out := make([]byte, len(like))
+	for i := range out {
+		set := consonants
+		if i%2 == 1 {
+			set = vowels
+		}
+		c := set[r.Intn(len(set))]
+		if like[i] >= 'A' && like[i] <= 'Z' {
+			c -= 'a' - 'A'
+		}
+		out[i] = c
+	}
+	return string(out)
+}
+
+var legalNotices = []string{
+	"Authorized users only. All activity may be monitored and reported.",
+	"Welcome to the file server of example.org",
+	"This system is for the use of authorized users only.",
+	"----------- Welcome -----------",
+	"Unauthorized access is prohibited",
+	"mail.example.com",
+}
+
+var kexAlgorithms = []string{
+	"curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384",
+	"sntrup761x25519-sha512@openssh.com,curve25519-sha256,ecdh-sha2-nistp256",
+	"mlkem768x25519-sha256,sntrup761x25519-sha512,curve25519-sha256",
+	"diffie-hellman-group14-sha256,diffie-hellman-group16-sha512,ext-info-s",
+}
+
+// pipeline appends what a server sends right after its banner when it does
+// not wait for the client: the binary SSH_MSG_KEXINIT after an SSH version,
+// a capability line after an IMAP greeting; or puts a notice before a
+// multi-line FTP or SMTP greeting, so the product may fall past what tcpcat
+// keeps.
+func pipeline(raw string, port int, r *rand.Rand) (string, int) {
+	switch {
+	case strings.HasPrefix(raw, "SSH-"):
+		var b strings.Builder
+		b.WriteString(raw + "\r\n")
+		b.Write([]byte{0, 0, 4, byte(r.Intn(256)), byte(4 + r.Intn(8)), 20})
+		for i := 0; i < 16; i++ {
+			b.WriteByte(byte(r.Intn(256))) // the random cookie
+		}
+		kex := kexAlgorithms[r.Intn(len(kexAlgorithms))]
+		b.Write([]byte{0, 0, 0, byte(len(kex))})
+		b.WriteString(kex)
+		return b.String(), port
+	case strings.HasPrefix(raw, "220"):
+		lines := 1 + r.Intn(2)
+		var b strings.Builder
+		for i := 0; i < lines; i++ {
+			b.WriteString("220-" + legalNotices[r.Intn(len(legalNotices))] + "\r\n")
+		}
+		return b.String() + raw, port
+	case strings.HasPrefix(raw, "* OK"):
+		return raw + "\r\n* CAPABILITY IMAP4rev1 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE STARTTLS AUTH=PLAIN", port
+	}
+	return raw, port
 }

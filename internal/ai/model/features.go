@@ -2,16 +2,21 @@
 // names the service behind a port from the banner tcpcat captured and the
 // port number, and says how sure it is.
 //
-// It is a multinomial naive Bayes model over hashed character n-grams and
-// words. That is deliberately modest: it trains in seconds, runs offline in
-// microseconds, fits in the binary, and its mistakes can be understood. It
-// was trained on public banners (Rapid7 Recog, BSD-2-Clause) and on the
+// It is a multinomial logistic regression over hashed features of the
+// banner (character n-grams, words, its first characters, its shape) and of
+// the port. It trains in about a minute, runs offline in microseconds, fits
+// in the binary, and each of its answers can be traced to the features that
+// produced it. It was trained on public banners (Rapid7 Recog,
+// BSD-2-Clause), on variants generated from Recog's patterns, and on the
 // examples of tcpcat's dictionary, each one degraded the way real networks
-// degrade a banner (see conditions.go), and it is evaluated per condition.
+// and real administrators change a banner (see conditions.go), and it is
+// evaluated per condition on fingerprints it never saw.
 package model
 
 import (
 	"hash/fnv"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -53,15 +58,23 @@ func Normalize(banner string) string {
 	return strings.TrimSpace(b.String())
 }
 
-// Features returns the hashed features of a banner: character 3- to 5-grams
-// of the normalized banner (anchored at its start and end, so "^ssh-" and
-// "^220 " stand out) and its words. The port is not a feature: the model
-// weighs it separately (see Model.PortWeight), so how much a port number
-// counts against the banner is learned rather than an accident of how many
-// n-grams the banner happens to have.
+// Features returns the hashed features of a banner, each once, sorted:
+//
+//   - character 3- to 5-grams of the normalized banner, anchored at its start
+//     and end, so "^ssh-" and "^220 " stand out;
+//   - its words, and pairs of consecutive words;
+//   - its first 1 to 10 characters, which carry the protocol's framing
+//     ("ssh-0.0-", "+ok ", "* ok [") even when the rest was cut off;
+//   - its shape, letters collapsed to "a" ("a-0.0-a_0.0a0 a"), which
+//     recognizes a framing around a product the model never saw;
+//   - its length, coarsely.
+//
+// The port is not a feature: the model weighs it separately (see
+// Model.PortWeight), so how much a port number counts against the banner is
+// fitted rather than an accident of how many features a banner has.
 func Features(banner string) []uint32 {
 	n := Normalize(banner)
-	feats := make([]uint32, 0, 3*len(n)+16)
+	feats := make([]uint32, 0, 3*len(n)+40)
 	add := func(s string) { feats = append(feats, hash(s)) }
 
 	if n == "" {
@@ -73,15 +86,60 @@ func Features(banner string) []uint32 {
 				add("c" + t[i:i+size])
 			}
 		}
-		for _, w := range strings.FieldsFunc(n, func(r rune) bool {
+		words := strings.FieldsFunc(n, func(r rune) bool {
 			return (r < 'a' || r > 'z') && r != '0'
-		}) {
+		})
+		prev := "^"
+		for _, w := range words {
 			if len(w) >= 2 {
 				add("w:" + w)
 			}
+			add("b:" + prev + " " + w)
+			prev = w
+		}
+		for k := 1; k <= 10 && k <= len(n); k++ {
+			add("p:" + n[:k])
+		}
+		shape := shapeOf(n)
+		add("s:" + head(shape, 8))
+		add("S:" + head(shape, 16))
+		add("l:" + strconv.Itoa(min(len(n)/8, 8)))
+	}
+	sort.Slice(feats, func(i, j int) bool { return feats[i] < feats[j] })
+	out := feats[:0]
+	for i, f := range feats {
+		if i == 0 || f != feats[i-1] {
+			out = append(out, f)
 		}
 	}
-	return feats
+	return out
+}
+
+// shapeOf collapses every run of letters to "a" and keeps the rest of a
+// normalized banner (digit runs are already "0").
+func shapeOf(n string) string {
+	var b strings.Builder
+	letter := false
+	for i := 0; i < len(n); i++ {
+		c := n[i]
+		if c >= 'a' && c <= 'z' {
+			if !letter {
+				b.WriteByte('a')
+			}
+			letter = true
+			continue
+		}
+		letter = false
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+func head(s string, n int) string {
+	if len(s) > n {
+		return s[:n]
+	}
+	return s
 }
 
 func hash(s string) uint32 {

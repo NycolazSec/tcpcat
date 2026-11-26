@@ -6,14 +6,18 @@
 //
 // Training data: the banner examples of Rapid7 Recog (BSD-2-Clause), framed
 // the way each protocol presents them (an SSH example "OpenSSH_9.6" arrives
-// as "SSH-2.0-OpenSSH_9.6"), plus the example banners of tcpcat's
-// dictionary. Every example is degraded under each network condition of
-// internal/ai/model before tcpcat's own sanitizer stores it.
+// as "SSH-2.0-OpenSSH_9.6", a MySQL error as the packet that carries it);
+// banners generated from the patterns of Recog's training fingerprints (see
+// regexgen.go); the example banners of tcpcat's dictionary; and binary noise
+// as examples of "a service the dictionary does not know". Every example is
+// degraded under each network condition of internal/ai/model before tcpcat's
+// own sanitizer stores it.
 //
 // Examples are split by fingerprint, not by line, so near-identical
 // variants of one fingerprint never sit on both sides of the split: 60% of
-// fingerprints train, 20% calibrate the confidence, 20% are only ever used
-// for the report.
+// fingerprints train, 20% stop the training and calibrate the confidence,
+// 20% are only ever used for the report. Generated banners only come from
+// training fingerprints, and the report only judges real ones.
 package main
 
 import (
@@ -36,6 +40,7 @@ import (
 
 type recogFile struct {
 	Fingerprints []struct {
+		Pattern     string `xml:"pattern,attr"`
 		Description string `xml:"description"`
 		Examples    []struct {
 			Encoding string `xml:"_encoding,attr"`
@@ -79,7 +84,23 @@ var sources = []source{
 	{"http_servers.xml", "http", prefix("")},
 	{"mysql_banners.xml", "mysql", prefix("")},
 	{"rtsp_servers.xml", "rtsp", prefix("")},
+	{"mysql_error.xml", "mysql", mysqlError},
 	{"nntp_banners.xml", "", prefix("200 ")},
+}
+
+// mysqlError wraps an error message in the packet a MySQL server sends to a
+// client it refuses before the handshake: length, sequence, 0xff, the error
+// code, the text. tcpcat stores what is printable of it.
+func mysqlError(e string, r *rand.Rand) string {
+	code := 1130 // ER_HOST_NOT_PRIVILEGED
+	switch l := strings.ToLower(e); {
+	case strings.Contains(l, "block"):
+		code = 1129 // ER_HOST_IS_BLOCKED
+	case strings.Contains(l, "too many"):
+		code = 1040 // ER_CON_COUNT_ERROR
+	}
+	n := len(e) + 3
+	return string([]byte{byte(n), byte(n >> 8), 0, 0, 0xff, byte(code), byte(code >> 8)}) + e
 }
 
 // raw is one banner before any network condition.
@@ -87,6 +108,7 @@ type raw struct {
 	label, banner, group string
 	port                 int // conventional port for this label
 	fromDictionary       bool
+	generated            bool // from a pattern or noise: training only
 }
 
 var httpPorts = []int{80, 443, 8080, 8443, 8000}
@@ -96,7 +118,15 @@ func main() {
 	out := flag.String("out", "internal/ai/model/weights.bin", "Where to write the model")
 	report := flag.String("report", "internal/ai/model/EVALUATION.md", "Where to write the evaluation report")
 	seed := flag.Int64("seed", 1, "Random seed")
-	confusion := flag.Bool("confusion", false, "Print the most frequent mistakes on clean held-out banners")
+	epochs := flag.Int("epochs", 30, "Training passes at most (training stops earlier once held-out loss stops improving)")
+	rate := flag.Float64("rate", 1, "FTRL learning rate")
+	l1 := flag.Float64("l1", 1.5, "L1 regularization (sparser, smaller model)")
+	l2 := flag.Float64("l2", 1, "L2 regularization")
+	dropout := flag.Float64("dropout", 0.7, "Share of banner features hidden at each pass")
+	balance := flag.Float64("balance", 0.5, "0 weighs every example alike, 1 every class alike")
+	sweep := flag.Bool("sweep", false, "Print accuracy on the calibration split only (to tune the flags above without looking at the test split)")
+	perPattern := flag.Int("generate", 12, "Banners to generate from each training fingerprint's pattern")
+	confusion := flag.String("confusion", "", "Print the mistakes on the calibration split under this network condition (clean, unusual-port...)")
 	flag.Parse()
 	if *recogDir == "" {
 		fmt.Fprintln(os.Stderr, "usage: aitrain -recog <path to rapid7/recog>")
@@ -117,6 +147,8 @@ func main() {
 		}
 		for i, fp := range f.Fingerprints {
 			label := labelFor(dict, src.protocol, product(fp.Params))
+			group := fmt.Sprintf("%s#%d", src.file, i)
+			seen := map[string]bool{}
 			for _, ex := range fp.Examples {
 				text := ex.Text
 				if ex.Encoding == "base64" {
@@ -129,14 +161,46 @@ func main() {
 				if strings.TrimSpace(text) == "" {
 					continue
 				}
+				seen[text] = true
 				all = append(all, raw{
 					label:  label,
 					banner: src.frame(text, r),
-					group:  fmt.Sprintf("%s#%d", src.file, i),
+					group:  group,
 					port:   conventionalPort(dict, label, r),
 				})
 			}
+			if bucket(group) < 2 {
+				continue // never generate from a held-out fingerprint
+			}
+			if g := newGenerator(fp.Pattern); g != nil {
+				for k := 0; k < *perPattern; k++ {
+					text := g.sample(r)
+					if text == "" || seen[text] {
+						continue
+					}
+					seen[text] = true
+					all = append(all, raw{label: label, banner: src.frame(text, r), group: group,
+						port: conventionalPort(dict, label, r), generated: true})
+				}
+			}
 		}
+	}
+	// Binary noise: what an unknown binary protocol leaves once tcpcat has
+	// kept the printable bytes. The model should say it does not know.
+	ports := dict.Ports()
+	for k := 0; k < 400; k++ {
+		b := make([]byte, 6+r.Intn(60))
+		for i := range b {
+			b[i] = byte(r.Intn(256))
+		}
+		if model.Store(string(b)) == "" {
+			continue
+		}
+		port := 1024 + r.Intn(64511)
+		if k%2 == 0 {
+			port = ports[r.Intn(len(ports))]
+		}
+		all = append(all, raw{label: model.Other, banner: string(b), group: "noise", port: port, generated: true})
 	}
 	for _, s := range dict.All() {
 		for _, b := range s.Banners {
@@ -147,7 +211,7 @@ func main() {
 	var train, calib, test []raw
 	for _, e := range all {
 		switch {
-		case e.fromDictionary:
+		case e.fromDictionary || e.generated:
 			train = append(train, e)
 		case bucket(e.group) == 0:
 			test = append(test, e)
@@ -163,12 +227,16 @@ func main() {
 		for _, e := range set {
 			n := copies
 			if e.fromDictionary {
-				n *= 6 // few, hand-checked examples: weigh them more
+				n *= 4 // few, hand-checked examples: weigh them more
 			}
 			for _, c := range model.Conditions {
+				label := e.label
+				if c.ProtocolOnly {
+					label = protocolLabel(dict, label)
+				}
 				for k := 0; k < n; k++ {
 					b, p := c.Apply(e.banner, e.port, r)
-					out = append(out, model.Example{Label: e.label, Banner: model.Store(b), Port: p})
+					out = append(out, model.Example{Label: label, Banner: model.Store(b), Port: p})
 				}
 			}
 		}
@@ -178,30 +246,62 @@ func main() {
 	calibEx := degrade(calib, 1, rand.New(rand.NewSource(*seed+2)))
 
 	start := time.Now()
-	m := model.Train(trainEx, model.TrainOptions{Alpha: 0.05, MinCount: 2})
-	m.Calibrate(calibEx)
-	m.Trained = fmt.Sprintf("%s; Rapid7 Recog %s; %d raw banners, %d training examples after network conditions",
-		time.Now().UTC().Format("2006-01-02"), recogCommit(*recogDir), len(all), len(trainEx))
-	took := time.Since(start)
-
+	m := model.Train(trainEx, model.TrainOptions{
+		Epochs: *epochs, Rate: *rate, L1: *l1, L2: *l2, Dropout: *dropout, Balance: *balance, Seed: *seed, Validate: calibEx,
+		Progress: func(epoch int, tl, vl float64) {
+			fmt.Fprintf(os.Stderr, "epoch %2d  train loss %.4f  held-out loss %.4f\n", epoch, tl, vl)
+		},
+	})
+	// What ships is the quantized model: calibrate and judge that one.
 	data, err := m.Encode()
 	if err != nil {
+		fail(err)
+	}
+	if m, err = model.Decode(data); err != nil {
+		fail(err)
+	}
+	m.Calibrate(calibEx)
+	gen, noise := countGenerated(all)
+	m.Trained = fmt.Sprintf("%s; Rapid7 Recog %s; %d banners (%d generated from its patterns), %d training examples after %d network conditions",
+		time.Now().UTC().Format("2006-01-02"), recogCommit(*recogDir), len(all), gen, len(trainEx), len(model.Conditions))
+	took := time.Since(start)
+
+	if data, err = m.Encode(); err != nil {
 		fail(err)
 	}
 	if err := os.WriteFile(*out, data, 0o600); err != nil {
 		fail(err)
 	}
 
-	if *confusion {
-		mistakes := map[string]int{}
-		for _, e := range test {
-			stored := model.Store(e.banner)
-			if g := m.Classify(stored, e.port)[0]; protocolOf(dict, g.ID) != protocolOf(dict, e.label) {
-				mistakes[fmt.Sprintf("%-10s -> %-10s e.g. %q:%d", e.label, g.ID, stored, e.port)]++
+	if *sweep {
+		var prot, sureRight, worst float64
+		rows := evaluate(dict, m, calib, *seed+3)
+		for _, row := range rows {
+			prot += row.protocol / float64(len(rows))
+			sureRight += row.sureRight / float64(len(rows))
+			if row.cond.Name == "worst-case" {
+				worst = row.protocol
 			}
 		}
-		for k := range mistakes {
-			fmt.Println(k)
+		fmt.Printf("calibration split: protocol %.2f%%  worst-case %.2f%%  right when sure %.2f%%  size %d KB\n", 100*prot, 100*worst, 100*sureRight, len(data)/1024)
+		for _, row := range rows {
+			fmt.Printf("  %-13s %.1f%%\n", row.cond.Name, 100*row.protocol)
+		}
+		return
+	}
+	if *confusion != "" {
+		for _, c := range model.Conditions {
+			if c.Name != *confusion {
+				continue
+			}
+			r := rand.New(rand.NewSource(*seed + 3))
+			for _, e := range calib { // the test split stays unseen while tuning
+				b, p := c.Apply(e.banner, e.port, r)
+				stored := model.Store(b)
+				if g := m.Classify(stored, p)[0]; protocolOf(dict, g.ID) != protocolOf(dict, e.label) {
+					fmt.Printf("%-12s -> %-12s %3.0f%%  %q:%d\n", e.label, g.ID, 100*g.P, stored, p)
+				}
+			}
 		}
 		return
 	}
@@ -209,17 +309,21 @@ func main() {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Banner model: evaluation\n\n")
 	fmt.Fprintf(&b, "Generated by `go run ./internal/ai/aitrain` on %s. Do not edit by hand.\n\n", time.Now().UTC().Format("2006-01-02"))
-	fmt.Fprintf(&b, "- Training data: %d raw banners (%d from Rapid7 Recog %s, %d from tcpcat's dictionary), %d classes.\n",
-		len(all), len(all)-countDict(all), recogCommit(*recogDir), countDict(all), len(m.Classes))
-	fmt.Fprintf(&b, "- Split by fingerprint: %d banners train, %d calibrate, %d are held out for this report.\n", len(train), len(calib), len(test))
+	fmt.Fprintf(&b, "- Training data: %d banners: %d real ones from Rapid7 Recog %s, %d generated from the patterns of its training fingerprints, %d from tcpcat's dictionary, %d of binary noise; %d classes.\n",
+		len(all), len(all)-gen-noise-countDict(all), recogCommit(*recogDir), gen, countDict(all), noise, len(m.Classes))
+	fmt.Fprintf(&b, "- Split by fingerprint: %d banners train, %d stop the training and calibrate, %d real banners are held out for this report.\n", len(train), len(calib), len(test))
 	fmt.Fprintf(&b, "- Each training banner is degraded under all %d network conditions: %d training examples.\n", len(model.Conditions), len(trainEx))
-	fmt.Fprintf(&b, "- Model: naive Bayes over hashed character n-grams and words, %d weights, %d KB on disk, temperature %.0f, port weight %.0f, trained in %s.\n\n",
-		m.Size(), len(data)/1024, m.Temperature, m.PortWeight, took.Round(time.Millisecond))
+	fmt.Fprintf(&b, "- Model: multinomial logistic regression over hashed n-grams, words, prefixes, shape and port, %d one-byte weights, %d KB on disk, port weight %.2f, temperature %.2f, trained in %s.\n\n",
+		m.Size(), len(data)/1024, m.PortWeight, m.Temperature, took.Round(time.Second))
 	b.WriteString("Every held-out banner is degraded under one condition at a time. **Protocol** counts an answer right when it names the right kind of service (SSH, FTP, HTTP...), which is what an exposure decision needs; **exact** also requires the right product (OpenSSH vs Dropbear). **Detector** is tcpcat's existing banner signatures with the port-number fallback, judged on the same protocol criterion. **Sure** is the share of answers with a confidence of 50% or more, and **right when sure** their accuracy.\n\n")
 	b.WriteString("| Condition | What it simulates | Protocol | Exact | Detector | Sure | Right when sure |\n|---|---|---:|---:|---:|---:|---:|\n")
 	for _, row := range rep {
-		fmt.Fprintf(&b, "| %s | %s | %.1f%% | %.1f%% | %.1f%% | %.0f%% | %.1f%% |\n", row.cond.Name, row.cond.Why,
-			100*row.protocol, 100*row.exact, 100*row.baseline, 100*row.sure, 100*row.sureRight)
+		exact := fmt.Sprintf("%.1f%%", 100*row.exact)
+		if row.cond.ProtocolOnly {
+			exact = "n/a"
+		}
+		fmt.Fprintf(&b, "| %s | %s | %.1f%% | %s | %.1f%% | %.0f%% | %.1f%% |\n", row.cond.Name, row.cond.Why,
+			100*row.protocol, exact, 100*row.baseline, 100*row.sure, 100*row.sureRight)
 	}
 	b.WriteString("\nWhen no banner arrives at all (a filtered port, or a service that waits for the client to speak first), there is nothing to classify: tcpcat's AI then falls back to the dictionary's port conventions and says the identification is unconfirmed.\n")
 	if err := os.WriteFile(*report, []byte(b.String()), 0o600); err != nil {
@@ -273,11 +377,10 @@ func evaluate(dict *kb.Dictionary, m *model.Model, test []raw, seed int64) []row
 
 func protocolOf(dict *kb.Dictionary, id string) string {
 	if s := dict.Get(id); s != nil {
-		p := s.Protocol()
-		if p == "https" || p == "http-alt" {
-			return "http" // one kind of service for this comparison
+		if s.SpeaksHTTP() {
+			return "http" // one kind of service for this comparison: Webmin is a web server
 		}
-		return p
+		return s.Protocol()
 	}
 	return model.Other
 }
@@ -305,11 +408,10 @@ func labelFor(dict *kb.Dictionary, protocol, prod string) string {
 		return model.Other
 	}
 	if prod != "" {
-		if s := dict.ByName(prod); s != nil && s.Protocol() == protocol {
-			return s.ID
-		}
-		if s := dict.ByName(strings.Fields(prod)[0]); s != nil && s.Protocol() == protocol {
-			return s.ID
+		for _, name := range []string{prod, strings.Fields(prod)[0]} {
+			if s := dict.ByName(name); s != nil && (s.Protocol() == protocol || protocol == "http" && s.SpeaksHTTP()) {
+				return s.ID
+			}
 		}
 	}
 	return protocol
@@ -338,6 +440,18 @@ func bucket(group string) int {
 	return int(h.Sum32() % 5)
 }
 
+func countGenerated(all []raw) (generated, noise int) {
+	for _, e := range all {
+		switch {
+		case e.generated && e.label == model.Other && e.group == "noise":
+			noise++
+		case e.generated:
+			generated++
+		}
+	}
+	return
+}
+
 func countDict(all []raw) int {
 	n := 0
 	for _, e := range all {
@@ -359,4 +473,15 @@ func recogCommit(dir string) string {
 func fail(err error) {
 	fmt.Fprintln(os.Stderr, "aitrain:", err)
 	os.Exit(1)
+}
+
+// protocolLabel is the dictionary entry of a label's protocol: "smtp" for
+// "postfix". A banner whose product name was replaced can only say that much.
+func protocolLabel(dict *kb.Dictionary, label string) string {
+	if s := dict.Get(label); s != nil {
+		if p := dict.Get(s.Protocol()); p != nil {
+			return p.ID
+		}
+	}
+	return label
 }
