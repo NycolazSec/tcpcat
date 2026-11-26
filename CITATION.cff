@@ -4,7 +4,9 @@ title: "tcpcat: know what your servers expose"
 abstract: >-
   tcpcat checks what the servers and networks you are responsible for expose.
   It scans them from the outside (SYN, connect and UDP scans, service, version
-  and OS detection, an eBPF/AF_XDP engine), ties each open port to the program
+  and OS detection, an eBPF/AF_XDP engine), and its offline AI explains each
+  open port: what it is, why it matters and how to fix it, verifying its own
+  findings with read-only follow-up probes. It ties each port to the program
   behind it, correlates vulnerabilities with distribution patch data, checks
   exposure against YAML rules from several vantage points, and keeps signed
   evidence that can be replayed to verify a fix. Reports are JSON, SARIF and

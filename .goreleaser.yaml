@@ -118,7 +118,7 @@ brews:
     # repository root and `brew install` keeps the previous version.
     directory: Formula
     homepage: "https://tcpcat.io"
-    description: "Checks what your servers expose to the network and proves when it is fixed"
+    description: "Checks what your servers expose, explains it with an offline AI, proves fixes"
     license: "AGPL-3.0-only"
     commit_author:
       name: NycolazSec
@@ -135,7 +135,7 @@ brews:
 # aurs:
 #   - name: tcpcat-bin
 #     homepage: "https://tcpcat.io"
-#     description: "Checks what your servers expose to the network and proves when it is fixed"
+#     description: "Checks what your servers expose, explains it with an offline AI, proves fixes"
 #     maintainers:
 #       - "NycolazSec <support@tcpcat.io>"
 #     license: "AGPL-3.0-only"
