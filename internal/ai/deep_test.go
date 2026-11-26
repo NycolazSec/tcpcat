@@ -24,11 +24,9 @@ type fakeProber struct {
 		code int
 		body string
 	}
-	sshCalls int
 }
 
 func (f *fakeProber) SSHAuthMethods(host string, port int) ([]string, error) {
-	f.sshCalls++
 	if m, ok := f.ssh[port]; ok {
 		return m, nil
 	}
