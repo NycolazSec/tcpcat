@@ -97,7 +97,7 @@ func vantageFor(results []scan.TargetResult, given string) string {
 	}
 	for _, r := range results {
 		ip := net.ParseIP(r.IP)
-		if ip == nil || !(ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()) {
+		if ip == nil || !ip.IsPrivate() && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() {
 			return ai.Internet
 		}
 	}
@@ -177,7 +177,7 @@ func writeDraftPolicy(a *ai.Analyzer, rep ai.Report, path string) int {
 		return exitError
 	}
 	data := a.DraftPolicy(rep, msg(rep.Lang, "public exposure", "exposition publique"))
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		fmt.Printf("%s[!] %v%s\n", config.Red, err, config.Reset)
 		return exitError
 	}

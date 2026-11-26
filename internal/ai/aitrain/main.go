@@ -188,7 +188,7 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	if err := os.WriteFile(*out, data, 0o644); err != nil {
+	if err := os.WriteFile(*out, data, 0o600); err != nil {
 		fail(err)
 	}
 
@@ -222,7 +222,7 @@ func main() {
 			100*row.protocol, 100*row.exact, 100*row.baseline, 100*row.sure, 100*row.sureRight)
 	}
 	b.WriteString("\nWhen no banner arrives at all (a filtered port, or a service that waits for the client to speak first), there is nothing to classify: tcpcat's AI then falls back to the dictionary's port conventions and says the identification is unconfirmed.\n")
-	if err := os.WriteFile(*report, []byte(b.String()), 0o644); err != nil {
+	if err := os.WriteFile(*report, []byte(b.String()), 0o600); err != nil {
 		fail(err)
 	}
 	fmt.Print(b.String())
@@ -349,7 +349,7 @@ func countDict(all []raw) int {
 }
 
 func recogCommit(dir string) string {
-	out, err := exec.Command("git", "-C", dir, "log", "-1", "--format=%h (%cs)").Output()
+	out, err := exec.Command("git", "-C", dir, "log", "-1", "--format=%h (%cs)").Output() // #nosec G204 -- fixed arguments, no shell; dir is the -recog path the developer passed
 	if err != nil {
 		return "(unknown commit)"
 	}

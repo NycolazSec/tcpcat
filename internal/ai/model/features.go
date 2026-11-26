@@ -74,7 +74,7 @@ func Features(banner string) []uint32 {
 			}
 		}
 		for _, w := range strings.FieldsFunc(n, func(r rune) bool {
-			return !(r >= 'a' && r <= 'z' || r == '0')
+			return (r < 'a' || r > 'z') && r != '0'
 		}) {
 			if len(w) >= 2 {
 				add("w:" + w)
