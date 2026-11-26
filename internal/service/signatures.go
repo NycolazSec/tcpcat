@@ -99,3 +99,19 @@ func matchBannerSignature(banner string) (name, version, matched string, binary 
 	}
 	return "", "", "", false, false
 }
+
+// IdentifyStoredBanner names a service the way the detector's passive path
+// does, from a banner as tcpcat stored it: the first banner signature that
+// matches, otherwise the conventional name of the port ("unknown" when the
+// port has none). internal/ai uses it to compare its model with the
+// detector, and to say which of the two an answer came from.
+func IdentifyStoredBanner(banner string, port int) (name string, fromBanner bool) {
+	if n, _, _, _, ok := matchBannerSignature(banner); ok {
+		return n, true
+	}
+	return resolveDefaultPortName(port), false
+}
+
+// SanitizeBanner is the transformation applied to every banner tcpcat
+// stores (see sanitizeBanner).
+func SanitizeBanner(b string) string { return sanitizeBanner(b) }

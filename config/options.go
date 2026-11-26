@@ -152,6 +152,9 @@ type Options struct {
 	ScriptPath     string
 	VulnersAPIKey  string
 	ExploitIntel   bool
+	AI             bool   // --ai: tcpcat's AI judges the results (internal/ai)
+	AILang         string // --ai-lang: fr or en; empty follows $LANG
+	AIFrom         string // --ai-from: internet or internal; empty guesses from the addresses
 	DualStack      bool
 	EvidenceOutput string
 	EvidenceKey    string
@@ -323,6 +326,8 @@ func ParseFlags() (*Options, error) {
 		"--evidence":          true,
 		"--evidence-key":      true,
 		"--fingerprints-out":  true,
+		"--ai-lang":           true,
+		"--ai-from":           true,
 		"--exclude":           true,
 		"-oX":                 true,
 		"-oH":                 true,
@@ -467,6 +472,9 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.ScriptPath, "scripts", "", "Directory of WebAssembly detection modules (*.wasm); see docs/WASM_SDK.md")
 	flag.StringVar(&opts.VulnersAPIKey, "vulners-apikey", "", "Vulners.com API key for CVE lookup")
 	flag.BoolVar(&opts.ExploitIntel, "exploit-intel", false, "Enrich CVEs with CISA KEV (known-exploited) + EPSS scores and prioritize by them")
+	flag.BoolVar(&opts.AI, "ai", false, "Let tcpcat's AI judge the results: what to fix, why, and how")
+	flag.StringVar(&opts.AILang, "ai-lang", "", "Language of the AI's answers: fr or en (default: from $LANG)")
+	flag.StringVar(&opts.AIFrom, "ai-from", "", "Where the scan runs from, for the AI: internet or internal (default: guessed)")
 	flag.BoolVar(&opts.DualStack, "dual-stack", false, "Also scan the IPv6 address published (DNS AAAA) for each IPv4 target and report ports open on IPv6 only")
 	flag.BoolVar(&opts.SmartBypass, "smart-bypass", false, "Enable advanced monitoring validation on filtered ports")
 	flag.BoolVar(&opts.SmartBypass, "spoof-agent", false, "Alias for --smart-bypass")
@@ -520,6 +528,7 @@ func ParseFlags() (*Options, error) {
 		fmt.Printf("  %s--scripts <dir>%s Run scripts from directory for advanced detection\n", White, Reset)
 		fmt.Printf("  %s--vulners-apikey <key>%s Perform CVE lookup for detected services\n", White, Reset)
 		fmt.Printf("  %s--exploit-intel%s Enrich CVEs with CISA KEV + EPSS and prioritize by real-world exploitation\n", White, Reset)
+		fmt.Printf("  %s--ai%s            tcpcat's AI judges the results: what to fix, why, how (offline; --ai-lang fr|en)\n", White, Reset)
 		fmt.Printf("  %s--fingerprints-out <file>%s With -sV: export unknown-service groups as anonymized templates + suggested signatures\n", White, Reset)
 		fmt.Printf("  %s--dual-stack%s    Scan each target's IPv6 address (DNS AAAA) too; flag ports open on IPv6 but not IPv4\n", White, Reset)
 		fmt.Printf("  %s-O%s              Enable OS detection\n", White, Reset)

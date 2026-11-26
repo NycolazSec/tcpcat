@@ -241,7 +241,7 @@ func splitPositional(args []string) (string, []string) {
 // booleans), so splitPositional doesn't swallow a file name after a bool.
 func flagTakesValue(flagName string) bool {
 	switch strings.TrimLeft(flagName, "-") {
-	case "from", "j", "sarif", "rate", "T", "scope-file", "out", "key", "pub", "o", "finding":
+	case "from", "j", "sarif", "rate", "T", "scope-file", "out", "key", "pub", "o", "finding", "lang", "port", "policy":
 		return true
 	}
 	return false

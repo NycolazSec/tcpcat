@@ -1,0 +1,1288 @@
+# tcpcat's dictionary of network services.
+#
+# One entry per service (a protocol such as "ssh") or product (a daemon such as
+# "openssh", with `parent: ssh`). An entry inherits every field it leaves empty
+# from its parent, so groups of services share their text: `abstract` entries
+# exist only to be inherited from and are never reported themselves.
+#
+#   exposure  what is acceptable from the internet:
+#               public      meant to be reachable by anyone (a website, a game)
+#               restricted  may be reachable, better limited to known addresses
+#               private     should never be reachable from the internet
+#   risk      how bad it is when a private/restricted service is reachable
+#             from the internet: info, low, medium, high, critical
+#   insecure  the protocol itself sends credentials or data in clear text
+#   products  product names (as Rapid7 Recog and tcpcat's detector write
+#             them) that identify this entry; matched case-insensitively
+#   banners   real-looking banners, as tcpcat stores them, used as extra
+#             training examples for the banner model
+#
+# Statements here must stay factual and checkable: they are shown to users
+# as the reason behind a finding.
+version: 1
+services:
+
+  # ------------------------------------------------------------------ groups
+  - id: database
+    abstract: true
+    category: database
+    exposure: private
+    risk: high
+    why:
+      en: Anyone on the internet can try passwords against it, use any unpatched flaw, and reach your data directly.
+      fr: N'importe qui sur Internet peut essayer des mots de passe, exploiter une faille non corrigée et atteindre directement vos données.
+    hint:
+      en: Applications on the same machine or network reach it without the internet; for remote administration use an SSH tunnel or a VPN.
+      fr: Les applications de la même machine ou du même réseau y accèdent sans passer par Internet ; pour l'administrer à distance, utilisez un tunnel SSH ou un VPN.
+
+  - id: queue
+    abstract: true
+    category: messaging
+    exposure: private
+    risk: high
+    why:
+      en: Message brokers often accept connections without authentication by default; anyone could read or inject messages.
+      fr: Les courtiers de messages acceptent souvent des connexions sans authentification par défaut ; n'importe qui pourrait lire ou injecter des messages.
+
+  - id: cluster
+    abstract: true
+    category: orchestration
+    exposure: private
+    risk: critical
+    why:
+      en: This is the control plane of your containers or cluster; access to it usually means control of every workload.
+      fr: C'est le cœur de commande de vos conteneurs ou de votre cluster ; y accéder revient généralement à contrôler toutes les applications.
+    hint:
+      en: Cluster ports only need to be reachable between nodes; restrict them to the node addresses or the private network.
+      fr: Les ports du cluster n'ont besoin d'être joignables qu'entre les nœuds ; limitez-les aux adresses des nœuds ou au réseau privé.
+
+  - id: monitoring
+    abstract: true
+    category: monitoring
+    exposure: private
+    risk: medium
+    why:
+      en: It reveals the inside of your infrastructure (hosts, versions, metrics) and often has no login at all.
+      fr: Il révèle l'intérieur de votre infrastructure (machines, versions, métriques) et n'a souvent aucune authentification.
+
+  - id: windows-network
+    abstract: true
+    category: windows
+    exposure: private
+    risk: high
+    why:
+      en: Windows network services are a favourite target of worms and ransomware; they are meant for the local network only.
+      fr: Les services réseau Windows sont une cible favorite des vers et des rançongiciels ; ils sont faits pour le réseau local uniquement.
+
+  - id: industrial
+    abstract: true
+    category: industrial
+    exposure: private
+    risk: critical
+    insecure: true
+    why:
+      en: Industrial protocols have no authentication; anyone who reaches the port can read or change the state of physical equipment.
+      fr: Les protocoles industriels n'ont pas d'authentification ; quiconque atteint le port peut lire ou modifier l'état d'équipements physiques.
+    hint:
+      en: Keep control networks isolated from the internet; remote access goes through a VPN and a monitored jump host.
+      fr: Gardez les réseaux de contrôle isolés d'Internet ; l'accès distant passe par un VPN et une machine de rebond surveillée.
+
+  - id: admin-web
+    abstract: true
+    category: administration
+    exposure: private
+    risk: high
+    why:
+      en: An administration interface on the internet gets constant password-guessing, and one flaw in it gives control of the server.
+      fr: Une interface d'administration sur Internet subit des essais de mots de passe en continu, et une seule faille donne le contrôle du serveur.
+
+  # ---------------------------------------------------------- remote access
+  - id: ssh
+    name: SSH
+    category: remote-access
+    ports: [22]
+    exposure: restricted
+    risk: low
+    what:
+      en: Remote shell access to the machine.
+      fr: Accès distant en ligne de commande à la machine.
+    why:
+      en: SSH on the internet is fine when well configured, but it is probed by password-guessing bots all day long.
+      fr: SSH sur Internet est acceptable s'il est bien configuré, mais des robots y essaient des mots de passe en permanence.
+    hint:
+      en: Allow only key-based login (PasswordAuthentication no), disable root login, and if you can, allow only known addresses.
+      fr: N'autorisez que la connexion par clé (PasswordAuthentication no), interdisez root, et si possible n'acceptez que des adresses connues.
+    banners: [SSH-2.0-Go, SSH-2.0-SSHD, SSH-2.0-paramiko_3.4.0]
+  - id: openssh
+    name: OpenSSH
+    parent: ssh
+    products: [openssh]
+    banners: [SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.5, SSH-2.0-OpenSSH_10.0p2 Debian-7, SSH-2.0-OpenSSH_8.7]
+  - id: dropbear
+    name: Dropbear SSH
+    parent: ssh
+    products: [dropbear, dropbear ssh, dropbear_ssh]
+    banners: [SSH-2.0-dropbear_2022.83]
+  - id: libssh
+    name: libssh
+    parent: ssh
+    products: [libssh]
+
+  - id: telnet
+    name: Telnet
+    category: remote-access
+    ports: [23, 2323]
+    exposure: private
+    risk: critical
+    insecure: true
+    what:
+      en: Old remote login protocol, often found on routers, cameras and IoT devices.
+      fr: Ancien protocole de connexion distante, fréquent sur les routeurs, caméras et objets connectés.
+    why:
+      en: Telnet sends passwords in clear text and is the main way botnets such as Mirai take over devices.
+      fr: Telnet envoie les mots de passe en clair et c'est la porte d'entrée principale des botnets comme Mirai.
+    hint:
+      en: Turn Telnet off and use SSH instead.
+      fr: Désactivez Telnet et utilisez SSH à la place.
+
+  - id: rdp
+    name: Remote Desktop (RDP)
+    name_fr: Bureau à distance (RDP)
+    category: remote-access
+    ports: [3389]
+    aliases: [ms-wbt-server, rdp]
+    exposure: private
+    risk: high
+    what:
+      en: Windows remote desktop.
+      fr: Bureau à distance Windows.
+    why:
+      en: Exposed RDP is one of the most common entry points for ransomware, through password-guessing and flaws such as BlueKeep.
+      fr: Un RDP exposé est l'une des entrées les plus fréquentes des rançongiciels, par essais de mots de passe et failles comme BlueKeep.
+    hint:
+      en: Put RDP behind a VPN or a Remote Desktop Gateway, and require Network Level Authentication.
+      fr: Placez RDP derrière un VPN ou une passerelle Bureau à distance, et exigez l'authentification au niveau du réseau (NLA).
+
+  - id: vnc
+    name: VNC
+    category: remote-access
+    ports: [5900, 5901, 5800]
+    exposure: private
+    risk: high
+    what:
+      en: Remote screen sharing.
+      fr: Partage d'écran à distance.
+    why:
+      en: VNC passwords are short and often missing, and the screen and keyboard travel unencrypted.
+      fr: Les mots de passe VNC sont courts, souvent absents, et l'écran comme le clavier circulent sans chiffrement.
+    hint:
+      en: Reach VNC through an SSH tunnel or a VPN only.
+      fr: N'accédez à VNC qu'à travers un tunnel SSH ou un VPN.
+    banners: ["RFB 003.008", "RFB 003.003"]
+
+  - id: x11
+    name: X11
+    category: remote-access
+    ports: [6000, 6001]
+    exposure: private
+    risk: critical
+    insecure: true
+    what:
+      en: X Window display server.
+      fr: Serveur d'affichage X Window.
+    why:
+      en: An open X server lets anyone capture the screen and every keystroke.
+      fr: Un serveur X ouvert permet à n'importe qui de capturer l'écran et chaque frappe au clavier.
+    hint:
+      en: Start X with -nolisten tcp and use ssh -X for remote applications.
+      fr: Lancez X avec -nolisten tcp et utilisez ssh -X pour les applications distantes.
+
+  - id: winrm
+    name: WinRM
+    parent: windows-network
+    ports: [5985, 5986]
+    what:
+      en: Windows remote management (PowerShell remoting).
+      fr: Administration à distance de Windows (PowerShell à distance).
+
+  # ------------------------------------------------------------- file sharing
+  - id: ftp
+    name: FTP
+    category: file-transfer
+    ports: [21]
+    exposure: restricted
+    risk: medium
+    insecure: true
+    what:
+      en: File transfer server.
+      fr: Serveur de transfert de fichiers.
+    why:
+      en: FTP sends logins and files in clear text, and anonymous access is often left on by mistake.
+      fr: FTP transmet identifiants et fichiers en clair, et l'accès anonyme reste souvent activé par erreur.
+    hint:
+      en: Prefer SFTP; if FTP must stay, require TLS (FTPS) and disable anonymous login.
+      fr: Préférez SFTP ; si FTP doit rester, exigez TLS (FTPS) et désactivez la connexion anonyme.
+    banners: ["220 FTP server ready."]
+  - id: vsftpd
+    name: vsftpd
+    parent: ftp
+    products: [vsftpd]
+    banners: ["220 (vsFTPd 3.0.3)"]
+  - id: proftpd
+    name: ProFTPD
+    parent: ftp
+    products: [proftpd]
+    banners: ["220 ProFTPD Server (Debian) [::ffff:192.0.2.10]"]
+  - id: pure-ftpd
+    name: Pure-FTPd
+    parent: ftp
+    products: [pure-ftpd, pureftpd]
+    banners: ["220---------- Welcome to Pure-FTPd [privsep] [TLS] ----------"]
+  - id: filezilla-ftp
+    name: FileZilla Server
+    parent: ftp
+    products: [filezilla server, filezilla-ftp, filezilla]
+  - id: microsoft-ftpd
+    name: Microsoft FTP Service
+    parent: ftp
+    products: [microsoft-ftpd, ftp service, iis ftp]
+    banners: ["220 Microsoft FTP Service"]
+
+  - id: smb
+    name: SMB (Windows file sharing)
+    name_fr: SMB (partage Windows)
+    parent: windows-network
+    ports: [445]
+    aliases: [microsoft-ds, smb, smb2]
+    risk: critical
+    what:
+      en: Windows file and printer sharing.
+      fr: Partage de fichiers et d'imprimantes Windows.
+    why:
+      en: SMB on the internet is how WannaCry and NotPetya spread; it should never leave the local network.
+      fr: C'est par SMB exposé que WannaCry et NotPetya se sont propagés ; il ne doit jamais sortir du réseau local.
+  - id: netbios
+    name: NetBIOS session
+    name_fr: Session NetBIOS
+    parent: windows-network
+    ports: [139]
+    aliases: [netbios-ssn]
+    what:
+      en: Legacy Windows file sharing transport.
+      fr: Ancien transport du partage de fichiers Windows.
+  - id: msrpc
+    name: Microsoft RPC
+    parent: windows-network
+    ports: [135]
+    aliases: [msrpc, epmap]
+    what:
+      en: Windows remote procedure call endpoint mapper.
+      fr: Répartiteur d'appels de procédure à distance de Windows.
+
+  - id: nfs
+    name: NFS
+    category: file-transfer
+    ports: [2049]
+    exposure: private
+    risk: high
+    what:
+      en: Network file system shares.
+      fr: Partages de fichiers réseau NFS.
+    why:
+      en: NFS trusts the client's claimed identity; a share open to the internet can be mounted and read by anyone.
+      fr: NFS fait confiance à l'identité déclarée par le client ; un partage ouvert sur Internet peut être monté et lu par n'importe qui.
+    hint:
+      en: Export shares only to the client addresses that need them (/etc/exports) and block 2049 and 111 at the firewall.
+      fr: N'exportez les partages qu'aux adresses clientes concernées (/etc/exports) et bloquez 2049 et 111 au pare-feu.
+  - id: rpcbind
+    name: rpcbind / portmapper
+    category: file-transfer
+    ports: [111]
+    aliases: [rpcbind, portmapper, sunrpc]
+    exposure: private
+    risk: medium
+    what:
+      en: Directory of the machine's RPC services (NFS and others).
+      fr: Annuaire des services RPC de la machine (NFS et autres).
+    why:
+      en: It lists internal services to anyone and has been used for traffic amplification attacks.
+      fr: Il liste les services internes à n'importe qui et a servi à des attaques par amplification.
+    hint:
+      en: Block port 111 from the internet, or stop rpcbind if you do not use NFS.
+      fr: Bloquez le port 111 depuis Internet, ou arrêtez rpcbind si vous n'utilisez pas NFS.
+  - id: rsync
+    name: rsync daemon
+    name_fr: Démon rsync
+    category: file-transfer
+    ports: [873]
+    exposure: private
+    risk: high
+    what:
+      en: File synchronisation daemon.
+      fr: Démon de synchronisation de fichiers.
+    why:
+      en: rsync modules are often readable or even writable without a password.
+      fr: Les modules rsync sont souvent lisibles, voire modifiables, sans mot de passe.
+    hint:
+      en: Run rsync over SSH instead of the daemon, or require auth users and hosts allow in rsyncd.conf.
+      fr: Utilisez rsync par SSH plutôt que le démon, ou exigez auth users et hosts allow dans rsyncd.conf.
+    banners: ["@RSYNCD: 31.0", "@RSYNCD: 30.0"]
+
+  # --------------------------------------------------------------------- web
+  - id: http
+    name: Web server (HTTP)
+    name_fr: Serveur web (HTTP)
+    category: web
+    ports: [80]
+    aliases: [http, www]
+    exposure: public
+    risk: info
+    what:
+      en: Website or web application, without encryption.
+      fr: Site ou application web, sans chiffrement.
+    why:
+      en: Normal for a website, but plain HTTP should only redirect to HTTPS.
+      fr: Normal pour un site, mais le HTTP simple ne devrait servir qu'à rediriger vers HTTPS.
+    hint:
+      en: Redirect every request to HTTPS and add Strict-Transport-Security.
+      fr: Redirigez toutes les requêtes vers HTTPS et ajoutez Strict-Transport-Security.
+  - id: https
+    name: Web server (HTTPS)
+    name_fr: Serveur web (HTTPS)
+    category: web
+    ports: [443]
+    aliases: [https, ssl/http, http-tls]
+    exposure: public
+    risk: info
+    what:
+      en: Website or web application over TLS.
+      fr: Site ou application web chiffré par TLS.
+    why:
+      en: Normal for a website; what matters is the TLS configuration and the software version behind it.
+      fr: Normal pour un site ; ce qui compte, c'est la configuration TLS et la version du logiciel derrière.
+  - id: http-alt
+    name: Web service on an alternate port
+    parent: http
+    name_fr: Service web sur un port alternatif
+    category: web
+    ports: [8080, 8000, 8008, 8081, 8888, 8443]
+    aliases: [http-proxy, http-alt, https-alt]
+    exposure: restricted
+    risk: low
+    what:
+      en: Web service on a non-standard port, often a development server or an admin tool.
+      fr: Service web sur un port non standard, souvent un serveur de développement ou un outil d'administration.
+    why:
+      en: Alternate ports often host tools that were never meant to be public.
+      fr: Les ports alternatifs hébergent souvent des outils qui n'étaient pas prévus pour être publics.
+    hint:
+      en: Check what runs there; publish it through your main reverse proxy on 443, or limit it to known addresses.
+      fr: Vérifiez ce qui tourne là ; publiez-le via votre reverse proxy principal sur 443, ou limitez-le à des adresses connues.
+  - id: nginx
+    name: nginx
+    parent: http
+    products: [nginx]
+    banners: ["nginx/1.24.0 (Ubuntu)", "nginx/1.26.3", "nginx"]
+  - id: apache
+    name: Apache httpd
+    parent: http
+    products: [apache, apache httpd, httpd]
+    banners: ["Apache/2.4.62 (Debian)", "Apache/2.4.58 (Ubuntu)", "Apache"]
+  - id: iis
+    name: Microsoft IIS
+    parent: http
+    products: [iis, microsoft-iis, internet information services]
+    banners: ["Microsoft-IIS/10.0"]
+  - id: caddy
+    name: Caddy
+    parent: http
+    products: [caddy]
+    banners: ["Caddy"]
+  - id: lighttpd
+    name: lighttpd
+    parent: http
+    products: [lighttpd]
+  - id: litespeed
+    name: LiteSpeed
+    parent: http
+    products: [litespeed, openlitespeed]
+    banners: ["LiteSpeed"]
+  - id: cloudflare
+    name: Cloudflare
+    parent: https
+    products: [cloudflare]
+    banners: ["cloudflare"]
+    what:
+      en: Cloudflare edge server in front of the real host.
+      fr: Serveur Cloudflare placé devant la vraie machine.
+  - id: squid
+    name: Squid proxy
+    name_fr: Proxy Squid
+    category: web
+    ports: [3128]
+    products: [squid]
+    exposure: private
+    risk: high
+    what:
+      en: HTTP proxy.
+      fr: Proxy HTTP.
+    why:
+      en: An open proxy lets anyone relay attacks and spam through your address, and may reach your internal network.
+      fr: Un proxy ouvert permet à n'importe qui de faire passer attaques et spam par votre adresse, et peut atteindre votre réseau interne.
+    hint:
+      en: Restrict http_access to your own networks.
+      fr: Limitez http_access à vos propres réseaux.
+    banners: ["squid/6.10", "squid/5.7"]
+  - id: socks
+    name: SOCKS proxy
+    name_fr: Proxy SOCKS
+    category: web
+    ports: [1080]
+    exposure: private
+    risk: high
+    what:
+      en: SOCKS proxy.
+      fr: Proxy SOCKS.
+    why:
+      en: An open proxy lets anyone relay traffic through your address, and may reach your internal network.
+      fr: Un proxy ouvert permet à n'importe qui de faire passer du trafic par votre adresse, et peut atteindre votre réseau interne.
+
+  # -------------------------------------------------------------------- mail
+  - id: smtp
+    name: Mail server (SMTP)
+    name_fr: Serveur de mail (SMTP)
+    category: mail
+    ports: [25]
+    exposure: public
+    risk: info
+    what:
+      en: Receives email for your domains.
+      fr: Reçoit le courrier électronique de vos domaines.
+    why:
+      en: Normal on a mail server; elsewhere, an SMTP port usually means a mail daemon that should listen locally only.
+      fr: Normal sur un serveur de mail ; ailleurs, un port SMTP signale souvent un démon qui ne devrait écouter qu'en local.
+    hint:
+      en: If this machine is not your mail server, set inet_interfaces = loopback-only (Postfix) or the equivalent.
+      fr: Si cette machine n'est pas votre serveur de mail, réglez inet_interfaces = loopback-only (Postfix) ou l'équivalent.
+    banners: ["220 mail.example.com ESMTP"]
+  - id: smtp-submission
+    name: Mail submission
+    name_fr: Envoi de mail
+    parent: smtp
+    ports: [587, 465]
+    aliases: [submission, smtps, submissions]
+    what:
+      en: Lets your users send email through the server.
+      fr: Permet à vos utilisateurs d'envoyer du courrier via le serveur.
+  - id: postfix
+    name: Postfix
+    parent: smtp
+    products: [postfix]
+    banners: ["220 mail.example.com ESMTP Postfix (Debian/GNU)"]
+  - id: exim
+    name: Exim
+    parent: smtp
+    products: [exim]
+    banners: ["220 mx.example.com ESMTP Exim 4.97 Mon, 24 Nov 2026 10:00:00 +0000"]
+  - id: sendmail
+    name: Sendmail
+    parent: smtp
+    products: [sendmail]
+  - id: microsoft-esmtp
+    name: Microsoft Exchange SMTP
+    parent: smtp
+    products: [microsoft-esmtp, exchange server, microsoft exchange, exchange]
+    banners: ["220 mail.example.com Microsoft ESMTP MAIL Service ready"]
+  - id: pop3
+    name: POP3 (clear text)
+    name_fr: POP3 (en clair)
+    category: mail
+    ports: [110]
+    exposure: restricted
+    risk: medium
+    insecure: true
+    what:
+      en: Mailbox download without encryption.
+      fr: Relève du courrier sans chiffrement.
+    why:
+      en: Passwords and emails can travel in clear text.
+      fr: Mots de passe et messages peuvent circuler en clair.
+    hint:
+      en: Offer only POP3S on 995 (or require STARTTLS) and close 110.
+      fr: Ne proposez que POP3S sur 995 (ou exigez STARTTLS) et fermez le 110.
+    banners: ["+OK Dovecot (Debian) ready.", "+OK POP3 server ready"]
+  - id: imap
+    name: IMAP (clear text)
+    name_fr: IMAP (en clair)
+    category: mail
+    ports: [143]
+    exposure: restricted
+    risk: medium
+    insecure: true
+    what:
+      en: Mailbox access without encryption.
+      fr: Accès aux boîtes mail sans chiffrement.
+    why:
+      en: Passwords and emails can travel in clear text.
+      fr: Mots de passe et messages peuvent circuler en clair.
+    hint:
+      en: Offer only IMAPS on 993 (or require STARTTLS) and close 143.
+      fr: Ne proposez que IMAPS sur 993 (ou exigez STARTTLS) et fermez le 143.
+    banners: ["* OK IMAP4rev1 server ready"]
+  - id: mail-tls
+    name: Mailbox access over TLS
+    name_fr: Accès aux boîtes mail en TLS
+    category: mail
+    ports: [993, 995]
+    aliases: [imaps, pop3s]
+    exposure: public
+    risk: info
+    what:
+      en: Encrypted mailbox access (IMAPS / POP3S).
+      fr: Accès chiffré aux boîtes mail (IMAPS / POP3S).
+    why:
+      en: Normal on a mail server.
+      fr: Normal sur un serveur de mail.
+  - id: dovecot
+    name: Dovecot
+    parent: imap
+    products: [dovecot]
+    banners: ["* OK [CAPABILITY IMAP4rev1 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE LITERAL+ STARTTLS AUTH=PLAIN] Dovecot (Debian) ready."]
+  - id: courier
+    name: Courier
+    parent: imap
+    products: [courier, courier-imap]
+
+  # --------------------------------------------------------------------- dns
+  - id: dns
+    name: DNS
+    category: dns
+    ports: [53]
+    aliases: [domain, dns]
+    exposure: restricted
+    risk: low
+    what:
+      en: Name server.
+      fr: Serveur de noms.
+    why:
+      en: Normal for an authoritative server; a resolver open to everyone is used for amplification attacks.
+      fr: Normal pour un serveur faisant autorité ; un résolveur ouvert à tous sert aux attaques par amplification.
+    hint:
+      en: If this is a resolver, answer recursive queries only for your own networks (allow-recursion in BIND).
+      fr: S'il s'agit d'un résolveur, ne répondez aux requêtes récursives que pour vos réseaux (allow-recursion dans BIND).
+
+  # --------------------------------------------------------------- databases
+  - id: mysql
+    name: MySQL / MariaDB
+    parent: database
+    ports: [3306]
+    aliases: [mysql]
+    products: [mysql]
+    what:
+      en: SQL database.
+      fr: Base de données SQL.
+    hint:
+      en: Set bind-address = 127.0.0.1 in my.cnf, or block 3306 at the firewall.
+      fr: Réglez bind-address = 127.0.0.1 dans my.cnf, ou bloquez le 3306 au pare-feu.
+    banners: ["8.0.39-0ubuntu0.24.04.2", "5.7.44-log"]
+  - id: mariadb
+    name: MariaDB
+    parent: mysql
+    products: [mariadb]
+    banners: ["11.4.5-MariaDB-1:11.4.5+maria~ubu2404", "10.11.11-MariaDB-0+deb12u1"]
+  - id: postgresql
+    name: PostgreSQL
+    parent: database
+    ports: [5432]
+    aliases: [postgresql, postgres]
+    products: [postgresql, postgres]
+    what:
+      en: SQL database.
+      fr: Base de données SQL.
+    hint:
+      en: Set listen_addresses = 'localhost' in postgresql.conf and limit pg_hba.conf to known networks.
+      fr: Réglez listen_addresses = 'localhost' dans postgresql.conf et limitez pg_hba.conf aux réseaux connus.
+  - id: mssql
+    name: Microsoft SQL Server
+    parent: database
+    ports: [1433]
+    aliases: [ms-sql-s, mssql]
+    products: [microsoft sql server, mssql]
+    what:
+      en: SQL database.
+      fr: Base de données SQL.
+  - id: oracle
+    name: Oracle Database listener
+    name_fr: Écouteur Oracle Database
+    parent: database
+    ports: [1521]
+    aliases: [oracle, oracle-tns]
+    what:
+      en: Oracle database listener.
+      fr: Écouteur de la base de données Oracle.
+  - id: mongodb
+    name: MongoDB
+    parent: database
+    ports: [27017, 27018]
+    aliases: [mongodb, mongod]
+    products: [mongodb]
+    risk: critical
+    what:
+      en: Document database.
+      fr: Base de données orientée documents.
+    why:
+      en: Thousands of exposed MongoDB servers have been emptied and held for ransom; old versions had no authentication by default.
+      fr: Des milliers de MongoDB exposés ont été vidés puis rançonnés ; les anciennes versions n'avaient aucune authentification par défaut.
+    hint:
+      en: Set net.bindIp to 127.0.0.1 (or the private address) and enable security.authorization.
+      fr: Réglez net.bindIp sur 127.0.0.1 (ou l'adresse privée) et activez security.authorization.
+  - id: redis
+    name: Redis
+    parent: database
+    ports: [6379]
+    aliases: [redis]
+    products: [redis]
+    risk: critical
+    what:
+      en: In-memory database and cache.
+      fr: Base de données et cache en mémoire.
+    why:
+      en: Redis often has no password; anyone who reaches it can read your data and, through its configuration commands, run code on the server.
+      fr: Redis n'a souvent pas de mot de passe ; quiconque l'atteint peut lire vos données et, via ses commandes de configuration, exécuter du code sur le serveur.
+    hint:
+      en: In redis.conf set bind 127.0.0.1 ::1, protected-mode yes, and a requirepass (or ACL users).
+      fr: Dans redis.conf, mettez bind 127.0.0.1 ::1, protected-mode yes et un requirepass (ou des utilisateurs ACL).
+    banners: ["-NOAUTH Authentication required.", "-DENIED Redis is running in protected mode because protected mode is enabled", "$3755 # Server redis_version:7.2.4"]
+  - id: memcached
+    name: Memcached
+    parent: database
+    ports: [11211]
+    aliases: [memcached, memcache]
+    products: [memcached]
+    what:
+      en: In-memory cache.
+      fr: Cache en mémoire.
+    why:
+      en: Memcached has no authentication; anyone can read the cache, and exposed servers were used for record-size amplification attacks.
+      fr: Memcached n'a pas d'authentification ; n'importe qui peut lire le cache, et des serveurs exposés ont servi à des attaques par amplification record.
+    hint:
+      en: Start it with -l 127.0.0.1 -U 0 (listen locally, UDP off).
+      fr: Lancez-le avec -l 127.0.0.1 -U 0 (écoute locale, UDP désactivé).
+    banners: ["VERSION 1.6.21", "VERSION 1.6.29"]
+  - id: elasticsearch
+    name: Elasticsearch
+    parent: database
+    ports: [9200, 9300]
+    aliases: [elasticsearch, wap-wsp]
+    products: [elasticsearch]
+    risk: critical
+    what:
+      en: Search engine and document store.
+      fr: Moteur de recherche et stockage de documents.
+    why:
+      en: Exposed Elasticsearch clusters are behind many large data leaks; versions before 8 have security off by default.
+      fr: Des Elasticsearch exposés sont à l'origine de nombreuses fuites massives ; avant la version 8, la sécurité est désactivée par défaut.
+    hint:
+      en: "Set network.host to a private address and keep xpack.security.enabled: true."
+      fr: "Réglez network.host sur une adresse privée et gardez xpack.security.enabled: true."
+  - id: couchdb
+    name: CouchDB
+    parent: database
+    ports: [5984]
+    products: [couchdb]
+    what:
+      en: Document database with an HTTP API.
+      fr: Base de données de documents avec une API HTTP.
+    banners: ["CouchDB/3.3.3 (Erlang OTP/25)"]
+  - id: cassandra
+    name: Cassandra
+    parent: database
+    ports: [9042, 7000]
+    what:
+      en: Distributed database.
+      fr: Base de données distribuée.
+  - id: influxdb
+    name: InfluxDB
+    parent: database
+    ports: [8086]
+    products: [influxdb]
+    what:
+      en: Time-series database.
+      fr: Base de données de séries temporelles.
+  - id: clickhouse
+    name: ClickHouse
+    parent: database
+    ports: [8123, 9000]
+    products: [clickhouse]
+    what:
+      en: Analytics database.
+      fr: Base de données analytique.
+  - id: neo4j
+    name: Neo4j
+    parent: database
+    ports: [7474, 7687]
+    products: [neo4j]
+    what:
+      en: Graph database.
+      fr: Base de données orientée graphe.
+
+  # --------------------------------------------------------------- messaging
+  - id: rabbitmq
+    name: RabbitMQ
+    parent: queue
+    ports: [5672, 15672]
+    aliases: [amqp]
+    products: [rabbitmq]
+    what:
+      en: Message broker (AMQP) and its management interface.
+      fr: Courtier de messages (AMQP) et son interface de gestion.
+    hint:
+      en: Delete or restrict the default guest user and listen on private addresses only.
+      fr: Supprimez ou restreignez l'utilisateur guest par défaut et n'écoutez que sur des adresses privées.
+  - id: kafka
+    name: Apache Kafka
+    parent: queue
+    ports: [9092]
+    what:
+      en: Event streaming platform.
+      fr: Plateforme de flux d'événements.
+  - id: zookeeper
+    name: ZooKeeper
+    parent: queue
+    ports: [2181]
+    what:
+      en: Coordination service used by Kafka and other clusters.
+      fr: Service de coordination utilisé par Kafka et d'autres clusters.
+  - id: mqtt
+    name: MQTT
+    parent: queue
+    ports: [1883]
+    insecure: true
+    aliases: [mqtt]
+    what:
+      en: Messaging protocol for connected devices.
+      fr: Protocole de messagerie pour objets connectés.
+    why:
+      en: Unprotected MQTT brokers let anyone read device data and send commands to devices.
+      fr: Un courtier MQTT non protégé permet à n'importe qui de lire les données des objets et de leur envoyer des commandes.
+    hint:
+      en: Disable anonymous access (allow_anonymous false), require TLS on 8883, and restrict it to known clients.
+      fr: Désactivez l'accès anonyme (allow_anonymous false), exigez TLS sur le 8883 et limitez-le aux clients connus.
+  - id: mqtt-tls
+    name: MQTT over TLS
+    parent: mqtt
+    ports: [8883]
+    aliases: [mqtt-tls, secure-mqtt]
+    insecure: false
+    exposure: restricted
+    risk: medium
+  - id: nats
+    name: NATS
+    parent: queue
+    ports: [4222]
+    what:
+      en: Messaging system.
+      fr: Système de messagerie.
+    banners: ['INFO {"server_id":"NB2X","server_name":"nats","version":"2.10.22","proto":1,"go":"go1.23.4","host":"0.0.0.0","port":4222}']
+
+  # ---------------------------------------------- containers and Kubernetes
+  - id: docker-api
+    name: Docker Engine API
+    name_fr: API du moteur Docker
+    parent: cluster
+    ports: [2375]
+    what:
+      en: Docker daemon remote API without TLS.
+      fr: API distante du démon Docker, sans TLS.
+    why:
+      en: The unencrypted Docker API has no authentication; whoever reaches it is root on the host and can start any container.
+      fr: L'API Docker non chiffrée n'a pas d'authentification ; quiconque l'atteint est root sur la machine et peut lancer n'importe quel conteneur.
+    hint:
+      en: Remove -H tcp://0.0.0.0:2375 from the daemon options; use the local socket, or TLS with client certificates on 2376.
+      fr: Retirez -H tcp://0.0.0.0:2375 des options du démon ; utilisez le socket local, ou TLS avec certificats clients sur le 2376.
+    banners: ['{"Platform":{"Name":"Docker Engine - Community"},"Components":[{"Name":"Engine","Version":"27.3.1"']
+  - id: docker-api-tls
+    name: Docker Engine API (TLS)
+    name_fr: API du moteur Docker (TLS)
+    parent: docker-api
+    ports: [2376]
+    risk: high
+    what:
+      en: Docker daemon remote API over TLS.
+      fr: API distante du démon Docker, en TLS.
+    why:
+      en: Even with TLS, a client certificate gives root on the host; this API should not face the internet.
+      fr: Même avec TLS, un certificat client donne les droits root sur la machine ; cette API ne doit pas faire face à Internet.
+  - id: kube-apiserver
+    name: Kubernetes API server
+    name_fr: Serveur d'API Kubernetes
+    parent: cluster
+    ports: [6443]
+    risk: high
+    what:
+      en: Kubernetes control plane API (also used by k3s and RKE2).
+      fr: API du plan de contrôle Kubernetes (aussi utilisée par k3s et RKE2).
+    why:
+      en: The API requires credentials, but exposing it invites attacks on any leaked token and on API server flaws.
+      fr: L'API exige des identifiants, mais l'exposer invite les attaques sur tout jeton divulgué et sur les failles du serveur d'API.
+    banners: ['{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Unauthorized","reason":"Unauthorized","code":401}', 'forbidden: User "system:anonymous" cannot get path "/"']
+  - id: kubelet
+    name: Kubelet API
+    parent: cluster
+    ports: [10250]
+    what:
+      en: Agent API on every Kubernetes node.
+      fr: API de l'agent présent sur chaque nœud Kubernetes.
+    why:
+      en: A misconfigured kubelet allows anonymous command execution inside every pod of the node.
+      fr: Un kubelet mal configuré permet d'exécuter des commandes sans authentification dans tous les pods du nœud.
+  - id: kubelet-readonly
+    name: Kubelet read-only API
+    name_fr: API kubelet en lecture seule
+    parent: cluster
+    ports: [10255]
+    risk: high
+    what:
+      en: Unauthenticated read-only kubelet API.
+      fr: API kubelet en lecture seule, sans authentification.
+  - id: etcd
+    name: etcd
+    parent: cluster
+    ports: [2379, 2380]
+    products: [etcd]
+    what:
+      en: Key-value store holding the whole Kubernetes cluster state, secrets included.
+      fr: Base clé-valeur qui contient tout l'état du cluster Kubernetes, secrets compris.
+    why:
+      en: Reading etcd gives every secret of the cluster; writing to it gives full control.
+      fr: Lire etcd donne tous les secrets du cluster ; y écrire en donne le contrôle total.
+  - id: kube-control-plane
+    name: Kubernetes scheduler / controller manager
+    name_fr: Ordonnanceur / contrôleur Kubernetes
+    parent: cluster
+    ports: [10257, 10259]
+    risk: high
+    what:
+      en: Internal Kubernetes control plane components.
+      fr: Composants internes du plan de contrôle Kubernetes.
+  - id: kube-proxy-health
+    name: kube-proxy health
+    parent: cluster
+    ports: [10256]
+    risk: low
+    what:
+      en: kube-proxy health check endpoint.
+      fr: Point de contrôle de santé de kube-proxy.
+  - id: spegel
+    name: k3s embedded registry (Spegel)
+    name_fr: Registre intégré de k3s (Spegel)
+    parent: cluster
+    ports: [5001]
+    risk: medium
+    what:
+      en: Peer-to-peer image registry mirror used by k3s.
+      fr: Miroir de registre d'images en pair à pair utilisé par k3s.
+    why:
+      en: It lets outsiders pull the container images cached on your nodes, which may contain private code.
+      fr: Il permet à des inconnus de télécharger les images de conteneurs en cache sur vos nœuds, qui peuvent contenir du code privé.
+  - id: portainer
+    name: Portainer
+    parent: admin-web
+    ports: [9443]
+    products: [portainer]
+    what:
+      en: Web interface to manage Docker and Kubernetes.
+      fr: Interface web de gestion de Docker et Kubernetes.
+
+  # ------------------------------------------------------- infrastructure
+  - id: consul
+    name: HashiCorp Consul
+    parent: cluster
+    ports: [8500, 8300, 8301]
+    risk: high
+    what:
+      en: Service discovery and configuration.
+      fr: Découverte de services et configuration.
+    why:
+      en: Without ACLs, Consul's API can register checks that run commands on the agents.
+      fr: Sans ACL, l'API de Consul peut enregistrer des contrôles qui exécutent des commandes sur les agents.
+  - id: vault
+    name: HashiCorp Vault
+    category: secrets
+    ports: [8200]
+    exposure: restricted
+    risk: medium
+    what:
+      en: Secrets manager.
+      fr: Gestionnaire de secrets.
+    why:
+      en: Vault is designed to be reached over TLS, but limiting who can reach it reduces the attack surface on your secrets.
+      fr: Vault est conçu pour être joint en TLS, mais limiter qui peut l'atteindre réduit la surface d'attaque sur vos secrets.
+  - id: nomad
+    name: HashiCorp Nomad
+    parent: cluster
+    ports: [4646]
+    what:
+      en: Workload orchestrator.
+      fr: Orchestrateur de charges de travail.
+
+  # --------------------------------------------------------------- monitoring
+  - id: prometheus
+    name: Prometheus
+    parent: monitoring
+    ports: [9090]
+    what:
+      en: Metrics database.
+      fr: Base de métriques.
+  - id: node-exporter
+    name: Prometheus node exporter
+    name_fr: Exporteur de métriques Prometheus
+    parent: monitoring
+    ports: [9100]
+    what:
+      en: Host metrics for Prometheus.
+      fr: Métriques de la machine pour Prometheus.
+  - id: alertmanager
+    name: Alertmanager
+    parent: monitoring
+    ports: [9093]
+    what:
+      en: Prometheus alert router.
+      fr: Routeur d'alertes de Prometheus.
+  - id: grafana
+    name: Grafana
+    parent: monitoring
+    ports: [3000]
+    exposure: restricted
+    products: [grafana]
+    what:
+      en: Dashboards.
+      fr: Tableaux de bord.
+    why:
+      en: Grafana has a login page, but it holds credentials to your data sources and has had serious flaws.
+      fr: Grafana a une page de connexion, mais il détient les accès à vos sources de données et a connu des failles graves.
+  - id: kibana
+    name: Kibana
+    parent: monitoring
+    ports: [5601]
+    risk: high
+    products: [kibana]
+    what:
+      en: Interface to Elasticsearch data.
+      fr: Interface vers les données Elasticsearch.
+  - id: snmp
+    name: SNMP
+    parent: monitoring
+    udp: [161]
+    risk: high
+    insecure: true
+    what:
+      en: Device management and monitoring protocol.
+      fr: Protocole de gestion et de supervision d'équipements.
+    why:
+      en: SNMP v1/v2c community strings ("public") travel in clear text and can reveal or change the device configuration.
+      fr: Les communautés SNMP v1/v2c (« public ») circulent en clair et peuvent révéler ou modifier la configuration de l'équipement.
+    hint:
+      en: Use SNMPv3 with authentication and allow only your monitoring server.
+      fr: Utilisez SNMPv3 avec authentification et n'autorisez que votre serveur de supervision.
+  - id: ipmi
+    name: IPMI / BMC
+    category: administration
+    udp: [623]
+    ports: [623]
+    exposure: private
+    risk: critical
+    what:
+      en: Out-of-band server management (iDRAC, iLO, BMC).
+      fr: Gestion hors bande du serveur (iDRAC, iLO, BMC).
+    why:
+      en: IPMI leaks password hashes by design (RAKP) and gives full control of the hardware, even when the server is off.
+      fr: IPMI divulgue des empreintes de mots de passe par conception (RAKP) et donne le contrôle total du matériel, même serveur éteint.
+    hint:
+      en: Put management interfaces on a separate network that is never routed to the internet.
+      fr: Placez les interfaces de gestion sur un réseau séparé, jamais routé vers Internet.
+
+  # ------------------------------------------------------------ admin tools
+  - id: webmin
+    name: Webmin
+    parent: admin-web
+    ports: [10000]
+    products: [webmin, miniserv]
+    what:
+      en: Web-based server administration.
+      fr: Administration du serveur par le web.
+    banners: ["MiniServ/2.105"]
+  - id: jenkins
+    name: Jenkins
+    parent: admin-web
+    products: [jenkins]
+    what:
+      en: Build server.
+      fr: Serveur d'intégration continue.
+    why:
+      en: Jenkins can run arbitrary code by design (script console, jobs); one weak account gives control of your build machines.
+      fr: Jenkins peut exécuter du code arbitraire par conception (console de scripts, tâches) ; un seul compte faible donne le contrôle de vos machines de build.
+  - id: jupyter
+    name: Jupyter
+    parent: admin-web
+    products: [jupyter, tornadoserver]
+    risk: critical
+    what:
+      en: Notebook server.
+      fr: Serveur de notebooks.
+    why:
+      en: A notebook runs any code typed into it; an exposed Jupyter without a strong token is a remote shell.
+      fr: Un notebook exécute tout code saisi ; un Jupyter exposé sans jeton solide est un accès shell à distance.
+  - id: ollama
+    name: Ollama
+    category: ai
+    ports: [11434]
+    products: [ollama]
+    exposure: private
+    risk: high
+    what:
+      en: Local AI model server.
+      fr: Serveur de modèles d'IA locaux.
+    why:
+      en: The Ollama API has no authentication; anyone can use your GPU, download or delete your models.
+      fr: L'API d'Ollama n'a pas d'authentification ; n'importe qui peut utiliser votre GPU, télécharger ou supprimer vos modèles.
+    hint:
+      en: Keep OLLAMA_HOST on 127.0.0.1 and put an authenticating reverse proxy in front if remote access is needed.
+      fr: Gardez OLLAMA_HOST sur 127.0.0.1 et placez un reverse proxy avec authentification devant si un accès distant est nécessaire.
+    banners: ["Ollama is running"]
+  - id: minio
+    name: MinIO
+    parent: admin-web
+    ports: [9001]
+    products: [minio]
+    risk: medium
+    what:
+      en: S3-compatible object storage console.
+      fr: Console du stockage d'objets compatible S3.
+  - id: php-fpm
+    name: PHP-FPM (FastCGI)
+    category: web
+    ports: [9000]
+    exposure: private
+    risk: critical
+    what:
+      en: PHP FastCGI process manager.
+      fr: Gestionnaire de processus FastCGI pour PHP.
+    why:
+      en: An exposed FastCGI port lets anyone run PHP code on the server.
+      fr: Un port FastCGI exposé permet à n'importe qui d'exécuter du code PHP sur le serveur.
+    hint:
+      en: Use a Unix socket (listen = /run/php/php-fpm.sock) or listen = 127.0.0.1:9000.
+      fr: Utilisez un socket Unix (listen = /run/php/php-fpm.sock) ou listen = 127.0.0.1:9000.
+
+  # ---------------------------------------------------------- VPN and voice
+  - id: openvpn
+    name: OpenVPN
+    category: vpn
+    ports: [1194]
+    udp: [1194]
+    exposure: public
+    risk: info
+    what:
+      en: VPN endpoint.
+      fr: Point d'entrée VPN.
+    why:
+      en: A VPN endpoint is meant to be reachable; keep it up to date.
+      fr: Un point d'entrée VPN est fait pour être joignable ; gardez-le à jour.
+  - id: wireguard
+    name: WireGuard
+    category: vpn
+    udp: [51820]
+    exposure: public
+    risk: info
+    what:
+      en: VPN endpoint.
+      fr: Point d'entrée VPN.
+    why:
+      en: WireGuard answers nothing to unauthenticated packets; exposing it is safe by design.
+      fr: WireGuard ne répond rien aux paquets non authentifiés ; l'exposer est sûr par conception.
+  - id: sip
+    name: SIP (VoIP)
+    name_fr: SIP (téléphonie IP)
+    category: voice
+    ports: [5060, 5061]
+    udp: [5060]
+    exposure: restricted
+    risk: medium
+    what:
+      en: Voice over IP signalling.
+      fr: Signalisation de la voix sur IP.
+    why:
+      en: Exposed SIP servers are scanned for weak extension passwords to place fraudulent paid calls.
+      fr: Les serveurs SIP exposés sont scannés à la recherche de mots de passe faibles pour passer des appels frauduleux payants.
+  - id: rtsp
+    name: RTSP (video streams)
+    name_fr: RTSP (flux vidéo)
+    category: iot
+    ports: [554, 8554]
+    exposure: private
+    risk: high
+    what:
+      en: Video stream server, typically a security camera.
+      fr: Serveur de flux vidéo, typiquement une caméra de surveillance.
+    why:
+      en: Camera streams are often viewable without a password.
+      fr: Les flux des caméras sont souvent visibles sans mot de passe.
+
+  # ----------------------------------------------------------------- printers
+  - id: ipp
+    name: IPP / CUPS
+    category: printing
+    ports: [631]
+    udp: [631]
+    exposure: private
+    risk: high
+    what:
+      en: Printing service.
+      fr: Service d'impression.
+    why:
+      en: CUPS browsing on the internet allowed remote code execution in 2024 (cups-browsed).
+      fr: Le partage CUPS exposé sur Internet a permis l'exécution de code à distance en 2024 (cups-browsed).
+  - id: jetdirect
+    name: Printer raw port (JetDirect)
+    name_fr: Port d'impression brut (JetDirect)
+    category: printing
+    ports: [9100]
+    exposure: private
+    risk: high
+    what:
+      en: Raw printing port of network printers.
+      fr: Port d'impression brut des imprimantes réseau.
+    why:
+      en: Anyone can print, and printer commands (PJL) can read stored jobs or change settings.
+      fr: N'importe qui peut imprimer, et les commandes d'imprimante (PJL) peuvent lire les travaux stockés ou changer les réglages.
+
+  # -------------------------------------------------------------- game hosting
+  - id: minecraft
+    name: Minecraft server
+    name_fr: Serveur Minecraft
+    category: game
+    ports: [25565]
+    exposure: public
+    risk: info
+    what:
+      en: Minecraft game server.
+      fr: Serveur de jeu Minecraft.
+    why:
+      en: Meant to be public; keep online-mode on and the server software up to date.
+      fr: Fait pour être public ; gardez online-mode activé et le logiciel du serveur à jour.
+  - id: minecraft-rcon
+    name: Minecraft RCON
+    category: game
+    ports: [25575]
+    exposure: private
+    risk: high
+    what:
+      en: Remote console of a Minecraft server.
+      fr: Console distante d'un serveur Minecraft.
+    why:
+      en: RCON gives full operator commands, protected only by a password sent in clear text.
+      fr: RCON donne toutes les commandes d'opérateur, protégées seulement par un mot de passe envoyé en clair.
+  - id: pterodactyl-wings
+    name: Pterodactyl Wings
+    parent: http
+    category: game
+    ports: [8080]
+    exposure: public
+    risk: info
+    products: [wings, pterodactyl]
+    what:
+      en: Game server daemon of the Pterodactyl panel.
+      fr: Démon des serveurs de jeu du panneau Pterodactyl.
+    why:
+      en: Players' browsers connect to it for consoles and file transfers, so it is normally public; serve it over TLS.
+      fr: Les navigateurs des joueurs s'y connectent pour la console et les fichiers, il est donc normalement public ; servez-le en TLS.
+  - id: wings-sftp
+    name: Pterodactyl SFTP
+    parent: ssh
+    ports: [2022]
+    what:
+      en: SFTP access to game server files, served by Pterodactyl Wings.
+      fr: Accès SFTP aux fichiers des serveurs de jeu, fourni par Pterodactyl Wings.
+
+  # -------------------------------------------------------------- industrial
+  - id: modbus
+    name: Modbus/TCP
+    parent: industrial
+    ports: [502]
+    what:
+      en: Industrial control protocol (PLCs, sensors).
+      fr: Protocole de contrôle industriel (automates, capteurs).
+  - id: s7comm
+    name: Siemens S7
+    parent: industrial
+    ports: [102]
+    what:
+      en: Siemens PLC protocol.
+      fr: Protocole des automates Siemens.
+  - id: bacnet
+    name: BACnet
+    parent: industrial
+    udp: [47808]
+    ports: [47808]
+    what:
+      en: Building automation protocol (heating, ventilation, access).
+      fr: Protocole de gestion technique du bâtiment (chauffage, ventilation, accès).
+  - id: dnp3
+    name: DNP3
+    parent: industrial
+    ports: [20000]
+    what:
+      en: Utility and SCADA protocol.
+      fr: Protocole SCADA des réseaux d'énergie et d'eau.
+  - id: iec-104
+    name: IEC 60870-5-104
+    parent: industrial
+    ports: [2404]
+    what:
+      en: Power grid telecontrol protocol.
+      fr: Protocole de téléconduite des réseaux électriques.
+  - id: ethernet-ip
+    name: EtherNet/IP
+    parent: industrial
+    ports: [44818, 2222]
+    what:
+      en: Industrial protocol of Rockwell / Allen-Bradley devices.
+      fr: Protocole industriel des équipements Rockwell / Allen-Bradley.
+  - id: opcua
+    name: OPC UA
+    parent: industrial
+    ports: [4840]
+    risk: high
+    insecure: false
+    what:
+      en: Industrial data exchange; supports security, but is often deployed with it off.
+      fr: Échange de données industrielles ; la sécurité existe mais est souvent désactivée.
+  - id: niagara-fox
+    name: Niagara Fox
+    parent: industrial
+    ports: [1911, 4911]
+    what:
+      en: Tridium Niagara building automation.
+      fr: Gestion de bâtiment Tridium Niagara.
+  - id: codesys
+    name: CODESYS
+    parent: industrial
+    ports: [2455]
+    what:
+      en: PLC runtime protocol.
+      fr: Protocole du moteur d'exécution d'automates.
+  - id: omron-fins
+    name: OMRON FINS
+    parent: industrial
+    ports: [9600]
+    what:
+      en: OMRON PLC protocol.
+      fr: Protocole des automates OMRON.
+  - id: profinet
+    name: PROFINET
+    parent: industrial
+    ports: [34962, 34964]
+    what:
+      en: Industrial Ethernet protocol.
+      fr: Protocole Ethernet industriel.
