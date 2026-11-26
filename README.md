@@ -11,6 +11,8 @@
 
 [![CI](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml/badge.svg)](https://github.com/NycolazSec/tcpcat/actions/workflows/ci.yml)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14561/badge)](https://www.bestpractices.dev/projects/14561)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/NycolazSec/tcpcat/badge)](https://scorecard.dev/viewer/?uri=github.com/NycolazSec/tcpcat)
+[![Go Reference](https://pkg.go.dev/badge/github.com/NycolazSec/tcpcat.svg)](https://pkg.go.dev/github.com/NycolazSec/tcpcat)
 [![License: AGPL-3.0 or Commercial](https://img.shields.io/badge/License-AGPL--3.0%20or%20Commercial-blue.svg)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/releases)
 [![WASM dissector hub](https://img.shields.io/badge/WASM%20dissectors-hub-3ddc84?logo=webassembly&logoColor=white)](https://github.com/NycolazSec/tcpcat-scripts)
@@ -857,11 +859,38 @@ or a compliance certification.
 
 ## Contributing
 
-Bug reports and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
-for the development setup, coding guidelines, and pre-PR checklist, and
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations. Security
-vulnerabilities should be reported privately per [SECURITY.md](SECURITY.md),
-not as public issues. See [CHANGELOG.md](CHANGELOG.md) for release history.
+Bug reports and pull requests are welcome. The quickest way in is to teach
+tcpcat's AI a service you know: one entry in a YAML file, explained in
+[CONTRIBUTING.md](CONTRIBUTING.md#your-first-contribution-in-ten-minutes).
+Issues labelled
+[good first issue](https://github.com/NycolazSec/tcpcat/labels/good%20first%20issue)
+are scoped for a first pull request, and questions are welcome in
+[Discussions](https://github.com/NycolazSec/tcpcat/discussions).
+
+[CONTRIBUTING.md](CONTRIBUTING.md) also covers the development setup, coding
+guidelines and pre-PR checklist, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+the community expectations. Report security vulnerabilities privately, as
+[SECURITY.md](SECURITY.md) explains, not as public issues. Release history is
+in [CHANGELOG.md](CHANGELOG.md).
+
+### Contributors
+
+[![Contributors](https://contrib.rocks/image?repo=NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/graphs/contributors)
+
+### Built on
+
+tcpcat stands on the work of these projects:
+- [Rapid7 Recog](https://github.com/rapid7/recog) (BSD-2-Clause): the banner
+  examples and patterns the AI's model is trained on;
+- [cilium/ebpf](https://github.com/cilium/ebpf) and
+  [asavie/xdp](https://github.com/asavie/xdp): the eBPF and AF_XDP engine;
+- [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto): the SSH
+  posture and login-method checks;
+- [wazero](https://github.com/tetratelabs/wazero): the WebAssembly runtime of
+  the dissector modules;
+- [OSV](https://osv.dev), [Vulners](https://vulners.com),
+  [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
+  and [FIRST EPSS](https://www.first.org/epss/): vulnerability data.
 
 ---
 
