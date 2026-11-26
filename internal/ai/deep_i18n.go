@@ -65,9 +65,28 @@ func init() {
 		"prof-traefik":     {"behind the Traefik reverse proxy", "derrière le reverse proxy Traefik"},
 		"prof-os":          {"on %s", "sur %s"},
 		"prof-generic":     {"a machine exposing %d services", "une machine qui expose %d services"},
+		"prof-generic-one": {"a machine exposing one service", "une machine qui expose un seul service"},
 
+		"good-private-closed-one": {"the one sensitive port tested (a database, Docker, Kubernetes, an admin tool...) is not reachable",
+			"le seul port sensible testé (base de données, Docker, Kubernetes, outil d'administration…) n'est pas joignable"},
 		"good-private-closed": {"none of the %d sensitive ports tested (databases, Docker, Kubernetes, admin tools...) is reachable",
 			"aucun des %d ports sensibles testés (bases de données, Docker, Kubernetes, outils d'administration…) n'est joignable"},
+		"prof-machine": {"a machine", "une machine"},
+		"colon":        {": ", " : "},
+
+		"alert-blind": {"%s: all %d ports tested are filtered. Either the machine is off, or it (or a firewall on the way) is ignoring your address, for instance after spotting the scan. This scan cannot tell what the machine exposes: check again from another connection (a phone's hotspot, for instance).",
+			"%s : les %d ports testés sont tous filtrés. Soit la machine est éteinte, soit elle (ou un pare-feu sur le chemin) ignore votre adresse, par exemple après avoir repéré le scan. Ce scan ne permet pas de savoir ce qu'elle expose : revérifiez depuis une autre connexion (le partage de connexion d'un téléphone, par exemple)."},
+		"alert-mute": {"%s: its %d open ports accept connections, but no service answered on any of them. Something on the way (an anti-DDoS, a SYN proxy, a firewall) may be answering for the machine, or cutting the exchange short: what follows rests on the port numbers alone.",
+			"%s : ses %d ports ouverts acceptent la connexion, mais aucun service n'a répondu. Un équipement sur le chemin (anti-DDoS, proxy SYN, pare-feu) répond peut-être à la place de la machine, ou coupe l'échange : ce qui suit repose sur les seuls numéros de port."},
+		"alert-cluster-node": {"This scan runs from a Kubernetes node. The cluster's firewall may trust this machine and let it reach ports that are closed to the internet: check the cluster ports again from a machine outside the cluster before acting.",
+			"Ce scan part d'un nœud Kubernetes. Le pare-feu du cluster fait peut-être confiance à cette machine et lui ouvre des ports fermés à Internet : revérifiez les ports du cluster depuis une machine extérieure au cluster avant d'agir."},
+		"ev-cluster-node": {"seen from a Kubernetes node, which the cluster's firewall may trust", "vu depuis un nœud Kubernetes, auquel le pare-feu du cluster fait peut-être confiance"},
+		"ev-silent":       {"the port accepts connections, but the service sent nothing back", "le port accepte la connexion, mais le service n'a rien répondu"},
+		"ev-answered-late": {"the follow-up check got an answer in %s: the service is there, but answered too slowly for service detection",
+			"la vérification approfondie a obtenu une réponse en %s : le service est bien là, mais il a répondu trop lentement pour la détection de service"},
+		"chk-no-answer": {"could not be verified: nothing answered in %s (a firewall, a connection limit, or it is not %s)",
+			"vérification impossible : rien n'a répondu en %s (pare-feu, limite de connexions, ou ce n'est pas du %s)"},
+
 		"plan-many-ssh": {"%d SSH entry points face the internet: each is a door to defend. Keep the one you administer with, limit the others to known addresses",
 			"%d accès SSH font face à Internet : chacun est une porte à défendre. Gardez celui qui sert à l'administration, limitez les autres à des adresses connues"},
 	} {

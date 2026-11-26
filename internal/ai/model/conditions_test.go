@@ -2,6 +2,7 @@ package model
 
 import (
 	"math/rand"
+	"strings"
 	"testing"
 
 	"github.com/NycolazSec/tcpcat/internal/service"
@@ -36,5 +37,33 @@ func TestConditionsAreDeterministic(t *testing.T) {
 func TestNormalize(t *testing.T) {
 	if got := Normalize("  SSH-2.0-OpenSSH_9.6p1\r\n\x00Ubuntu "); got != "ssh-0.0-openssh_0.0p0 ubuntu" {
 		t.Fatalf("Normalize: %q", got)
+	}
+}
+
+func TestRebrandKeepsTheProtocolNotTheProduct(t *testing.T) {
+	got, _ := rebrand("220 mail.example.org ESMTP Postfix (Debian/GNU) ready", 25, rand.New(rand.NewSource(1)))
+	if !strings.HasPrefix(got, "220 mail.") || !strings.Contains(got, "ESMTP") || !strings.HasSuffix(got, "ready") {
+		t.Fatalf("protocol words lost: %q", got)
+	}
+	if strings.Contains(got, "Postfix") || strings.Contains(got, "Debian") || len(got) != len("220 mail.example.org ESMTP Postfix (Debian/GNU) ready") {
+		t.Fatalf("product kept or shape changed: %q", got)
+	}
+}
+
+func TestPipelineIsWhatTheScannerWouldStore(t *testing.T) {
+	r := rand.New(rand.NewSource(3))
+	ssh, _ := pipeline("SSH-2.0-Go", 2022, r)
+	if !strings.HasPrefix(ssh, "SSH-2.0-Go\r\n") || !strings.Contains(ssh, "sha2") {
+		t.Fatalf("no key exchange after the SSH banner: %q", ssh)
+	}
+	if got, want := Store(ssh), service.SanitizeBanner(ssh); got != want {
+		t.Fatalf("Store(%q) = %q, scanner stores %q", ssh, got, want)
+	}
+	ftp, _ := pipeline("220 ProFTPD Server", 21, r)
+	if !strings.HasPrefix(ftp, "220-") || !strings.HasSuffix(ftp, "\r\n220 ProFTPD Server") {
+		t.Fatalf("multi-line greeting: %q", ftp)
+	}
+	if web, _ := pipeline("nginx", 80, r); web != "nginx" {
+		t.Fatalf("a Server header has nothing after it: %q", web)
 	}
 }

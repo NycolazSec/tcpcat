@@ -203,7 +203,7 @@ func TestGoodNewsFollowsIdentification(t *testing.T) {
 		{IP: "203.0.113.10", Port: 6379, State: "FILTERED"},
 	}
 	rep := a.Deep(rs, Options{Lang: "en"}, &fakeProber{}, nil)
-	if !strings.Contains(strings.Join(rep.Good, "\n"), "none of the 1 sensitive ports tested") {
+	if !strings.Contains(strings.Join(rep.Good, "\n"), "the one sensitive port tested") {
 		t.Errorf("good news: %v", rep.Good)
 	}
 }

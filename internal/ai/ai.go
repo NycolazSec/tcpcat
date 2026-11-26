@@ -45,6 +45,9 @@ const (
 type Options struct {
 	Lang    string // "fr" or "en"
 	Vantage string // Internet (default) or Internal
+	// FromClusterNode says the scan ran from a Kubernetes node, which the
+	// cluster's firewall may trust more than the internet.
+	FromClusterNode bool
 }
 
 // Identification is what the AI believes runs behind a port, and why.
@@ -75,8 +78,10 @@ type Finding struct {
 
 // Report is the result of an analysis.
 type Report struct {
-	Vantage  string    `json:"vantage"`
-	Lang     string    `json:"lang"`
+	Vantage string `json:"vantage"`
+	Lang    string `json:"lang"`
+	// Alerts are about the scan as a whole: what it cannot tell, and why.
+	Alerts   []string  `json:"alerts,omitempty"`
 	Findings []Finding `json:"findings"`
 	ToFix    int       `json:"to_fix"`
 	ToReview int       `json:"to_review"`
@@ -108,6 +113,12 @@ func (a *Analyzer) Analyze(results []scan.TargetResult, opt Options) Report {
 		opt.Vantage = Internet
 	}
 	rep := Report{Vantage: opt.Vantage, Lang: opt.Lang}
+	for _, h := range blindHosts(results) {
+		rep.Alerts = append(rep.Alerts, tr(opt.Lang, "alert-blind", h.host, h.tested))
+	}
+	for _, h := range muteHosts(results) {
+		rep.Alerts = append(rep.Alerts, tr(opt.Lang, "alert-mute", h.host, h.tested))
+	}
 	medians := hostLatencyMedians(results)
 	for _, r := range results {
 		if !isOpen(r.State) {
@@ -118,6 +129,12 @@ func (a *Analyzer) Analyze(results []scan.TargetResult, opt Options) Report {
 			a.markMiddlebox(&f, r, m, opt.Lang)
 		}
 		rep.Findings = append(rep.Findings, f)
+	}
+	for _, f := range rep.Findings {
+		if contains(f.Evidence, tr(opt.Lang, "ev-cluster-node")) {
+			rep.Alerts = append(rep.Alerts, tr(opt.Lang, "alert-cluster-node"))
+			break
+		}
 	}
 	sortFindings(rep.Findings)
 	for _, f := range rep.Findings {
@@ -132,6 +149,77 @@ func (a *Analyzer) Analyze(results []scan.TargetResult, opt Options) Report {
 	}
 	rep.Summary = tr(opt.Lang, "summary", rep.ToFix, rep.ToReview, rep.Fine)
 	return rep
+}
+
+type blindHost struct {
+	host   string
+	tested int
+}
+
+// blindHosts are the hosts on which no port answered at all: every port
+// tested filtered (a lone closed one aside). That is not good news, it is
+// no news: the machine is off, or something drops the scanner's packets.
+func blindHosts(results []scan.TargetResult) []blindHost {
+	type count struct{ open, closed, filtered int }
+	counts := map[string]*count{}
+	var order []string
+	for _, r := range results {
+		c := counts[r.IP]
+		if c == nil {
+			c = &count{}
+			counts[r.IP] = c
+			order = append(order, r.IP)
+		}
+		switch strings.ToUpper(r.State) {
+		case "OPEN":
+			c.open++
+		case "CLOSED":
+			c.closed++
+		default:
+			c.filtered++
+		}
+	}
+	var out []blindHost
+	for _, h := range order {
+		c := counts[h]
+		if tested := c.open + c.closed + c.filtered; c.open == 0 && c.filtered >= 3 && c.closed <= 1 {
+			out = append(out, blindHost{h, tested})
+		}
+	}
+	return out
+}
+
+// muteHosts are the hosts whose open ports (two or more) all accepted a
+// connection and then said nothing to service detection: more likely
+// something on the path than several silent services. tested is the number
+// of open ports.
+func muteHosts(results []scan.TargetResult) []blindHost {
+	open, silent := map[string]int{}, map[string]int{}
+	var order []string
+	for _, r := range results {
+		if !isOpen(r.State) {
+			continue
+		}
+		if open[r.IP] == 0 {
+			order = append(order, r.IP)
+		}
+		open[r.IP]++
+		if isSilent(r) {
+			silent[r.IP]++
+		}
+	}
+	var out []blindHost
+	for _, h := range order {
+		if open[h] >= 2 && silent[h] == open[h] {
+			out = append(out, blindHost{h, open[h]})
+		}
+	}
+	return out
+}
+
+// isSilent reports a port where service detection ran and got nothing back.
+func isSilent(r scan.TargetResult) bool {
+	return strings.EqualFold(strings.TrimSpace(r.Service), "unknown") && strings.TrimSpace(r.Banner) == ""
 }
 
 func isOpen(state string) bool {
@@ -210,7 +298,12 @@ func (a *Analyzer) identify(r scan.TargetResult) Identification {
 
 	var guess model.Guess
 	if strings.TrimSpace(r.Banner) != "" && a.Model != nil {
-		guess = a.Model.Classify(r.Banner, r.Port)[0]
+		guesses := a.Model.Classify(r.Banner, r.Port)
+		guess = guesses[0]
+		// Unsure which product, sure of the kind of service: say the kind.
+		if fam := a.Families(guesses); guess.P < 0.5 && len(fam) > 0 && fam[0].P >= 0.5 {
+			guess = fam[0]
+		}
 	}
 	guessed := a.Dict.Get(guess.ID)
 
@@ -258,6 +351,37 @@ func (a *Analyzer) identify(r scan.TargetResult) Identification {
 	return id
 }
 
+// Families adds up the model's guesses by kind of service (every FTP
+// server is FTP, every web server HTTP), most likely first. Each family is
+// named by its dictionary entry.
+func (a *Analyzer) Families(guesses []model.Guess) []model.Guess {
+	sum := map[string]float64{}
+	for _, g := range guesses {
+		s := a.Dict.Get(g.ID)
+		if s == nil {
+			continue
+		}
+		fam := s.Protocol()
+		if s.SpeaksHTTP() {
+			fam = "http"
+		}
+		if a.Dict.Get(fam) != nil {
+			sum[fam] += g.P
+		}
+	}
+	out := make([]model.Guess, 0, len(sum))
+	for id, p := range sum {
+		out = append(out, model.Guess{ID: id, P: p})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].P != out[j].P {
+			return out[i].P > out[j].P
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
 // stricter orders services by how much their exposure would matter.
 func stricter(a, b *kb.Service) bool {
 	rank := map[string]int{kb.Public: 0, kb.Restricted: 1, kb.Private: 2}
@@ -271,7 +395,7 @@ func (a *Analyzer) judge(r scan.TargetResult, opt Options) Finding {
 	lang := opt.Lang
 	id := a.Identify(r, lang)
 	f := Finding{Host: r.IP, Port: r.Port, Service: id}
-	f.Evidence = append(f.Evidence, tr(lang, "ev-open", r.Port, reason(r)))
+	f.Evidence = append(f.Evidence, tr(lang, "ev-open", r.Port, localReason(lang, reason(r))))
 	if b := strings.TrimSpace(r.Banner); b != "" {
 		f.Evidence = append(f.Evidence, tr(lang, "ev-banner", b))
 	}
@@ -355,7 +479,23 @@ func (a *Analyzer) judge(r scan.TargetResult, opt Options) Finding {
 	if id.Source == "port" && len(id.Alternatives) > 0 && kb.SeverityRank(f.Severity) > kb.SeverityRank("medium") {
 		f.Severity = "medium"
 	}
-	if hedged {
+	// Service detection ran and nothing answered: the port's number is all
+	// there is to go on.
+	silent := isSilent(r)
+	if silent {
+		f.Evidence = append(f.Evidence, tr(lang, "ev-silent"))
+	}
+	// Seen from a node of the cluster, a cluster port may be open for that
+	// node only.
+	if opt.FromClusterNode && opt.Vantage == Internet && a.inGroup(s, "cluster") && f.Verdict != OK {
+		f.Verdict = Review
+		if kb.SeverityRank(f.Severity) > kb.SeverityRank("medium") {
+			f.Severity = "medium"
+		}
+		f.Evidence = append(f.Evidence, tr(lang, "ev-cluster-node"))
+		hedged = true
+	}
+	if hedged || silent && id.Source == "port" {
 		f.Title += tr(lang, "to-confirm")
 	}
 	f.Evidence = append(f.Evidence, postureNotes(r, lang)...)
@@ -368,6 +508,17 @@ func (a *Analyzer) judge(r scan.TargetResult, opt Options) Finding {
 	}
 	a.addVulns(&f, r, lang)
 	return f
+}
+
+// inGroup reports whether a service descends from the dictionary entry group.
+func (a *Analyzer) inGroup(s *kb.Service, group string) bool {
+	for i := 0; s != nil && i < 8; i++ {
+		if s.ID == group || s.Parent == group {
+			return true
+		}
+		s = a.Dict.Get(s.Parent)
+	}
+	return false
 }
 
 // addVulns raises a finding for the vulnerabilities the scan correlated.
@@ -533,9 +684,11 @@ func postureNotes(r scan.TargetResult, lang string) []string {
 	}
 	notes = append(notes, r.Findings...)
 	for i, n := range notes {
-		if len(n) > 70 {
-			notes[i] = strings.TrimSpace(n[:67]) + "…"
+		n = localNote(lang, n)
+		if r := []rune(n); len(r) > 70 {
+			n = strings.TrimSpace(string(r[:67])) + "…"
 		}
+		notes[i] = n
 	}
 	if len(notes) == 0 {
 		return nil

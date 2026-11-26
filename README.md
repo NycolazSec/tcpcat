@@ -400,10 +400,10 @@ tcpcat ai identify "-NOAUTH Authentication required." --port 6390   # -> Redis, 
 The AI combines three things:
 - a dictionary of about a hundred services: what each is, whether it belongs
   on the internet, why exposing it is dangerous and how to stop it;
-- a small banner model, trained under seven simulated network conditions
-  (truncated banners, noise, non-standard ports...). It names the right kind
-  of service in 91 % of cases on a non-standard port, against 20 % for port
-  conventions;
+- a small banner model, trained on nearly 10,000 banners under nine
+  simulated network conditions (truncated banners, noise, rebranded banners,
+  non-standard ports...). It names the right kind of service in 96 % of
+  cases on a non-standard port, against 21 % for port conventions;
 - reasoning that weighs vulnerabilities, sets aside client-only CVEs and
   spots answers from a middlebox.
 
