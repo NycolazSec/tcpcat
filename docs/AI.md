@@ -94,7 +94,8 @@ out loud (an ICMP error), or something accepted the connection and then
 said nothing. Read together, they say what filters the machine:
 - a firewall that lets only the open ports through and drops the rest (the
   right setup);
-- no firewall in front of the closed ports;
+- closed ports that answer with a reset: nothing filters them, or a firewall
+  rejects them with a reset, which looks the same from outside;
 - a firewall with ports left open to nothing (maybe forgotten rules);
 - a firewall that rejects instead of dropping;
 - open ports answering close to the timeout, so "filtered" ports may only be

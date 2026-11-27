@@ -83,7 +83,7 @@ var scenarios = []scenario{
 	{
 		name:     "no firewall",
 		services: []string{sshBanner, web},
-		want:     []string{"no firewall filters them"},
+		want:     []string{"nothing filters them, or a firewall refuses them with a reset"},
 		wantNot:  []string{"drops everything else silently"},
 	},
 	{

@@ -81,8 +81,8 @@ func init() {
 		// How the scan went (scanStory) and what the thorough analysis checked (diagnose).
 		"story-whitelist": {"A firewall lets only the open ports through and drops everything else silently: the right setup.",
 			"Un pare-feu ne laisse passer que les ports ouverts et jette tout le reste en silence : c'est la bonne configuration."},
-		"story-no-firewall": {"The closed ports answer straight away with a reset (RST): no firewall filters them. A firewall that drops by default would tell a scanner less about the machine.",
-			"Les ports fermés répondent directement par un RST : aucun pare-feu ne les filtre. Un pare-feu qui jette tout par défaut en dirait moins sur la machine."},
+		"story-no-firewall": {"The closed ports answer straight away with a reset (RST): nothing filters them, or a firewall refuses them with a reset, which looks the same from outside. Dropping them silently would tell a scanner less about the machine.",
+			"Les ports fermés répondent directement par un RST : rien ne les filtre, ou un pare-feu les refuse par un RST, ce qui revient au même vu de l'extérieur. Les jeter en silence en dirait moins à un scanner."},
 		"story-partial": {"A firewall drops most ports, but some get through to the machine with nothing listening behind them (closed: %s): maybe opening rules left behind.",
 			"Un pare-feu jette la plupart des ports, mais certains passent jusqu'à la machine sans que rien n'y écoute (fermés : %s) : peut-être des règles d'ouverture oubliées."},
 		"story-reject": {"A firewall refuses some ports out loud (%s): it answers with an ICMP error instead of keeping quiet.",
@@ -121,6 +121,8 @@ func init() {
 		"ev-silent":       {"the port accepts connections, but the service sent nothing back", "le port accepte la connexion, mais le service n'a rien répondu"},
 		"ev-answered-late": {"the follow-up check got an answer in %s: the service is there, but answered too slowly for service detection",
 			"la vérification approfondie a obtenu une réponse en %s : le service est bien là, mais il a répondu trop lentement pour la détection de service"},
+		"ev-answered-after-block": {"the follow-up check got an answer in %s once the block lifted: the block, not the service, had cut service detection short",
+			"la vérification approfondie a obtenu une réponse en %s une fois le blocage levé : c'est le blocage, pas le service, qui avait coupé la détection de service"},
 		"chk-no-answer": {"could not be verified: nothing answered in %s (a firewall, a connection limit, or it is not %s)",
 			"vérification impossible : rien n'a répondu en %s (pare-feu, limite de connexions, ou ce n'est pas du %s)"},
 

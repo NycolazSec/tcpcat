@@ -44,6 +44,9 @@ Full diffs for every release are available via GitHub's
   reachable. They run in their own network namespaces with real nftables
   rules. tcpcat scans each one with `--ai-deep`, and the test checks that
   the AI names the defense, and no other.
+- When the host blocked the scanner, a service that answers the follow-up
+  check is explained by the block ("the block, not the service, had cut
+  service detection short"), not by a slow service.
 - The AI recognizes an SSH tarpit (endlessh), a deliberate trap for bots
   (new dictionary entry `ssh-tarpit`). When everything is filtered, it also
   mentions that the machine may only open to a VPN or after port knocking.
@@ -80,6 +83,12 @@ Full diffs for every release are available via GitHub's
     only, so they are "to be confirmed" rather than critical.
 
 ### Fixed
+- Closed ports that answer with a reset no longer read as "no firewall": a
+  firewall that rejects with a reset looks the same from outside, and the
+  AI now says so.
+- "How the scan went" lists what the scan cannot tell first, then the
+  story, so that "blocked during the scan" comes before "after 15 s, it
+  answers again".
 - The thorough analysis could wait for minutes on a port that accepts a
   connection and then says nothing (a SYN proxy, a tarpit). The SSH
   login-methods check bounded the TCP connection, but not the handshake that

@@ -72,7 +72,7 @@ func TestStoryReadsTheFiltering(t *testing.T) {
 		want string
 	}{
 		"whitelist":   {[]scan.TargetResult{open(22, "ssh", ""), filtered(23), filtered(25)}, "drops everything else silently"},
-		"no firewall": {[]scan.TargetResult{open(22, "ssh", ""), closed(23), closed(25)}, "no firewall filters them"},
+		"no firewall": {[]scan.TargetResult{open(22, "ssh", ""), closed(23), closed(25)}, "nothing filters them, or a firewall refuses them with a reset"},
 		"partial":     {[]scan.TargetResult{open(22, "ssh", ""), closed(8443), filtered(25), filtered(26)}, "(closed: 8443)"},
 		"reject":      {[]scan.TargetResult{open(22, "ssh", ""), rejected(3306), filtered(25)}, "refuses some ports out loud (3306)"},
 	} {
@@ -168,5 +168,23 @@ func TestDiagnosisHearsASlowBanner(t *testing.T) {
 	rep = a.Deep([]scan.TargetResult{silentOpen(22), filtered(23), filtered(25)}, Options{Lang: "en"}, n, nil)
 	if text := joined(rep); !strings.Contains(text, "no banner even after") {
 		t.Fatal(text)
+	}
+}
+
+// When the host blocked the scanner, a service that answers the follow-up
+// check was cut off by the block, not slow.
+func TestLateAnswerAfterABlockIsExplainedByTheBlock(t *testing.T) {
+	fastDiagnosis(t)
+	a := analyzer(t)
+	n := newFakeNet()
+	n.states[80] = []string{"filtered", "open"}
+	n.http = map[string]struct {
+		code int
+		body string
+	}{"80/": {200, "<html></html>"}}
+	rep := a.Deep([]scan.TargetResult{silentOpen(80), filtered(23), filtered(25)}, Options{Lang: "en"}, n, nil)
+	f := find(t, rep.Report, 80)
+	if !contains(f.Evidence, tr("en", "ev-answered-after-block", "HTTP")) || contains(f.Evidence, tr("en", "ev-answered-late", "HTTP")) {
+		t.Fatalf("evidence: %v", f.Evidence)
 	}
 }
