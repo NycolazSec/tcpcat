@@ -19,6 +19,8 @@ Full diffs for every release are available via GitHub's
 - tcpcat's AI recognizes Gitea and Forgejo, and explains why a self-hosted Git
   service should not be open to everyone. Contributed by
   @avaldivieso-meraki (#98).
+- tcpcat's AI recognizes Rust game servers and their RCON console, which it
+  says to keep off the internet. Contributed by @jay23606 (#133).
 - tcpcat's AI can speak any language. A translation is one YAML file in
   `internal/ai/locales` (`es.yaml`, `pt-BR.yaml`…) that anyone can write from
   the browser, starting from `TEMPLATE.yaml`; texts it leaves out are shown in
