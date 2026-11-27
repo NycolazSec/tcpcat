@@ -1239,8 +1239,8 @@ services:
       en: Rust game server.
       fr: Serveur de jeu Rust.
     why:
-      en: Meant to be public; keep the server updated and its player list under your control.
-      fr: Fait pour être public ; gardez le serveur à jour et la liste des joueurs sous contrôle.
+      en: Meant to be public; keep the server and its plugins (Oxide, Carbon) up to date.
+      fr: Fait pour être public ; gardez le serveur et ses plugins (Oxide, Carbon) à jour.
   - id: rust-rcon
     name: Rust RCON
     name_fr: RCON Rust
@@ -1253,7 +1253,7 @@ services:
       fr: Console distante (RCON et WebRCON) d'un serveur Rust.
     why:
       en: RCON gives full operator commands, protected only by a password; keep it off the internet.
-      fr: RCON donne toutes les commandes d'opérateur, protégées seulement par un mot de passe ; gardez-le hors d'internet.
+      fr: RCON donne toutes les commandes d'opérateur, protégées seulement par un mot de passe ; gardez-le hors d'Internet.
   - id: pterodactyl-wings
     name: Pterodactyl Wings
     parent: http
