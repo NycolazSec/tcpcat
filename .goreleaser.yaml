@@ -30,7 +30,6 @@ archives:
       - README.md
       - LICENSE
       - LICENSE-Apache-2.0.txt
-      - COMMERCIAL-LICENSE.md
       - NOTICE
       - NOTICE.md
       - docs/*

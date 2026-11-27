@@ -16,8 +16,10 @@ set -u
 # Strong indicators: specific to this project. One hit is significant.
 STRONG=(
   'github.com/NycolazSec/tcpcat'          # Go module path, kept in build info even when stripped
-  'tcpcat.io/oem'                          # license notice printed by --version/--license
-  'Print licensing terms (AGPL-3.0'        # --license flag help text
+  'License: GNU AGPL-3.0 (tcpcat --license)'  # license notice printed by --version (after v1.10.0)
+  'Print the license terms (GNU AGPL-3.0'  # --license flag help text (after v1.10.0)
+  'tcpcat.io/oem'                          # license notice of v1.4.2 to v1.10.0
+  'Print licensing terms (AGPL-3.0'        # --license flag help text of v1.4.2 to v1.10.0
   'Check GitHub and update the tcpcat binary'  # --update flag help text
   'Start the local web interface'          # --web flag help text
 )

@@ -119,8 +119,8 @@ vendored or fetched outside of Go modules.
 
 **How dependencies are selected.** Prefer the Go standard library. A new
 third-party module is added only when it is actively maintained, widely used,
-and under a license compatible with tcpcat's licensing (see [LICENSE](LICENSE)
-and [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). A pull request that adds
+and under a license compatible with the AGPL-3.0 (see [LICENSE](LICENSE)).
+A pull request that adds
 one must say why the standard library or an existing dependency isn't enough.
 
 **How dependencies are tracked.**
@@ -175,22 +175,9 @@ Guidelines:
   responsive to review feedback; PRs with no activity for an extended period
   may be closed and can be reopened when you're ready to continue.
 
-## License and Contributor License Agreement
+## License
 
-tcpcat is dual-licensed: it is published under the
-[GNU Affero General Public License v3.0](LICENSE) and also offered under a
-[commercial license](COMMERCIAL-LICENSE.md). Versions up to and including
-v1.4.1 were released under the Apache License 2.0.
-
-Before your first pull request can be merged, you must accept the
-[Contributor License Agreement](CLA.md). You keep the copyright in your work.
-The CLA lets the project distribute your contribution under both licenses, and
-commits the project to keeping every accepted contribution available under the
-AGPL-3.0 or another OSI-approved license.
-
-The CLA Assistant bot comments on your first pull request. To sign, reply:
-
-> I have read the CLA Document and I hereby sign the CLA
-
-You only sign once. The CLA check runs on every pull request and must pass for
-each commit author before merging.
+tcpcat is published under the [GNU Affero General Public License v3.0](LICENSE).
+By opening a pull request, you agree that your contribution is licensed under
+the same license. You keep the copyright in your work, and there is no
+Contributor License Agreement to sign.

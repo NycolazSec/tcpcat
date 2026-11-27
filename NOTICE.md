@@ -13,10 +13,9 @@ statement made here.
 ## 1. Software Status and Defensive Purpose
 
 tcpcat is a **dual-use** network reconnaissance and security-assessment
-engine, dual-licensed under the GNU Affero General Public License v3.0 (AGPL-3.0)
-or a separate commercial (OEM) license for proprietary integration (see
-COMMERCIAL-LICENSE.md). Versions up to and including v1.4.1 were released
-under the Apache License 2.0.
+engine, released under the GNU Affero General Public License v3.0 (AGPL-3.0).
+Versions up to and including v1.4.1 were released under the Apache License
+2.0.
 
 tcpcat is designed and distributed exclusively for:
 
@@ -171,7 +170,7 @@ export controls.
 
 ## 6. No Compliance Guarantee
 
-tcpcat is provided under the GNU AGPL-3.0 (or a commercial license). The authors do not
+tcpcat is provided under the GNU AGPL-3.0. The authors do not
 guarantee compliance with OFAC, EAR, GDPR, computer-misuse laws, or any
 other regulation. Users remain responsible for their own legal and
 operational decisions.
