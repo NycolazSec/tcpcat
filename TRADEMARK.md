@@ -1,7 +1,7 @@
 # tcpcat — Trademark policy
 
-The AGPL-3.0 and the commercial (OEM) license grant rights to the **code**. They do
-not grant the right to use the **tcpcat** name or logo to present your own product.
+The AGPL-3.0 grants rights to the **code**. It does not grant the right to use the
+**tcpcat** name or logo to present your own product.
 The name is used by Nicolas Blondelle (NycolazSec) to identify this project; no
 trademark registration is claimed here.
 
@@ -16,8 +16,7 @@ trademark registration is claimed here.
   with it. Choose your own name and say it is "based on tcpcat".
 - Presenting your product or company as official, endorsed or partnered with tcpcat.
 - Using the name or logo in a product name, domain, app-store listing or social handle.
-- Shipping tcpcat in a commercial product under the tcpcat name (this also requires the
-  commercial license, see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)).
+- Shipping tcpcat in a commercial product under the tcpcat name.
 
 **Licensing notices must stay.** Keep copyright and license notices; under the AGPL the
 corresponding source must be available to those who receive or use your version.

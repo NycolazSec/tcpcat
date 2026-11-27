@@ -4,11 +4,11 @@ Copyright 2026 Nicolas Blondelle (NycolazSec)
 This product is developed by Nicolas Blondelle (NycolazSec),
 https://github.com/NycolazSec/tcpcat
 
-Versions after v1.4.1 are dual-licensed: under the GNU Affero General Public
-License v3.0 (see LICENSE), or under a separate commercial (OEM) license for
-proprietary integration and redistribution (see COMMERCIAL-LICENSE.md).
-Versions up to and including v1.4.1 were released under the Apache License 2.0
-(see LICENSE-Apache-2.0.txt).
+tcpcat is released under the GNU Affero General Public License v3.0 (see
+LICENSE). Versions up to and including v1.4.1 were released under the Apache
+License 2.0 (see LICENSE-Apache-2.0.txt). Versions after v1.4.1 up to and
+including v1.10.0 were also offered under a commercial license, which is no
+longer offered.
 
 The banner model of tcpcat's AI (internal/ai/model/weights.bin) was trained
 on the banner examples of Rapid7 Recog, https://github.com/rapid7/recog,
