@@ -261,6 +261,15 @@ func (a *Analyzer) diagnose(results []scan.TargetResult, lang string, d Diagnose
 			banner := service.SanitizeBanner(strings.TrimSpace(g.data))
 			switch {
 			case !g.connected:
+			case banner != "" && a.speaksFirst(p) == "SSH" && !strings.Contains(banner, "SSH-"):
+				// SSH lets a server send lines before its version string; a
+				// tarpit sends nothing else, slowly, to hold bots.
+				story = append(story, tr(lang, "diag-tarpit", p, seconds(lang, g.delay)))
+				for j := range results {
+					if results[j].IP == h && results[j].Port == p {
+						results[j].Service = "ssh-tarpit"
+					}
+				}
 			case banner != "":
 				line := tr(lang, "diag-banner-late", p, seconds(lang, g.delay))
 				if strings.HasPrefix(banner, "SSH-") {

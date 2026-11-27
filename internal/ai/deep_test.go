@@ -230,3 +230,31 @@ func TestWingsSFTPPasswordsAreForPlayers(t *testing.T) {
 		t.Fatalf("%+v / %+v", f, rep.Plan)
 	}
 }
+
+// A server that accepts and never speaks (a SYN proxy, a tarpit) must not
+// hold the probe beyond its timeout.
+func TestSSHProbeGivesUpOnASilentServer(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			defer func() { _ = c.Close() }() // held open, silent, until the test ends
+		}
+	}()
+	host, portStr, _ := net.SplitHostPort(ln.Addr().String())
+	port, _ := strconv.Atoi(portStr)
+	start := time.Now()
+	if _, err := (NetProber{Timeout: 300 * time.Millisecond}).SSHAuthMethods(host, port); err == nil {
+		t.Fatal("a silent server answered")
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("the probe waited %s for a silent server", d)
+	}
+}

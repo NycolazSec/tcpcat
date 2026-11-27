@@ -76,8 +76,8 @@ func init() {
 		"plan-see-below": {"the full fix is in the port's detail below", "le correctif complet est dans le détail du port, plus bas"},
 		"colon":          {": ", " : "},
 
-		"alert-blind": {"%s: all %d ports tested are filtered. Either the machine is off, or it (or a firewall on the way) is ignoring your address, for instance after spotting the scan. This scan cannot tell what the machine exposes: check again from another connection (a phone's hotspot, for instance).",
-			"%s : les %d ports testés sont tous filtrés. Soit la machine est éteinte, soit elle (ou un pare-feu sur le chemin) ignore votre adresse, par exemple après avoir repéré le scan. Ce scan ne permet pas de savoir ce qu'elle expose : revérifiez depuis une autre connexion (le partage de connexion d'un téléphone, par exemple)."},
+		"alert-blind": {"%s: all %d ports tested are filtered. Either the machine is off, or it (or a firewall on the way) is ignoring your address, for instance after spotting the scan, or it only opens to a VPN or after a port-knocking sequence. This scan cannot tell what the machine exposes: check again from another connection (a phone's hotspot, for instance).",
+			"%s : les %d ports testés sont tous filtrés. Soit la machine est éteinte, soit elle (ou un pare-feu sur le chemin) ignore votre adresse, par exemple après avoir repéré le scan, soit elle ne s'ouvre qu'à un VPN ou après une séquence de port-knocking. Ce scan ne permet pas de savoir ce qu'elle expose : revérifiez depuis une autre connexion (le partage de connexion d'un téléphone, par exemple)."},
 		// How the scan went (scanStory) and what the thorough analysis checked (diagnose).
 		"story-whitelist": {"A firewall lets only the open ports through and drops everything else silently: the right setup.",
 			"Un pare-feu ne laisse passer que les ports ouverts et jette tout le reste en silence : c'est la bonne configuration."},
@@ -108,8 +108,10 @@ func init() {
 			"Port %d : le service a envoyé sa bannière au bout de %s, alors que la détection de service n'attend qu'une demi-seconde. La bannière est maintenant prise en compte."},
 		"diag-ssh-slow-hint": {"For SSH, the usual causes are UseDNS yes, a MaxStartups limit, or an anti-DDoS holding new connections back.",
 			"Pour SSH, les causes habituelles sont UseDNS yes, une limite MaxStartups, ou un anti-DDoS qui retient les nouvelles connexions."},
-		"diag-banner-none": {"Port %d: no banner even after %s, though %s speaks first: something holds the connection (an anti-DDoS, a SYN proxy), or it is not %s.",
-			"Port %d : aucune bannière même après %s, alors que %s parle en premier : quelque chose retient la connexion (anti-DDoS, proxy SYN), ou ce n'est pas du %s."},
+		"diag-tarpit": {"Port %d trickles random lines instead of an SSH banner (the first after %s): an SSH tarpit such as endlessh, a trap that holds bots for hours. The real SSH server, if any, listens elsewhere.",
+			"Le port %d distille des lignes au hasard au lieu d'une bannière SSH (la première au bout de %s) : un piège à SSH (tarpit, comme endlessh) qui retient les robots pendant des heures. Le vrai serveur SSH, s'il existe, écoute ailleurs."},
+		"diag-banner-none": {"Port %d: no banner even after %s, though %s speaks first: something holds the connection (an anti-DDoS, a SYN proxy, a tarpit), or it is not %s.",
+			"Port %d : aucune bannière même après %s, alors que %s parle en premier : quelque chose retient la connexion (anti-DDoS, proxy SYN, piège à robots), ou ce n'est pas du %s."},
 
 		"alert-mute": {"%s: its %d open ports accept connections, but no service answered on any of them. Something on the way (an anti-DDoS, a SYN proxy, a firewall) may be answering for the machine, or cutting the exchange short: what follows rests on the port numbers alone.",
 			"%s : ses %d ports ouverts acceptent la connexion, mais aucun service n'a répondu. Un équipement sur le chemin (anti-DDoS, proxy SYN, pare-feu) répond peut-être à la place de la machine, ou coupe l'échange : ce qui suit repose sur les seuls numéros de port."},

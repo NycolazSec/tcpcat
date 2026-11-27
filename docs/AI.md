@@ -130,6 +130,33 @@ read-only, before verifying anything else:
 These checks add up to about 30 seconds on a blocked host, and nothing on a
 normal one beyond one connection per open port.
 
+It also recognizes an **SSH tarpit** (such as endlessh) on the SSH port: a
+server that trickles random lines and never sends an SSH version. That is a
+deliberate trap for bots, reported as such, not as a broken SSH server.
+
+### The hardened lab
+
+[`test/ailab`](../test/ailab) puts the AI in front of hardened machines. Each
+scenario builds a target in its own Linux network namespace, defended by real
+nftables rules and lab services, scans it with `--ai-deep` from a second
+namespace, and checks that the AI names the defense, and no other:
+
+| Target | What the AI must say |
+|---|---|
+| allow-list firewall | only the open ports get through, the right setup |
+| no firewall | the closed ports answer with a reset |
+| ICMP rejects | the firewall refuses some ports out loud |
+| open ports that never answer (SYN proxy, anti-DDoS) | something on the path may be answering |
+| SSH banner after 2 s | the delay, its usual causes, then OpenSSH |
+| ban for 10 s after the scan | blocked during the scan, then a temporary limit |
+| ban for 10 min after the scan | blocked during the scan, then a ban |
+| SSH tarpit | a trap for bots, public as expected |
+| nothing reachable (VPN only, port knocking) | the scan cannot tell, even slowly |
+
+It runs in CI on every change to the AI or the scanner
+([AI lab workflow](../.github/workflows/ai-lab.yml)), and anywhere with root,
+iproute2 and nft, as [`test/ailab/doc.go`](../test/ailab/doc.go) explains.
+
 ## How it works
 
 The AI has three parts.
