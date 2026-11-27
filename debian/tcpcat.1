@@ -10,6 +10,9 @@ tcpcat \- network scanner that shows what your servers expose
 .B tcpcat ai
 .RI { explain | policy | identify | model }
 .RI [ options ]
+.br
+.B tcpcat completion
+.RI { bash | zsh | fish }
 .SH DESCRIPTION
 .B tcpcat
 scans your servers from the outside and tells what they expose, why it
@@ -29,6 +32,10 @@ names the service behind a banner
 .RB ( "tcpcat ai identify" )
 and shows what its model knows
 .RB ( "tcpcat ai model" ).
+.PP
+.B tcpcat completion
+prints a completion script for bash, zsh or fish. For bash, load it with
+.BR "source <(tcpcat completion bash)" .
 .PP
 Targets may be host names, IP addresses or CIDR ranges. Raw-socket scans
 require root privileges or the
