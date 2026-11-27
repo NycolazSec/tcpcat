@@ -464,7 +464,7 @@ func verbs(s string) (map[int]byte, error) {
 			i++
 		}
 		explicit()
-		if i >= len(s) || !(s[i] >= 'a' && s[i] <= 'z' || s[i] >= 'A' && s[i] <= 'Z') {
+		if i >= len(s) || !isLetter(s[i]) {
 			return nil, fmt.Errorf("a %% sign that is not a placeholder")
 		}
 		out[arg] = s[i]
@@ -472,6 +472,8 @@ func verbs(s string) (map[int]byte, error) {
 	}
 	return out, nil
 }
+
+func isLetter(c byte) bool { return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' }
 
 func list(v map[int]byte) string {
 	var keys []int
