@@ -11,6 +11,11 @@ Full diffs for every release are available via GitHub's
 ## [Unreleased]
 
 ### Changed
+- tcpcat is released under the GNU AGPL-3.0 only. The commercial (OEM)
+  license is no longer offered, and contributions no longer need a
+  Contributor License Agreement: they are accepted under the AGPL-3.0, like
+  the rest of the code. `--version` and `--license` print the new terms.
+  Earlier versions keep theirs.
 - The Kali packaging metadata (`debian/`) follows 1.10.0. The description
   says what tcpcat is for, and the man page documents the AI options and
   `tcpcat ai`.

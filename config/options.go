@@ -493,7 +493,7 @@ func ParseFlags() (*Options, error) {
 	flag.StringVar(&opts.WebAddr, "web-addr", "127.0.0.1:8080", "Web interface listen address")
 	flag.BoolVar(&opts.Update, "update", false, "Check GitHub and update the tcpcat binary")
 	flag.BoolVar(&opts.ShowVersion, "version", false, "Print version information and exit")
-	flag.BoolVar(&opts.ShowLicense, "license", false, "Print licensing terms (AGPL-3.0 / commercial OEM) and exit")
+	flag.BoolVar(&opts.ShowLicense, "license", false, "Print the license terms (GNU AGPL-3.0) and exit")
 
 	flag.BoolVar(&opts.InsecureTLS, "insecure", false, "Allow insecure server connections")
 

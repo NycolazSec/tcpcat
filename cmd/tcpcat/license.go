@@ -5,28 +5,22 @@ package main
 // which is how a downstream user (or a compliance audit) learns which terms
 // apply and where the source is.
 
-const licenseShort = "License: AGPL-3.0 (commercial OEM license available: https://tcpcat.io/oem)\n" +
+const licenseShort = "License: GNU AGPL-3.0 (tcpcat --license)\n" +
 	"Source: https://github.com/NycolazSec/tcpcat"
 
-const licenseNotice = `tcpcat - Copyright 2026 Nicolas Blondelle (NycolazSec)
+const licenseNotice = `tcpcat - Copyright 2026 Nicolas Blondelle (NycolazSec) and contributors
 
-tcpcat is dual-licensed.
+tcpcat is free software under the GNU Affero General Public License v3.0
+(AGPL-3.0). You may use, study, modify and redistribute it.
 
-1. GNU Affero General Public License v3.0 (AGPL-3.0)
-   You may use, modify and redistribute tcpcat under the AGPL. If you
-   distribute it, or let third parties use it over a network, you must
-   provide the complete corresponding source code of your work under the
-   same license (AGPL section 13 applies to network use).
-   Source code: https://github.com/NycolazSec/tcpcat
+If you distribute tcpcat or a modified version, or let third parties use a
+modified version over a network, you must provide the complete
+corresponding source code of your work under the same license (AGPL
+section 13 covers network use).
+Source code: https://github.com/NycolazSec/tcpcat
 
-2. Commercial (OEM) license
-   To embed tcpcat in a proprietary product, appliance or hosted service
-   without releasing your source code, you need a commercial license.
-   Terms and pricing: https://tcpcat.io/oem
-   Contact: support@tcpcat.io
-
-Using tcpcat internally, including for authorized security assessments of
-your own or your clients' networks, does not require a commercial license.
+Running tcpcat, including for authorized security assessments of your own
+or your clients' networks, does not require you to publish anything.
 
 Versions up to and including v1.4.1 were released under the Apache License
 2.0 and remain available under those terms.
