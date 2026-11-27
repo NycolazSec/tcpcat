@@ -358,7 +358,7 @@ func DefineFlags(fs *flag.FlagSet, opts *Options) *bool {
 	fs.StringVar(&opts.VulnersAPIKey, "vulners-apikey", "", "Vulners.com API key for CVE lookup")
 	fs.BoolVar(&opts.ExploitIntel, "exploit-intel", false, "Enrich CVEs with CISA KEV (known-exploited) + EPSS scores and prioritize by them")
 	fs.BoolVar(&opts.AI, "ai", false, "Let tcpcat's AI judge the results: what to fix, why, and how")
-	fs.StringVar(&opts.AILang, "ai-lang", "", "Language of the AI's answers: fr or en (default: from $LANG)")
+	fs.StringVar(&opts.AILang, "ai-lang", "", "Language of the AI's answers: en, fr or a translation in internal/ai/locales (default: from $LANG)")
 	fs.StringVar(&opts.AIFrom, "ai-from", "", "Where the scan runs from, for the AI: internet or internal (default: guessed)")
 	fs.BoolVar(&opts.AIDeep, "ai-deep", false, "Thorough AI analysis: verifies its hypotheses with read-only probes, profiles the machine, plans the fixes")
 	fs.BoolVar(&opts.DualStack, "dual-stack", false, "Also scan the IPv6 address published (DNS AAAA) for each IPv4 target and report ports open on IPv6 only")
@@ -372,7 +372,7 @@ func DefineFlags(fs *flag.FlagSet, opts *Options) *bool {
 	fs.StringVar(&opts.WebAddr, "web-addr", "127.0.0.1:8080", "Web interface listen address")
 	fs.BoolVar(&opts.Update, "update", false, "Check GitHub and update the tcpcat binary")
 	fs.BoolVar(&opts.ShowVersion, "version", false, "Print version information and exit")
-	fs.BoolVar(&opts.ShowLicense, "license", false, "Print licensing terms (AGPL-3.0 / commercial OEM) and exit")
+	fs.BoolVar(&opts.ShowLicense, "license", false, "Print the license terms (GNU AGPL-3.0) and exit")
 
 	fs.BoolVar(&opts.InsecureTLS, "insecure", false, "Allow insecure server connections")
 

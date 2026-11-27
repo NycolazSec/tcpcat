@@ -267,6 +267,9 @@ sudo ./tcpcat --help
 **Prebuilt packages:** `.deb`, `.dmg`, and per-platform binaries are attached
 to each [GitHub release](https://github.com/NycolazSec/tcpcat/releases).
 
+**Shell completions:** Bash `source <(tcpcat completion bash)`; Zsh
+`source <(tcpcat completion zsh)`; Fish `source (tcpcat completion fish | psub)`.
+
 ### Verifying a release
 
 Every release ships a `checksums.txt`, a CycloneDX **SBOM** per archive, and a
@@ -706,8 +709,6 @@ the port state.
 `--update` downloads the release archive matching the current OS and CPU architecture, verifies it against the release `checksums.txt`, and replaces the current executable atomically. It requires a published GitHub release with matching assets and may require elevated permissions when the binary is installed in a system directory. The option does not update source checkouts or package-manager installations.
 
 ### Audit subcommands
-
-Enable completion: Bash `source <(tcpcat completion bash)`; Zsh `source <(tcpcat completion zsh)`; Fish `source (tcpcat completion fish | psub)`.
 
 ```
 tcpcat policy check <policy.yaml> --from <vantage> [-j f] [--sarif f] [--rate n] [-T n] [--scope-file f]
