@@ -10,6 +10,16 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Added
+- tcpcat's AI can speak any language. A translation is one YAML file in
+  `internal/ai/locales` (`es.yaml`, `pt-BR.yaml`…) that anyone can write from
+  the browser, starting from `TEMPLATE.yaml`; texts it leaves out are shown in
+  English. `--ai-lang`, `--lang` and `$LANG` select it (`es_MX.UTF-8` selects
+  `es`), and the numbers follow its conventions. CI checks every file: known
+  texts only, and the same placeholders as the English.
+  `go run ./internal/ai/localetool status` shows how much of each language is
+  done.
+
 ### Changed
 - tcpcat is released under the GNU AGPL-3.0 only. The commercial (OEM)
   license is no longer offered, and contributions no longer need a

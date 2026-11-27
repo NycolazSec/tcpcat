@@ -1,6 +1,7 @@
 # tcpcat's AI
 
-tcpcat's AI reads a scan and tells you, in plain English or French, what is
+tcpcat's AI reads a scan and tells you, in plain English or French (or another
+language, see [Translations](../internal/ai/locales/README.md)), what is
 exposed, how serious it is, why, and what to do. It runs **offline, inside the
 binary**: no account, no API key, and nothing about your network leaves your
 machine.

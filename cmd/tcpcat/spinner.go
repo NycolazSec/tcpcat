@@ -127,7 +127,7 @@ func (s *spinner) draw() {
 	verb := s.verbs[int(elapsed/verbEvery)%len(s.verbs)]
 	line := fmt.Sprintf("\r\033[K  %s%s%s %s…", spinnerColor, spinnerFrames[s.frame%len(spinnerFrames)], config.Reset, msg(s.lang, verb[0], verb[1]))
 	if secs := int(elapsed.Seconds()); secs >= 1 {
-		line += fmt.Sprintf(" %s(%d%s)%s", config.Gray, secs, msg(s.lang, "s", " s"), config.Reset)
+		line += fmt.Sprintf(" %s(%s)%s", config.Gray, fmt.Sprintf(msg(s.lang, "%ds", "%d s"), secs), config.Reset)
 	}
 	_, _ = fmt.Fprint(s.out, line)
 	s.drawn = true
