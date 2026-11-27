@@ -27,6 +27,14 @@ tells you which open ports and services are dangerous, and it proves when they
 are fixed.** It is one open-source binary, for the hosts and networks you are
 responsible for.
 
+<div align="center">
+
+![tcpcat scanning scanme.nmap.org with --ai-deep: open ports, versions, weak crypto and CVEs, then its AI tells how the scan went, what the machine is, and the fixes in order](docs/demo.gif)
+
+</div>
+
+<!-- Regenerate this demo with: vhs docs/demo.tape  (see docs/demo.tape) -->
+
 > **Want to help?** Teach tcpcat's AI a service you run (Jellyfin, Home
 > Assistant, Proxmox, a game server…) in about ten minutes, or
 > [translate it into your language](https://github.com/NycolazSec/tcpcat/issues/96):
@@ -51,14 +59,6 @@ then tells you what to do about it.
 **Who it is for:** system administrators, DevOps and hosting teams, and small
 companies without a security team. Penetration testers can use it too, with
 written authorization.
-
-<div align="center">
-
-![tcpcat scanning scanme.nmap.org with --ai-deep: open ports, versions, weak crypto and CVEs, then its AI tells how the scan went, what the machine is, and the fixes in order](docs/demo.gif)
-
-</div>
-
-<!-- Regenerate this demo with: vhs docs/demo.tape  (see docs/demo.tape) -->
 
 ## Quick start
 
@@ -888,6 +888,8 @@ the community expectations. Report security vulnerabilities privately, as
 in [CHANGELOG.md](CHANGELOG.md).
 
 ### Contributors
+
+If tcpcat is useful to you, a ⭐ on GitHub helps other admins find it.
 
 [![Contributors](https://contrib.rocks/image?repo=NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/graphs/contributors)
 
