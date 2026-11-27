@@ -93,3 +93,41 @@ func TestDictionaryPortsAreInTheTopPorts(t *testing.T) {
 		}
 	}
 }
+
+// The Rust entries are found by their ports and carry the exposure the
+// dictionary promises: the game port is public, RCON is private.
+func TestRustEntriesAreLoaded(t *testing.T) {
+	d := Default()
+	for id, want := range map[string]struct {
+		exposure string
+		udp      bool
+		port     int
+	}{
+		"rust-game": {Public, true, 28015},
+		"rust-rcon": {Private, false, 28016},
+	} {
+		s := d.Get(id)
+		if s == nil {
+			t.Errorf("%s: missing from the dictionary", id)
+			continue
+		}
+		if s.Exposure != want.exposure {
+			t.Errorf("%s: exposure %q, want %q", id, s.Exposure, want.exposure)
+		}
+		found := false
+		var matches []*Service
+		if want.udp {
+			matches = d.ByUDPPort(want.port)
+		} else {
+			matches = d.ByPort(want.port)
+		}
+		for _, m := range matches {
+			if m.ID == id {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: port %d does not lead to it", id, want.port)
+		}
+	}
+}
