@@ -28,7 +28,9 @@ are fixed.** It is one open-source binary, for the hosts and networks you are
 responsible for.
 
 > **Want to help?** Teach tcpcat's AI a service you run (Jellyfin, Home
-> Assistant, Proxmox, a game server…) in about ten minutes, without writing Go.
+> Assistant, Proxmox, a game server…) in about ten minutes, or
+> [translate it into your language](https://github.com/NycolazSec/tcpcat/issues/96):
+> each is one YAML file, written from the browser, without Go.
 > Pick one of the [good first issues](https://github.com/NycolazSec/tcpcat/labels/good%20first%20issue).
 
 ### Why scan your own servers?
