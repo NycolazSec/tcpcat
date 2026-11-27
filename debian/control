@@ -17,8 +17,9 @@ Depends: iputils-ping,
          ${misc:Depends},
          ${shlibs:Depends},
 Static-Built-Using: ${misc:Static-Built-Using}
-Description: fast network scanner with an eBPF/AF_XDP engine and CVE correlation
- tcpcat is a network reconnaissance engine written in Go, intended for
+Description: network scanner that shows what your servers expose
+ tcpcat scans your servers from the outside and tells what they expose, why
+ it matters and how to fix it. It is written in Go and intended for
  authorized security assessments and network administration.
  .
  Main features are:
@@ -28,6 +29,9 @@ Description: fast network scanner with an eBPF/AF_XDP engine and CVE correlation
      fingerprinting
    * CVE correlation against an embedded offline database, Google OSV or
      the Vulners API
+   * an offline AI (--ai, --ai-deep, "tcpcat ai") that says what to fix,
+     why and how, verifies its findings with read-only probes and tells
+     what blocked the scan
    * JSON, SARIF, JSONL audit log and baseline-comparison reports
    * scope file and a conservative "safe-production" profile for approved
      engagements

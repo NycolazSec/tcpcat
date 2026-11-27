@@ -11,7 +11,7 @@ without ever visiting the repo.
 | Debian/RPM | `.deb` / `.rpm` on Releases | ✅ live | none (GoReleaser `nfpms`) |
 | macOS installer | `.dmg` / `.pkg` on Releases | ✅ live | none (release workflow) |
 | Container (GHCR) | `docker run ghcr.io/nycolazsec/tcpcat:latest ...` | ✅ live | make package public once |
-| BlackArch | `pacman -S tcpcat` | 🟡 PKGBUILD in repo | submit/refresh upstream |
+| BlackArch | `pacman -S tcpcat` | ✅ live | none (git package, rebuilt by BlackArch) |
 | Homebrew (tap) | `brew install nycolazsec/tap/tcpcat` | ✅ live | renew the PAT yearly |
 | Homebrew (core) | `brew install tcpcat` | ⚪ not eligible yet | notability, see below |
 | AUR | `yay -S tcpcat-bin` | ⚪ ready, off | AUR package + SSH key |
@@ -109,13 +109,43 @@ The `aurs:` block in `.goreleaser.yaml` is written but commented out.
    the release workflow.
 5. Tag a release.
 
-## BlackArch
+## BlackArch — live
 
-[`packaging/blackarch/PKGBUILD`](../packaging/blackarch/PKGBUILD) tracks git and
-is pinned at `v1.3.0` — refresh `pkgver` and submit/update it upstream via the
-[blackarch/blackarch](https://github.com/BlackArch/blackarch) packages tree so
-`pacman -S tcpcat` stays current. Being in BlackArch (and, ideally, Kali)
-reaches the pentest audience directly through their distro.
+tcpcat has been in BlackArch since October 2026
+([BlackArch/blackarch#5114](https://github.com/BlackArch/blackarch/pull/5114)):
+`pacman -S tcpcat`. The package's PKGBUILD lives in the BlackArch tree, at
+`packages/tcpcat/PKGBUILD`.
+[`packaging/blackarch/PKGBUILD`](../packaging/blackarch/PKGBUILD) is a copy,
+kept in sync with it.
+
+It is a git package. When BlackArch rebuilds it, it builds `main` as it is
+then, not the latest release. BlackArch bumps its git packages in batches,
+every few weeks. The build stamps the version, so `tcpcat --version` prints,
+for example, `1.10.0.r0.g1234abc`.
+
+To ship a release sooner, or to change the package (description, license,
+dependencies):
+
+1. Open a pull request on
+   [BlackArch/blackarch](https://github.com/BlackArch/blackarch) that edits
+   `packages/tcpcat/PKGBUILD`.
+2. In it, set `pkgver` to what this prints on `main`, and reset `pkgrel` to 1:
+
+   ```bash
+   git describe --long --tags --abbrev=7 | sed 's/\([^-]*-g\)/r\1/;s/-/./g'
+   ```
+
+3. Copy the file here.
+
+To see which version `pacman` installs, read the repository database. The
+tools page on blackarch.org lags behind it.
+
+```bash
+curl -sL https://www.blackarch.org/blackarch/blackarch/os/x86_64/blackarch.db |
+  tar -tz | grep -m1 '^tcpcat-v'
+```
+
+There is no aarch64 build yet.
 
 ## Testing the config without publishing
 

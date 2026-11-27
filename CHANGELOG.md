@@ -10,6 +10,15 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
+### Changed
+- The Kali packaging metadata (`debian/`) follows 1.10.0. The description
+  says what tcpcat is for, and the man page documents the AI options and
+  `tcpcat ai`.
+- The BlackArch PKGBUILD matches the one BlackArch builds. Its license is
+  AGPL-3.0-only (BlackArch's package said Apache-2.0), and its build stamps
+  the version, so `tcpcat --version` no longer prints "dev" there.
+  docs/DISTRIBUTION.md explains how the package is built and updated.
+
 ## [1.10.0] - 2026-11-27
 
 ### Added

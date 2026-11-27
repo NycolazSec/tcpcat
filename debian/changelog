@@ -1,3 +1,19 @@
+tcpcat (1.10.0-0kali1) kali-dev; urgency=medium
+
+  * New upstream release 1.10.0.
+    - tcpcat's offline AI: --ai says what to fix, why and how; --ai-deep
+      verifies its findings with read-only probes, tells how the scan went
+      and what blocked it, and plans the fixes.
+    - --top-ports uses tcpcat's own list of 1,361 ports, -p- scans every
+      port, and the default --rate is 1000.
+    - CVE lookups use the distribution's own fix status.
+    - --help prints a short help; --help-all lists every option. The
+      IDS/IPS evasion options are deprecated and print a warning.
+  * debian/control, debian/tcpcat.1: say what tcpcat is for, and document
+    the AI options and the "tcpcat ai" subcommand.
+
+ -- Nicolas Blondelle <support@tcpcat.io>  Fri, 27 Nov 2026 16:00:00 +0100
+
 tcpcat (1.7.0-0kali1) kali-dev; urgency=medium
 
   * New upstream release 1.7.0.
