@@ -1228,6 +1228,32 @@ services:
     why:
       en: RCON gives full operator commands, protected only by a password sent in clear text.
       fr: RCON donne toutes les commandes d'opérateur, protégées seulement par un mot de passe envoyé en clair.
+  - id: rust-game
+    name: Rust server
+    name_fr: Serveur Rust
+    category: game
+    udp: [28015]
+    exposure: public
+    risk: info
+    what:
+      en: Rust game server.
+      fr: Serveur de jeu Rust.
+    why:
+      en: Meant to be public; keep the server updated and its player list under your control.
+      fr: Fait pour être public ; gardez le serveur à jour et la liste des joueurs sous contrôle.
+  - id: rust-rcon
+    name: Rust RCON
+    name_fr: RCON Rust
+    category: game
+    ports: [28016]
+    exposure: private
+    risk: high
+    what:
+      en: Remote console (RCON and WebRCON) of a Rust server.
+      fr: Console distante (RCON et WebRCON) d'un serveur Rust.
+    why:
+      en: RCON gives full operator commands, protected only by a password; keep it off the internet.
+      fr: RCON donne toutes les commandes d'opérateur, protégées seulement par un mot de passe ; gardez-le hors d'internet.
   - id: pterodactyl-wings
     name: Pterodactyl Wings
     parent: http
