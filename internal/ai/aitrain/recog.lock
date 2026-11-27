@@ -1,0 +1,11 @@
+# The training data of tcpcat's banner model, pinned. aitrain trains only on
+# the Recog files whose digest is recorded here, so that the weights in
+# internal/ai/model can be rebuilt byte for byte and checked (CI does it with
+# no network, see .github/workflows/ai-model.yml). To train on newer data:
+#   go run ./internal/ai/aitrain -recog <clone> -update-lock
+recog_repository: https://github.com/rapid7/recog
+recog_commit: f1191e24332c51d6a3d98457f64fba8dec340784
+recog_date: 2026-11-12
+recog_sha256: e177e1b9ec42022dc526999c8125787b0319ee53028a816995603b9e38096f03
+trained: 2026-11-26
+go: go1.26.5

@@ -37,6 +37,15 @@ Full diffs for every release are available via GitHub's
   is FTP.
 
 ### Added
+- A verifiable banner model. `internal/ai/aitrain/recog.lock` pins the
+  training data: the Recog commit, and the SHA-256 of every file the trainer
+  reads. The trainer refuses other data unless run with `-update-lock`.
+  Training is reproducible byte for byte, on x86 and ARM alike: the
+  provenance in the model comes from the lock, not from the clock or git. A
+  new workflow rebuilds the model on every change, in a network namespace
+  with no network and as an unprivileged user, and fails unless it matches
+  the committed weights. On `main`, it signs a provenance attestation:
+  `gh attestation verify internal/ai/model/weights.bin --repo NycolazSec/tcpcat`.
 - The AI tells how the scan went and what blocks it. Host by host, it
   separates ports closed by the machine (RST), dropped silently, refused by
   ICMP, and open but silent, and names the filtering: an allow-list
