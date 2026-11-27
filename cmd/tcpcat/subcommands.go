@@ -13,3 +13,7 @@ var subcommands = map[string]func([]string) int{
 	"scripts":   runScripts,
 	"ai":        runAI,
 }
+
+func init() {
+	subcommands["completion"] = runCompletion
+}
