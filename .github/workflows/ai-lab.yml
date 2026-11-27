@@ -1,0 +1,61 @@
+# The hardened lab of tcpcat's AI (test/ailab): targets in their own network
+# namespaces, defended by real nftables rules (allow-list, ICMP rejects, a ban
+# after the scan, a rate limit) and lab services (a silent port, a late SSH
+# banner, an SSH tarpit). tcpcat scans each one with --ai-deep, and the test
+# checks that the AI names the defense, and no other.
+name: AI lab
+
+on:
+  pull_request:
+    paths:
+      - "internal/ai/**"
+      - "internal/scan/**"
+      - "internal/service/**"
+      - "cmd/tcpcat/**"
+      - "test/ailab/**"
+      - ".github/workflows/ai-lab.yml"
+  push:
+    branches: [main]
+    paths:
+      - "internal/ai/**"
+      - "internal/scan/**"
+      - "internal/service/**"
+      - "cmd/tcpcat/**"
+      - "test/ailab/**"
+      - ".github/workflows/ai-lab.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  lab:
+    name: Hardened targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Install nftables
+        run: sudo apt-get install -y --no-install-recommends nftables
+
+      - name: Build tcpcat, the lab services and the lab
+        run: |
+          go build -o "$RUNNER_TEMP/tcpcat" ./cmd/tcpcat
+          go build -o "$RUNNER_TEMP/labsrv" ./test/ailab/labsrv
+          go test -c -tags ailab -o "$RUNNER_TEMP/ailab.test" ./test/ailab
+
+      - name: Run the lab (root, inside its own network namespaces)
+        run: |
+          sudo env TCPCAT_BIN="$RUNNER_TEMP/tcpcat" LABSRV_BIN="$RUNNER_TEMP/labsrv" \
+            "$RUNNER_TEMP/ailab.test" -test.v -test.timeout 15m

@@ -119,6 +119,19 @@ services:
       en: Allow only key-based login (PasswordAuthentication no), disable root login, and if you can, allow only known addresses.
       fr: N'autorisez que la connexion par clé (PasswordAuthentication no), interdisez root, et si possible n'acceptez que des adresses connues.
     banners: [SSH-2.0-Go, SSH-2.0-SSHD, SSH-2.0-paramiko_3.4.0]
+  - id: ssh-tarpit
+    name: SSH tarpit
+    name_fr: Piège à SSH (tarpit)
+    category: remote-access
+    exposure: public
+    risk: info
+    products: [endlessh]
+    what:
+      en: A trap that answers SSH connections with endless random lines, very slowly, to keep password-guessing bots busy.
+      fr: Un piège qui répond aux connexions SSH par des lignes au hasard, sans fin et très lentement, pour occuper les robots qui devinent les mots de passe.
+    why:
+      en: Meant to face the internet. It holds bots instead of your real SSH server, which should listen on another port, reachable only from known addresses.
+      fr: Fait pour être face à Internet. Il retient les robots à la place de votre vrai serveur SSH, qui doit écouter sur un autre port, joignable seulement depuis des adresses connues.
   - id: openssh
     name: OpenSSH
     parent: ssh

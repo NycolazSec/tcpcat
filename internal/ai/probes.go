@@ -67,10 +67,20 @@ func (p NetProber) SSHAuthMethods(host string, port int) ([]string, error) {
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // #nosec G106 -- identification probe: no session is opened and nothing is trusted
 		Timeout:         p.timeout(),
 	}
-	c, err := ssh.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(port)), cfg)
+	// ssh.Dial's timeout only covers the TCP connection; a server that
+	// accepts and then never speaks (a SYN proxy, a tarpit) would hold the
+	// handshake for as long as it likes. The deadline covers it all.
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
+	conn, err := net.DialTimeout("tcp", addr, p.timeout())
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(p.timeout()))
+	sc, chans, reqs, err := ssh.NewClientConn(conn, addr, cfg)
 	if err == nil {
 		// The server let an unauthenticated client in.
-		_ = c.Close()
+		_ = ssh.NewClient(sc, chans, reqs).Close()
 		return []string{"none"}, nil
 	}
 	// Either every method we were offered failed ("unable to authenticate"),

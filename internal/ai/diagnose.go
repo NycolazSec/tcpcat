@@ -164,8 +164,9 @@ func seconds(lang string, d time.Duration) string {
 }
 
 // diagnose checks the scan's story on the network, read-only, and returns
-// the results with the banners it obtained, what it found, and the alerts.
-func (a *Analyzer) diagnose(results []scan.TargetResult, lang string, d Diagnoser, progress func(string)) ([]scan.TargetResult, []string, []string) {
+// the results with the banners it obtained, what it found, the alerts, and
+// the hosts that blocked the scanner during the scan.
+func (a *Analyzer) diagnose(results []scan.TargetResult, lang string, d Diagnoser, progress func(string)) ([]scan.TargetResult, []string, []string, map[string]bool) {
 	results = append([]scan.TargetResult(nil), results...)
 	say := func(s string) {
 		if progress != nil {
@@ -173,6 +174,7 @@ func (a *Analyzer) diagnose(results []scan.TargetResult, lang string, d Diagnose
 		}
 	}
 	var story, alerts []string
+	blocked := map[string]bool{}
 	blind := map[string]bool{}
 	for _, h := range blindHosts(results) {
 		blind[h.host] = true
@@ -215,6 +217,7 @@ func (a *Analyzer) diagnose(results []scan.TargetResult, lang string, d Diagnose
 		}
 		if len(gone) == len(probe) {
 			alerts = append(alerts, tr(lang, "diag-blocked-now", h, joinPorts(gone)))
+			blocked[h] = true
 			say(tr(lang, "diag-wait", int(diagCoolDown.Seconds())))
 			time.Sleep(diagCoolDown)
 			if d.Dial(h, probe[0], diagDialTimeout) == "open" {
@@ -261,6 +264,15 @@ func (a *Analyzer) diagnose(results []scan.TargetResult, lang string, d Diagnose
 			banner := service.SanitizeBanner(strings.TrimSpace(g.data))
 			switch {
 			case !g.connected:
+			case banner != "" && a.speaksFirst(p) == "SSH" && !strings.Contains(banner, "SSH-"):
+				// SSH lets a server send lines before its version string; a
+				// tarpit sends nothing else, slowly, to hold bots.
+				story = append(story, tr(lang, "diag-tarpit", p, seconds(lang, g.delay)))
+				for j := range results {
+					if results[j].IP == h && results[j].Port == p {
+						results[j].Service = "ssh-tarpit"
+					}
+				}
 			case banner != "":
 				line := tr(lang, "diag-banner-late", p, seconds(lang, g.delay))
 				if strings.HasPrefix(banner, "SSH-") {
@@ -277,7 +289,7 @@ func (a *Analyzer) diagnose(results []scan.TargetResult, lang string, d Diagnose
 			}
 		}
 	}
-	return results, story, alerts
+	return results, story, alerts, blocked
 }
 
 // diagnoseBlind looks into a host on which nothing answered: one slow

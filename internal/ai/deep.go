@@ -60,8 +60,9 @@ func (a *Analyzer) Deep(results []scan.TargetResult, opt Options, p Prober, prog
 	// First, how the scan went: is the scanner blocked, are the silent
 	// services only slow? The banners this brings in feed the analysis.
 	var diagStory, diagAlerts []string
+	blocked := map[string]bool{}
 	if d, ok := p.(Diagnoser); ok {
-		results, diagStory, diagAlerts = a.diagnose(results, opt.Lang, d, progress)
+		results, diagStory, diagAlerts, blocked = a.diagnose(results, opt.Lang, d, progress)
 	}
 	rep := a.Analyze(results, opt)
 	rep.Story = append(rep.Story, diagStory...)
@@ -88,7 +89,7 @@ func (a *Analyzer) Deep(results []scan.TargetResult, opt Options, p Prober, prog
 				progress(tr(lang, "progress", f.Port, f.Service.Name))
 				mu.Unlock()
 			}
-			a.verify(f, r, rep.Vantage, lang, p)
+			a.verify(f, r, rep.Vantage, lang, p, blocked[f.Host])
 		}()
 	}
 	wg.Wait()
@@ -125,7 +126,9 @@ func (a *Analyzer) Deep(results []scan.TargetResult, opt Options, p Prober, prog
 	}
 }
 
-func (a *Analyzer) verify(f *Finding, r scan.TargetResult, vantage, lang string, p Prober) {
+// blocked says the host blocked the scanner during the scan: what service
+// detection missed was cut off, not slow.
+func (a *Analyzer) verify(f *Finding, r scan.TargetResult, vantage, lang string, p Prober, blocked bool) {
 	s := a.Dict.Get(f.Service.ID)
 	proto := ""
 	if s != nil {
@@ -157,7 +160,11 @@ func (a *Analyzer) verify(f *Finding, r scan.TargetResult, vantage, lang string,
 			}
 			kept = append(kept, e)
 		}
-		f.Evidence = append(kept, tr(lang, "ev-answered-late", protocol))
+		why := "ev-answered-late"
+		if blocked {
+			why = "ev-answered-after-block"
+		}
+		f.Evidence = append(kept, tr(lang, why, protocol))
 		if protocol == "SSH" && f.Service.Source == "port" {
 			f.Service.Source, f.Service.Confidence = "probe", 0.99
 		}
@@ -666,7 +673,7 @@ func capList(lang string, items []string, n int) string {
 // probe.
 func answeredLate(f Finding, lang string) bool {
 	for _, p := range []string{"SSH", "HTTP", "HTTPS"} {
-		if contains(f.Evidence, tr(lang, "ev-answered-late", p)) {
+		if contains(f.Evidence, tr(lang, "ev-answered-late", p)) || contains(f.Evidence, tr(lang, "ev-answered-after-block", p)) {
 			return true
 		}
 	}

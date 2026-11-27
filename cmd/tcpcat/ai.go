@@ -424,13 +424,14 @@ func renderAIReport(rep ai.Report) {
 	renderFindings(rep, false)
 }
 
-// printStory tells how the scan went, then what it cannot tell.
+// printStory says first what the scan cannot tell (the alerts), then how
+// it went.
 func printStory(rep ai.Report) {
-	for _, s := range rep.Story {
-		printItem("  "+config.Gray+"·"+config.Reset+" ", s)
-	}
 	for _, a := range rep.Alerts {
 		printItem("  "+config.Yellow+"!"+config.Reset+" ", a)
+	}
+	for _, s := range rep.Story {
+		printItem("  "+config.Gray+"·"+config.Reset+" ", s)
 	}
 }
 
