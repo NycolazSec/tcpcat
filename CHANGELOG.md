@@ -10,33 +10,21 @@ Full diffs for every release are available via GitHub's
 
 ## [Unreleased]
 
-### Changed
-- A stronger banner model for tcpcat's AI. It is a logistic regression over
-  the banner (n-grams, words, first characters, shape) with a calibrated
-  port table, in place of naive Bayes. It is trained on 9,878 banners
-  instead of 2,043: Recog's examples, banners generated from Recog's
-  patterns, MySQL error packets and binary noise. Training covers two more
-  network conditions: rebranded banners, and servers that keep talking
-  after the banner. On the same held-out banners:
-  - non-standard port: 95.7 % right instead of 87.2 %;
-  - truncated, noisy and on a non-standard port: 91.1 % instead of 79.9 %;
-  - exact product on a non-standard port: 92.9 % instead of 79.4 %.
-
-  It stays at 100 % on standard ports and takes 375 KB.
-  `go run ./internal/ai/aitrain -sweep` tunes the training on the
-  calibration split, never on the test split.
-- With `--ai-lang fr`, everything the AI quotes from the scanner is in
-  French: the port's reason ("SYN-ACK reçu") and the probes' SSH, TLS and SMB
-  warnings. The help of `tcpcat ai`, its error messages, the service names
-  in `ai identify` and `tcpcat ai model` are in French too.
-- `tcpcat ai model` shows the model's scores per network condition.
-- `tcpcat ai identify` adds up its guesses by kind of service when it is
-  unsure of the product. When it cannot decide, it says so ("FTP or SMTP?")
-  instead of saying the dictionary does not know the service. The analysis
-  uses the same sums: a banner that is surely FTP but of an unknown product
-  is FTP.
+## [1.10.0] - 2026-11-27
 
 ### Added
+- A thorough analysis mode for tcpcat's AI: `--ai-deep` on a scan, or
+  `tcpcat ai explain --deep`. It verifies its own hypotheses with read-only
+  follow-up probes, and never sends a credential:
+  - SSH login methods and weak algorithms;
+  - whether the kubelet, the Kubernetes API, the Docker API, Elasticsearch
+    and Redis answer anonymous clients;
+  - whether an alternate web port is Pterodactyl Wings;
+  - whether port 80 redirects to HTTPS;
+  - certificate problems.
+
+  It then works out what the machine is, says what is fine, and ends with a
+  plan ordered by severity, with the exact setting to change.
 - A hardened lab for the AI (`test/ailab`, run in CI by the AI lab workflow).
   Nine target machines are each defended differently: an allow-list
   firewall, no firewall, ICMP rejects, silent open ports, a late SSH banner,
@@ -82,6 +70,51 @@ Full diffs for every release are available via GitHub's
   - a scan run from a Kubernetes node: cluster ports may be open to that node
     only, so they are "to be confirmed" rather than critical.
 
+### Changed
+- A stronger banner model for tcpcat's AI. It is a logistic regression over
+  the banner (n-grams, words, first characters, shape) with a calibrated
+  port table, in place of naive Bayes. It is trained on 9,878 banners
+  instead of 2,043: Recog's examples, banners generated from Recog's
+  patterns, MySQL error packets and binary noise. Training covers two more
+  network conditions: rebranded banners, and servers that keep talking
+  after the banner. On the same held-out banners:
+  - non-standard port: 95.7 % right instead of 87.2 %;
+  - truncated, noisy and on a non-standard port: 91.1 % instead of 79.9 %;
+  - exact product on a non-standard port: 92.9 % instead of 79.4 %.
+
+  It stays at 100 % on standard ports and takes 375 KB.
+  `go run ./internal/ai/aitrain -sweep` tunes the training on the
+  calibration split, never on the test split.
+- With `--ai-lang fr`, everything the AI quotes from the scanner is in
+  French: the port's reason ("SYN-ACK reçu") and the probes' SSH, TLS and SMB
+  warnings. The help of `tcpcat ai`, its error messages, the service names
+  in `ai identify` and `tcpcat ai model` are in French too.
+- `tcpcat ai model` shows the model's scores per network condition.
+- `tcpcat ai identify` adds up its guesses by kind of service when it is
+  unsure of the product. When it cannot decide, it says so ("FTP or SMTP?")
+  instead of saying the dictionary does not know the service. The analysis
+  uses the same sums: a banner that is surely FTP but of an unknown product
+  is FTP.
+- `tcpcat -h` prints a short help, ordered by what tcpcat is for (see,
+  decide, prove). `--help-all` prints every option.
+- Subcommands (`ai`, `policy`, `explain`, ...) no longer print the ASCII
+  banner before their report.
+
+### Deprecated
+- The IDS/IPS evasion and packet-debugging options print a warning and will
+  be removed in 2.0: `--evasion`, `--jitter`, `--ttl-jitter`, `--ttl-mode`,
+  `--probe-ttl`, `--window-size`, `--source-port-mode`, `--frag`, `--decoy`,
+  `--smart-bypass`, `--relay-server`, `-sI`, and the `--deep-inspect`
+  family. They do not help check your own exposure.
+  `--decoy auto` spoofs public DNS resolvers' addresses. See
+  docs/IDS_VISIBILITY.md.
+
+### Removed
+- `-oS` (export in "leetspeak").
+- The internal phase reports, test scripts and roadmap that were in
+  `docs/`. Some of them still quoted speed figures that had been withdrawn.
+  Git history keeps them.
+
 ### Fixed
 - Closed ports that answer with a reset no longer read as "no firewall": a
   firewall that rejects with a reset looks the same from outside, and the
@@ -107,6 +140,11 @@ Full diffs for every release are available via GitHub's
   as if confirmed. It is now marked "to be confirmed", with that evidence.
 - The machine profile could read "Serving websites." without a subject. It
   now reads "a machine serving websites".
+- The `.deb` and `.rpm` packages still described tcpcat with its old
+  tagline. They now say what it is for, like the Homebrew formula.
+- The 1.9.0 entry of this changelog listed changes merged after the v1.9.0
+  tag: `--ai-deep`, the short help, the deprecations and the removals. They
+  ship in 1.10.0 and are listed here.
 
 ## [1.9.0] - 2026-11-26
 
@@ -127,43 +165,12 @@ Full diffs for every release are available via GitHub's
 - `-p-` (and `-p 1-`, `-p -1024`) for open-ended port ranges, as in Nmap.
 - Minecraft servers are recognised with the server-list status ping, which
   is read-only and reports the version and player count.
-- A thorough analysis mode for tcpcat's AI: `--ai-deep` on a scan, or
-  `tcpcat ai explain --deep`. It verifies its own hypotheses with read-only
-  follow-up probes, and never sends a credential:
-  - SSH login methods and weak algorithms;
-  - whether the kubelet, the Kubernetes API, the Docker API, Elasticsearch
-    and Redis answer anonymous clients;
-  - whether an alternate web port is Pterodactyl Wings;
-  - whether port 80 redirects to HTTPS;
-  - certificate problems.
-
-  It then works out what the machine is, says what is fine, and ends with a
-  plan ordered by severity, with the exact setting to change.
 
 ### Changed
 - tcpcat now says what it is for: know what your servers expose (see,
   decide, prove). The README, the `--help` banner, the package descriptions
   and CITATION.cff were rewritten around it.
 - The default `--rate` is 1000 packets/s (it was 500).
-- `tcpcat -h` prints a short help, ordered by what tcpcat is for (see,
-  decide, prove). `--help-all` prints every option.
-- Subcommands (`ai`, `policy`, `explain`, ...) no longer print the ASCII
-  banner before their report.
-
-### Deprecated
-- The IDS/IPS evasion and packet-debugging options print a warning and will
-  be removed in 2.0: `--evasion`, `--jitter`, `--ttl-jitter`, `--ttl-mode`,
-  `--probe-ttl`, `--window-size`, `--source-port-mode`, `--frag`, `--decoy`,
-  `--smart-bypass`, `--relay-server`, `-sI`, and the `--deep-inspect`
-  family. They do not help check your own exposure.
-  `--decoy auto` spoofs public DNS resolvers' addresses. See
-  docs/IDS_VISIBILITY.md.
-
-### Removed
-- `-oS` (export in "leetspeak").
-- The internal phase reports, test scripts and roadmap that were in
-  `docs/`. Some of them still quoted speed figures that had been withdrawn.
-  Git history keeps them.
 
 ### Fixed
 - `--top-ports 1000` scanned only 59 ports. The list was rebuilt and now
@@ -1188,7 +1195,8 @@ Full diffs for every release are available via GitHub's
   visibility-testing controls, and a WASM-based scripting engine for custom
   detectors and exploit modules.
 
-[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/NycolazSec/tcpcat/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/NycolazSec/tcpcat/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/NycolazSec/tcpcat/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/NycolazSec/tcpcat/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/NycolazSec/tcpcat/compare/v1.7.0...v1.8.0
