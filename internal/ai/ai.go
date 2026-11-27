@@ -43,7 +43,7 @@ const (
 
 // Options tune an analysis.
 type Options struct {
-	Lang    string // "fr" or "en"
+	Lang    string // a language of Languages(): "en", "fr" or a locale
 	Vantage string // Internet (default) or Internal
 	// FromClusterNode says the scan ran from a Kubernetes node, which the
 	// cluster's firewall may trust more than the internet.
@@ -109,9 +109,7 @@ func New() (*Analyzer, error) {
 
 // Analyze judges every open port of a scan.
 func (a *Analyzer) Analyze(results []scan.TargetResult, opt Options) Report {
-	if opt.Lang != "fr" {
-		opt.Lang = "en"
-	}
+	opt.Lang = Lang(opt.Lang)
 	if opt.Vantage != Internal {
 		opt.Vantage = Internet
 	}
@@ -718,11 +716,7 @@ func postureNotes(r scan.TargetResult, lang string) []string {
 
 // score writes a CVSS score the way the language does: 7.8 or 7,8.
 func score(lang string, v float64) string {
-	s := fmt.Sprintf("%.1f", v)
-	if lang == "fr" {
-		s = strings.Replace(s, ".", ",", 1)
-	}
-	return s
+	return strings.Replace(fmt.Sprintf("%.1f", v), ".", DecimalMark(lang), 1)
 }
 
 func hasPort(ports []int, p int) bool {

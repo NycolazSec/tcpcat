@@ -112,7 +112,7 @@ func scanStory(results []scan.TargetResult, lang string) []string {
 
 func countLine(lang string, c *portCounts) string {
 	var parts []string
-	add := func(n int, en, fr, frSuffix string) {
+	add := func(n int, key, fr, frSuffix string) {
 		if n == 0 {
 			return
 		}
@@ -124,12 +124,12 @@ func countLine(lang string, c *portCounts) string {
 			parts = append(parts, fmt.Sprintf("%d %s%s", n, word, frSuffix))
 			return
 		}
-		parts = append(parts, fmt.Sprintf("%d %s", n, en))
+		parts = append(parts, tr(lang, key, n))
 	}
-	add(c.open, "open", "ouvert", "")
-	add(c.closed, "closed (RST)", "fermé", " (RST)")
-	add(c.dropped, "dropped silently", "filtré", " en silence")
-	add(c.rejected, "rejected (ICMP)", "refusé", " par ICMP")
+	add(c.open, "count-open", "ouvert", "")
+	add(c.closed, "count-closed", "fermé", " (RST)")
+	add(c.dropped, "count-dropped", "filtré", " en silence")
+	add(c.rejected, "count-rejected", "refusé", " par ICMP")
 	return strings.Join(parts, ", ")
 }
 
@@ -156,11 +156,7 @@ func median(v []float64) float64 {
 }
 
 func seconds(lang string, d time.Duration) string {
-	s := strconv.FormatFloat(d.Seconds(), 'f', 1, 64)
-	if lang == "fr" {
-		s = strings.Replace(s, ".", ",", 1)
-	}
-	return s + " s"
+	return strings.Replace(strconv.FormatFloat(d.Seconds(), 'f', 1, 64), ".", DecimalMark(lang), 1) + " s"
 }
 
 // diagnose checks the scan's story on the network, read-only, and returns

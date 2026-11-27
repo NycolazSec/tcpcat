@@ -32,7 +32,7 @@ how serious it is, why, and what to do. It runs offline, inside tcpcat.
 
   Or add --ai (quick) or --ai-deep (thorough) to a scan: tcpcat -sV --ai-deep <target>
 
-  --lang fr|en        language of the answers (default: from $LANG)
+  --lang <code>       language of the answers: en, fr or a translation (default: from $LANG)
   --from internet|internal
                       where the scan ran from (default: internal when every
                       scanned address is private, internet otherwise)
@@ -59,7 +59,7 @@ ligne, dans tcpcat.
   Ou ajoutez --ai (rapide) ou --ai-deep (approfondi) à un scan :
   tcpcat -sV --ai-deep <cible>
 
-  --lang fr|en        langue des réponses (par défaut : selon $LANG)
+  --lang <code>       langue des réponses : en, fr ou une traduction (par défaut : selon $LANG)
   --from internet|internal
                       d'où le scan a été lancé (par défaut : internal quand toutes les
                       adresses scannées sont privées, internet sinon)
@@ -109,7 +109,7 @@ func newAIFlags(name string) aiFlags {
 	fs := flag.NewFlagSet("ai "+name, flag.ContinueOnError)
 	fs.Usage = func() { fmt.Print(usageIn(defaultLang())) }
 	f := aiFlags{fs: fs}
-	f.lang = fs.String("lang", defaultLang(), "Language of the answers: fr or en")
+	f.lang = fs.String("lang", defaultLang(), "Language of the answers: "+strings.Join(ai.Languages(), ", "))
 	f.from = fs.String("from", "", "Where the scan ran from: internet or internal")
 	return f
 }
@@ -117,10 +117,7 @@ func newAIFlags(name string) aiFlags {
 func defaultLang() string {
 	for _, v := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
 		if l := os.Getenv(v); l != "" {
-			if strings.HasPrefix(strings.ToLower(l), "fr") {
-				return "fr"
-			}
-			return "en"
+			return ai.Lang(l)
 		}
 	}
 	return "en"
@@ -246,7 +243,7 @@ func runAIIdentify(args []string) int {
 	fs := flag.NewFlagSet("ai identify", flag.ContinueOnError)
 	fs.Usage = func() { fmt.Print(usageIn(defaultLang())) }
 	port := fs.Int("port", 0, "Port the banner came from")
-	lang := fs.String("lang", defaultLang(), "Language of the answers: fr or en")
+	lang := fs.String("lang", defaultLang(), "Language of the answers: "+strings.Join(ai.Languages(), ", "))
 	// A banner may itself start with "-" (Redis answers "-NOAUTH ..."), so
 	// the first argument is the banner unless it is one of this command's flags.
 	var banner string
@@ -274,7 +271,7 @@ func runAIIdentify(args []string) int {
 		}
 		return id
 	}
-	pct := func(p float64) string { return fmt.Sprintf("%3.0f%s", 100*p, msg(*lang, "%", "\u00a0%")) }
+	pct := func(p float64) string { return fmt.Sprintf(ai.PercentFormat(*lang), fmt.Sprintf("%3.0f", 100*p)) }
 	fmt.Printf("%s%s%s\n", config.Bold, msg(*lang, "Most likely:", "Le plus probable :"), config.Reset)
 	var families []model.Guess
 	if banner != "" {
@@ -328,7 +325,7 @@ func isIdentifyFlag(a string) bool {
 func runAIModel(args []string) int {
 	fs := flag.NewFlagSet("ai model", flag.ContinueOnError)
 	fs.Usage = func() { fmt.Print(usageIn(defaultLang())) }
-	lang := fs.String("lang", defaultLang(), "Language of the answers: fr or en")
+	lang := fs.String("lang", defaultLang(), "Language of the answers: "+strings.Join(ai.Languages(), ", "))
 	if err := fs.Parse(args); err != nil {
 		return exitError
 	}
@@ -341,21 +338,18 @@ func runAIModel(args []string) int {
 	m, st := a.Model, a.Model.Stats
 	label := func(en, fr string) string { return fmt.Sprintf("%s%-13s%s", config.Bold, msg(l, en, fr), config.Reset) }
 	pad := strings.Repeat(" ", 13)
-	fmt.Printf("%s %s\n", label("Dictionary", "Dictionnaire"), msg(l,
-		fmt.Sprintf("%s services, %s known ports", number(l, len(a.Dict.All())), number(l, len(a.Dict.Ports()))),
-		fmt.Sprintf("%s services, %s ports connus", number(l, len(a.Dict.All())), number(l, len(a.Dict.Ports())))))
+	fmt.Printf("%s %s\n", label("Dictionary", "Dictionnaire"), fmt.Sprintf(msg(l, "%s services, %s known ports", "%s services, %s ports connus"),
+		number(l, len(a.Dict.All())), number(l, len(a.Dict.Ports()))))
 	fmt.Printf("%s %s\n", label("Model", "Modèle"), msg(l,
 		"logistic regression over the banner (n-grams, words, first characters, shape), plus the port",
 		"régression logistique sur la bannière (n-grammes, mots, premiers caractères, forme), plus le port"))
-	fmt.Printf("%s %s\n", pad, msg(l,
-		fmt.Sprintf("%d classes, %s weights, port weight %s, temperature %s", len(m.Classes), number(l, m.Size()), decimal(l, m.PortWeight), decimal(l, m.Temperature)),
-		fmt.Sprintf("%d classes, %s poids, poids du port %s, température %s", len(m.Classes), number(l, m.Size()), decimal(l, m.PortWeight), decimal(l, m.Temperature))))
+	fmt.Printf("%s %s\n", pad, fmt.Sprintf(msg(l, "%d classes, %s weights, port weight %s, temperature %s", "%d classes, %s poids, poids du port %s, température %s"),
+		len(m.Classes), number(l, m.Size()), decimal(l, m.PortWeight), decimal(l, m.Temperature)))
 	if st.Date != "" {
-		printItem(label("Trained", "Entraînée")+" ", msg(l,
-			fmt.Sprintf("%s, from %s banners: %s, %s of them generated from its patterns; %s examples under %d network conditions",
-				st.Date, number(l, st.Banners), st.Source, number(l, st.Generated), number(l, st.Examples), len(model.Conditions)),
-			fmt.Sprintf("le %s, à partir de %s bannières : %s, dont %s générées à partir de ses motifs ; %s exemples sous %d conditions réseau",
-				st.Date, number(l, st.Banners), st.Source, number(l, st.Generated), number(l, st.Examples), len(model.Conditions))))
+		printItem(label("Trained", "Entraînée")+" ", fmt.Sprintf(msg(l,
+			"%s, from %s banners: %s, %s of them generated from its patterns; %s examples under %d network conditions",
+			"le %s, à partir de %s bannières : %s, dont %s générées à partir de ses motifs ; %s exemples sous %d conditions réseau"),
+			st.Date, number(l, st.Banners), st.Source, number(l, st.Generated), number(l, st.Examples), len(model.Conditions)))
 	}
 	if len(st.Scores) > 0 {
 		fmt.Printf("\n%s%s%s\n", config.Bold, msg(l, "On banners it never saw:", "Sur des bannières qu'elle n'a jamais vues :"), config.Reset)
@@ -384,7 +378,7 @@ func runAIModel(args []string) int {
 // number writes an integer with the language's thousands separator.
 func number(lang string, n int) string {
 	s := strconv.Itoa(n)
-	sep := msg(lang, ",", "\u202f")
+	sep := ai.ThousandsSeparator(lang)
 	var b strings.Builder
 	for i, c := range s {
 		if i > 0 && (len(s)-i)%3 == 0 {
@@ -397,14 +391,13 @@ func number(lang string, n int) string {
 
 // decimal writes a number with two decimals and the language's decimal mark.
 func decimal(lang string, f float32) string {
-	s := strconv.FormatFloat(float64(f), 'f', 2, 32)
-	return msg(lang, s, strings.Replace(s, ".", ",", 1))
+	return strings.Replace(strconv.FormatFloat(float64(f), 'f', 2, 32), ".", ai.DecimalMark(lang), 1)
 }
 
 // percent writes a share as a percentage with one decimal.
 func percent(lang string, f float32) string {
-	s := strconv.FormatFloat(float64(100*f), 'f', 1, 32)
-	return msg(lang, s+"%", strings.Replace(s, ".", ",", 1)+"\u00a0%")
+	s := strings.Replace(strconv.FormatFloat(float64(100*f), 'f', 1, 32), ".", ai.DecimalMark(lang), 1)
+	return fmt.Sprintf(ai.PercentFormat(lang), s)
 }
 
 // renderAIReport prints findings worst first: full detail for what needs
@@ -517,10 +510,19 @@ func severityColor(s string) string {
 }
 
 func severityLabel(lang, s string) string {
-	if lang != "fr" {
-		return s
+	switch s {
+	case "critical":
+		return msg(lang, "critical", "critique")
+	case "high":
+		return msg(lang, "high", "élevé")
+	case "medium":
+		return msg(lang, "medium", "moyen")
+	case "low":
+		return msg(lang, "low", "faible")
+	case "info":
+		return msg(lang, "info", "info")
 	}
-	return map[string]string{"critical": "critique", "high": "élevé", "medium": "moyen", "low": "faible", "info": "info"}[s]
+	return s
 }
 
 func exposureLabel(lang, e string) string {
@@ -533,9 +535,14 @@ func exposureLabel(lang, e string) string {
 	return msg(lang, "should never be reachable", "ne doit jamais être joignable")
 }
 
+// msg writes a phrase of the command line in lang: French, a locale's
+// translation (keyed by the English text), or English.
 func msg(lang, en, fr string) string {
 	if lang == "fr" {
 		return fr
+	}
+	if s := ai.Phrase(lang, en); s != "" {
+		return s
 	}
 	return en
 }
@@ -584,10 +591,7 @@ func onClusterNode() bool {
 
 // runDeep runs the thorough analysis, showing what it checks, and prints it.
 func runDeep(a *ai.Analyzer, results []scan.TargetResult, opt ai.Options) ai.DeepReport {
-	l := opt.Lang
-	if l != "fr" {
-		l = "en"
-	}
+	l := ai.Lang(opt.Lang)
 	fmt.Printf("\n%s%s%s\n", config.Bold, msg(l, "tcpcat AI: thorough analysis", "IA de tcpcat : analyse approfondie"), config.Reset)
 	sp := startSpinner(l, verifyingVerbs)
 	d := a.Deep(results, opt, ai.NetProber{Timeout: 5 * time.Second}, sp.Step)

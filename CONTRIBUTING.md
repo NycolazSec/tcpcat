@@ -61,6 +61,14 @@ Every statement in the file is shown to users as the reason behind a
 finding, so write what you would tell a colleague, in English and French.
 Existing entries are good models: `grafana`, `jenkins`, `minecraft`.
 
+### Translate tcpcat's AI
+
+tcpcat's AI speaks English and French. Any other language is one YAML file in
+[`internal/ai/locales`](internal/ai/locales), which you can write from your
+browser: copy `TEMPLATE.yaml` to `es.yaml` (or `de.yaml`, `pt-BR.yaml`…) and
+translate what you can. Texts left empty are shown in English. The steps and
+the few rules are in [its README](internal/ai/locales/README.md).
+
 ### Retrain the banner model
 
 The model learns from the dictionary too (its banners, products and ports),

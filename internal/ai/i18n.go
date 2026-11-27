@@ -52,6 +52,13 @@ var messages = map[string][2]string{
 	"ev-client-side": {"%d other known flaws concern only the client programs (ssh, scp, sftp), not this server", "%d autres failles connues ne concernent que les programmes clients (ssh, scp, sftp), pas ce serveur"},
 	"ev-vulns":       {"known vulnerabilities for this version: %d, the most serious: %s", "failles connues pour cette version : %d, les plus graves : %s"},
 	"ev-kev":         {"in CISA's catalog of exploited vulnerabilities: %s", "dans le catalogue CISA des failles exploitées : %s"},
+
+	// French writes these counts with its own plurals (countLine); the
+	// French texts here are for translators.
+	"count-open":     {"%d open", "%d ouvert(s)"},
+	"count-closed":   {"%d closed (RST)", "%d fermé(s) (RST)"},
+	"count-dropped":  {"%d dropped silently", "%d filtré(s) en silence"},
+	"count-rejected": {"%d rejected (ICMP)", "%d refusé(s) par ICMP"},
 }
 
 func tr(lang, key string, args ...any) string {
@@ -62,6 +69,8 @@ func tr(lang, key string, args ...any) string {
 	f := m[0]
 	if lang == "fr" {
 		f = m[1]
+	} else if l := locales[lang]; l != nil && l.Messages[key] != "" {
+		f = l.Messages[key]
 	}
 	if len(args) == 0 {
 		return f
