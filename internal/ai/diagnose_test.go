@@ -188,3 +188,64 @@ func TestLateAnswerAfterABlockIsExplainedByTheBlock(t *testing.T) {
 		t.Fatalf("evidence: %v", f.Evidence)
 	}
 }
+
+// Port 25 answering closed among filtered ports is most often the scanner's
+// internet provider blocking outgoing mail, not an opening rule left behind.
+func TestStoryTellsAnSMTPBlockFromALeftoverRule(t *testing.T) {
+	closed := func(p int) scan.TargetResult {
+		return scan.TargetResult{IP: "203.0.113.10", Port: p, State: "CLOSED", Reason: "RST Received"}
+	}
+	story := strings.Join(scanStory([]scan.TargetResult{open(22, "ssh", ""), closed(25), closed(25566), filtered(23), filtered(24)}, "en"), "\n")
+	if !strings.Contains(story, "internet providers block outgoing mail") || !strings.Contains(story, "(closed: 25566)") || strings.Contains(story, "closed: 25,") {
+		t.Fatal(story)
+	}
+	if !strings.Contains(story, "or services that are stopped") {
+		t.Fatal(story)
+	}
+	story = strings.Join(scanStory([]scan.TargetResult{open(22, "ssh", ""), closed(25), filtered(23)}, "en"), "\n")
+	if strings.Contains(story, "opening rules") {
+		t.Fatalf("port 25 alone is no leftover rule: %s", story)
+	}
+}
+
+// Behind a home router, a block may be the router's own: the diagnosis says
+// so, and points to fewer connections at once.
+func TestDiagnosisBehindARouterSuspectsTheRouterToo(t *testing.T) {
+	fastDiagnosis(t)
+	a := analyzer(t)
+	n := newFakeNet()
+	n.states[22] = []string{"filtered", "open"}
+	n.ssh = map[int][]string{22: {"publickey"}}
+	rs := []scan.TargetResult{open(22, "openssh", "SSH-2.0-OpenSSH_9.6"), filtered(23), filtered(25)}
+	text := joined(a.Deep(rs, Options{Lang: "en", BehindNAT: true}, n, nil))
+	if !strings.Contains(text, "your own router ran out of room") || !strings.Contains(text, "-w 16 --rate 50") {
+		t.Fatal(text)
+	}
+	n = newFakeNet()
+	n.states[22] = []string{"filtered"}
+	if text := joined(a.Deep(rs, Options{Lang: "fr", BehindNAT: true}, n, nil)); !strings.Contains(text, "c'est un bannissement") || !strings.Contains(text, "derrière une box") {
+		t.Fatal(text)
+	}
+	// Without a router, the machine's protection stays the only suspect.
+	n = newFakeNet()
+	n.states[22] = []string{"filtered", "open"}
+	n.ssh = map[int][]string{22: {"publickey"}}
+	if text := joined(a.Deep(rs, Options{Lang: "en"}, n, nil)); strings.Contains(text, "router") {
+		t.Fatal(text)
+	}
+}
+
+func TestBlindHostBehindARouter(t *testing.T) {
+	fastDiagnosis(t)
+	a := analyzer(t)
+	rs := []scan.TargetResult{filtered(22), filtered(80), filtered(443), filtered(6443)}
+	rep := a.Analyze(rs, Options{Lang: "en", BehindNAT: true})
+	if len(rep.Alerts) == 0 || !strings.Contains(rep.Alerts[0], "fill its connection table") {
+		t.Fatal(rep.Alerts)
+	}
+	n := newFakeNet()
+	n.states[80] = []string{"open"}
+	if text := joined(a.Deep(rs, Options{Lang: "en", BehindNAT: true}, n, nil)); !strings.Contains(text, "answers a single slow connection on port 80") || !strings.Contains(text, "your own router") {
+		t.Fatal(text)
+	}
+}

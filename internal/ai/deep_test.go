@@ -93,8 +93,18 @@ func TestDeepVerifiesHypotheses(t *testing.T) {
 	if strings.Contains(good, "sensitive ports tested") || !strings.Contains(good, "TLS 1.3") {
 		t.Errorf("the kubelet is open, so no \"sensitive ports closed\" good news:\n%s", good)
 	}
-	if len(rep.Plan) == 0 || rep.Plan[0].Severity != "critical" || !strings.Contains(planText(rep), "SSH entry points") {
+	if len(rep.Plan) == 0 || rep.Plan[0].Severity != "critical" || !strings.Contains(planText(rep), "SSH answers on") {
 		t.Errorf("plan: %+v", rep.Plan)
+	}
+	// The ports belong in the sentence, and the sentence does not start with
+	// a number that would read as part of the host ("host : 22, 2022 2 SSH
+	// entry points").
+	for _, act := range rep.Plan {
+		if strings.Contains(act.Text, "SSH answers on") {
+			if strings.Contains(act.Where, ",") || !strings.HasPrefix(act.Text, "SSH answers on 2 ports facing the internet (") || !strings.HasSuffix(act.Text, ".") {
+				t.Errorf("many-SSH action reads badly: %q %q", act.Where, act.Text)
+			}
+		}
 	}
 }
 

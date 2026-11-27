@@ -292,3 +292,17 @@ func TestAnnotateApplicabilityFlagsComponentAsIdentifierPrefix(t *testing.T) {
 		t.Errorf("Applicability = %q, want requires_component:wsrep", got[0].Applicability)
 	}
 }
+
+func TestAnnotateApplicabilityFlagsOpenSSHClientTools(t *testing.T) {
+	vulns := AnnotateApplicability([]Vulnerability{
+		{ID: "C", Title: "ssh in OpenSSH before 10.4 can have a use-after-free when a server changes"},
+		{ID: "S", Title: "In scp in OpenSSH before 10.2, a crafted path"},
+		{ID: "B", Title: "In sshd and ssh in OpenSSH before 10.6, there is no check"},
+		{ID: "D", Title: "sshd in OpenSSH before 10.4 allows remote attackers to cause a denial of service"},
+	}, "debian")
+	for i, want := range []string{"client_only:openssh", "client_only:openssh", "", ""} {
+		if vulns[i].Applicability != want {
+			t.Errorf("%s: Applicability = %q, want %q", vulns[i].ID, vulns[i].Applicability, want)
+		}
+	}
+}

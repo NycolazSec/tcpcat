@@ -231,3 +231,18 @@ func TestWebsiteOnAlternatePortIsReviewed(t *testing.T) {
 		t.Fatalf("%+v", f)
 	}
 }
+
+// A private service reached from the internet may be open for the scanner's
+// own address only: the finding says so before telling to close it.
+func TestPrivatePortFromTheInternetMentionsAllowLists(t *testing.T) {
+	a := analyzer(t)
+	rep := a.Analyze([]scan.TargetResult{open(6443, "kubernetes-api", "HTTP/1.1 401 Unauthorized")}, Options{Lang: "en"})
+	f := find(t, rep, 6443)
+	if !strings.Contains(strings.Join(f.Evidence, " "), "open for you alone") {
+		t.Fatalf("evidence: %v", f.Evidence)
+	}
+	rep = a.Analyze([]scan.TargetResult{open(6443, "kubernetes-api", "HTTP/1.1 401 Unauthorized")}, Options{Lang: "en", Vantage: Internal})
+	if f := find(t, rep, 6443); strings.Contains(strings.Join(f.Evidence, " "), "allow list") {
+		t.Fatalf("an internal scan has nothing to say about allow lists: %v", f.Evidence)
+	}
+}

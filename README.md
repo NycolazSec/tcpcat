@@ -674,7 +674,9 @@ in tcpcat 2.0. See [docs/IDS_VISIBILITY.md](docs/IDS_VISIBILITY.md).
 -w <count>             Probes in flight at once. Default: CPU cores x 32, and on raw
                        scans (-sS, -sA, ...) a congestion window that grows while the
                        network answers cleanly and backs off on retransmissions.
-                       Giving -w fixes the count.
+                       A connect scan (-sT) from a private address to a public
+                       target keeps 32, so a home router's connection table does
+                       not fill up. Giving -w fixes the count.
 --rate <pps>           Maximum probe rate (packets/sec, default 1000), 0=unlimited
 --adaptive-rate        Adjust send rate from observed RTT/loss (AIMD) instead of a fixed --rate
 --max-retries <n>      Resend a probe up to <n> times before marking it filtered (default 2)

@@ -406,3 +406,17 @@ func TestEngineHidesClosedPortsFromConsoleButNotFromResults(t *testing.T) {
 		}
 	}
 }
+
+// --open trims Execute's results to the open ports, but keeps the others
+// aside for the AI, which reads how the scan went from them.
+func TestEngineKeepsWhatOnlyOpenHides(t *testing.T) {
+	opts := &config.Options{MaxWorkers: 4, Timing: 3, OnlyOpen: true}
+	engine := NewEngine(opts)
+	results := engine.Execute([]string{"127.0.0.1"}, []int{1, 2})
+	if len(results) != 0 {
+		t.Fatalf("--open returned non-open ports: %+v", results)
+	}
+	if hidden := engine.HiddenByOnlyOpen(); len(hidden) != 2 {
+		t.Fatalf("HiddenByOnlyOpen() = %+v, want the 2 closed ports", hidden)
+	}
+}

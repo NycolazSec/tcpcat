@@ -324,7 +324,7 @@ func DefineFlags(fs *flag.FlagSet, opts *Options) *bool {
 	fs.BoolVar(&opts.ProtocolTracing, "protocol-trace", false, "Trace full protocol negotiation sequence (3-way handshake, etc)")
 
 	fs.IntVar(&opts.Timing, "T", 3, "Set timing template (0-5, higher is faster)")
-	fs.IntVar(&opts.MaxWorkers, "w", 0, "Number of parallel workers (default: CPU cores × 32, adapted to the network on SYN/raw scans)")
+	fs.IntVar(&opts.MaxWorkers, "w", 0, "Number of parallel workers (default: CPU cores × 32, adapted to the network on SYN/raw scans; 32 for a connect scan through a home router)")
 	fs.IntVar(&opts.MaxWorkers, "workers", 0, "Number of parallel workers (alias for -w)")
 	fs.IntVar(&opts.BatchSize, "batch-size", 1000, "Number of jobs dispatched per batch")
 	fs.IntVar(&opts.ConnPoolSize, "conn-pool", 64, "Max idle TCP connections kept per address (for -sT scans)")

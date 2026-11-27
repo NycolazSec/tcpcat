@@ -559,7 +559,7 @@ func printAIAfterScan(results []scan.TargetResult, lang, from string, deep bool)
 			fmt.Printf("%s[!] AI: %v%s\n", config.Red, err, config.Reset)
 			return
 		}
-		runDeep(a, results, ai.Options{Lang: lang, Vantage: vantageFor(results, from), FromClusterNode: onClusterNode()})
+		runDeep(a, results, ai.Options{Lang: lang, Vantage: vantageFor(results, from), FromClusterNode: onClusterNode(), BehindNAT: behindNAT(results)})
 		return
 	}
 	sp := startSpinner(lang, thinkingVerbs)
@@ -569,9 +569,24 @@ func printAIAfterScan(results []scan.TargetResult, lang, from string, deep bool)
 		fmt.Printf("%s[!] AI: %v%s\n", config.Red, err, config.Reset)
 		return
 	}
-	rep := a.Analyze(results, ai.Options{Lang: lang, Vantage: vantageFor(results, from), FromClusterNode: onClusterNode()})
+	rep := a.Analyze(results, ai.Options{Lang: lang, Vantage: vantageFor(results, from), FromClusterNode: onClusterNode(), BehindNAT: behindNAT(results)})
 	sp.Stop()
 	renderAIReport(rep)
+}
+
+// behindNAT reports whether this scan reached its targets through a router
+// that translates addresses, such as a home box (see ai.Options.BehindNAT).
+func behindNAT(results []scan.TargetResult) bool {
+	seen := map[string]bool{}
+	var ips []string
+	for _, r := range results {
+		if !seen[r.IP] {
+			seen[r.IP] = true
+			ips = append(ips, r.IP)
+		}
+	}
+	_, ok := scan.SourceBehindNAT(ips)
+	return ok
 }
 
 // clusterNodePaths exist on a Kubernetes node (k3s, kubeadm, kubelet).

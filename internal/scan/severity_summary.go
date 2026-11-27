@@ -15,9 +15,12 @@ type SeveritySummaryEntry struct {
 // which iterating a map or a generic sort would give instead.
 var severityOrder = []string{"critical", "high", "medium", "low", "info"}
 
-// SummarizeSeverity aggregates every vulnerability across results by
+// SummarizeSeverity aggregates the vulnerabilities across results by
 // severity tier, each with the sorted, deduplicated list of hosts it was
-// found on. Tiers with zero findings are omitted entirely. Meant to be
+// found on. Entries flagged as not applicable (another OS, a component the
+// scan cannot confirm, a client-only flaw: see vuln.AnnotateApplicability)
+// are left out, as they are from each host's headline risk. Tiers with zero
+// findings are omitted entirely. Meant to be
 // computed once at the end of a scan and reused for the console summary,
 // the JSON report, and the SARIF report, rather than each recomputing it.
 func SummarizeSeverity(results []TargetResult) []SeveritySummaryEntry {
@@ -26,7 +29,7 @@ func SummarizeSeverity(results []TargetResult) []SeveritySummaryEntry {
 
 	for _, r := range results {
 		for _, v := range r.Vulnerabilities {
-			if v.Severity == "" {
+			if v.Severity == "" || v.Applicability != "" {
 				continue
 			}
 			countBySeverity[v.Severity]++
