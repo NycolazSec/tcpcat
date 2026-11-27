@@ -1,17 +1,34 @@
 .TH TCPCAT 1 "November 2026" "tcpcat" "Network reconnaissance"
 .SH NAME
-tcpcat \- fast network scanner with an eBPF/AF_XDP engine and CVE correlation
+tcpcat \- network scanner that shows what your servers expose
 .SH SYNOPSIS
 .B tcpcat
 .RI [ options ]
 .I target
 .RI [ target ... ]
+.br
+.B tcpcat ai
+.RI { explain | policy | identify | model }
+.RI [ options ]
 .SH DESCRIPTION
 .B tcpcat
-is a network reconnaissance engine written in Go, intended for authorized
+scans your servers from the outside and tells what they expose, why it
+matters and how to fix it. It is written in Go and intended for authorized
 security assessments and network administration. It performs TCP and UDP
 port scanning with host discovery, service and version detection, OS
-fingerprinting, and CVE correlation, and writes machine-readable reports.
+fingerprinting and CVE correlation, explains the results with an offline
+AI, and writes machine-readable reports.
+.PP
+The
+.B tcpcat ai
+subcommand runs the same analysis on a saved JSON report
+.RB ( "tcpcat ai explain scan.json" ),
+drafts an exposure policy
+.RB ( "tcpcat ai policy" ),
+names the service behind a banner
+.RB ( "tcpcat ai identify" )
+and shows what its model knows
+.RB ( "tcpcat ai model" ).
 .PP
 Targets may be host names, IP addresses or CIDR ranges. Raw-socket scans
 require root privileges or the
@@ -28,9 +45,11 @@ instead, which is faster there, unless
 .B \-\-ebpf\-copy
 is given.
 .SH OPTIONS
-Only the most common options are listed here. Run
+Only the most common options are listed here.
 .B tcpcat \-\-help
-for the complete, authoritative list.
+prints a short help, and
+.B tcpcat \-\-help\-all
+the complete, authoritative list.
 .SS Target and discovery
 .TP
 .BI \-i " interface"
@@ -48,7 +67,9 @@ Skip host discovery and treat every target as online.
 Ports to scan, for example
 .B 80,443
 or
-.BR 1\-1024 .
+.BR 1\-1024 ;
+.B \-p\-
+scans every port.
 .TP
 .BI \-\-top\-ports " n"
 Scan the
@@ -77,13 +98,30 @@ Service and version detection.
 .TP
 .B \-O
 Operating-system detection.
+.SS AI analysis
+.TP
+.B \-\-ai
+Let tcpcat's offline AI judge the results: what to fix, why, and how. Every
+statement comes with its evidence.
+.TP
+.B \-\-ai\-deep
+Thorough analysis. The AI verifies its hypotheses with read-only follow-up
+probes and never sends a credential. It tells how the scan went and what
+blocked it, works out what the machine is, and plans the fixes.
+.TP
+.BI \-\-ai\-lang " fr|en"
+Language of the AI's answers (default: from
+.BR $LANG ).
+.TP
+.BI \-\-ai\-from " internet|internal"
+Where the scan runs from, for the AI (default: guessed).
 .SS Timing and output
 .TP
 .BI \-T " 0\-5"
 Timing template, from slowest and stealthiest to fastest.
 .TP
 .BI \-\-rate " pps"
-Cap on packets per second.
+Cap on packets per second (default: 1000).
 .TP
 .BI \-j " file"
 Write results to
@@ -105,6 +143,9 @@ Compare the current scan against a prior JSON report.
 .B \-\-version
 Print version information and exit.
 .SH EXAMPLES
+.TP
+See what a server exposes, verify it and plan the fixes:
+.B tcpcat \-sT \-sV \-\-ai\-deep 203.0.113.10
 .TP
 Scan the 1000 most common ports across a subnet:
 .B sudo tcpcat \-sS \-\-top\-ports 1000 192.168.1.0/24
