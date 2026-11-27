@@ -15,6 +15,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/NycolazSec/tcpcat.svg)](https://pkg.go.dev/github.com/NycolazSec/tcpcat)
 [![License: AGPL-3.0 or Commercial](https://img.shields.io/badge/License-AGPL--3.0%20or%20Commercial-blue.svg)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/NycolazSec/tcpcat)](https://github.com/NycolazSec/tcpcat/releases)
+[![Good first issues](https://img.shields.io/github/issues/NycolazSec/tcpcat/good%20first%20issue?label=good%20first%20issues&color=7057ff)](https://github.com/NycolazSec/tcpcat/labels/good%20first%20issue)
 [![WASM dissector hub](https://img.shields.io/badge/WASM%20dissectors-hub-3ddc84?logo=webassembly&logoColor=white)](https://github.com/NycolazSec/tcpcat-scripts)
 [![BlackArch](https://img.shields.io/badge/BlackArch-packaged-1793d1?logo=archlinux&logoColor=white)](https://blackarch.org/scanner.html)
 [![Discord](https://img.shields.io/badge/Discord-Rejoindre-5865F2?logo=discord&logoColor=white)](https://discord.gg/syn)
@@ -25,6 +26,10 @@
 tells you which open ports and services are dangerous, and it proves when they
 are fixed.** It is one open-source binary, for the hosts and networks you are
 responsible for.
+
+> **Want to help?** Teach tcpcat's AI a service you run (Jellyfin, Home
+> Assistant, Proxmox, a game server…) in about ten minutes, without writing Go.
+> Pick one of the [good first issues](https://github.com/NycolazSec/tcpcat/labels/good%20first%20issue).
 
 ### Why scan your own servers?
 
