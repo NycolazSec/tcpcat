@@ -41,7 +41,7 @@ nfpms:
     vendor: NycolazSec
     homepage: https://tcpcat.io
     maintainer: NycolazSec <support@tcpcat.io>
-    description: High-Performance Network Reconnaissance & Vulnerability Intelligence Engine
+    description: "Checks what your servers expose, explains it with an offline AI, proves fixes"
     license: AGPL-3.0-only
     formats:
       - deb

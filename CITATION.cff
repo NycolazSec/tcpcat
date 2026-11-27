@@ -19,8 +19,8 @@ authors:
 repository-code: "https://github.com/NycolazSec/tcpcat"
 url: "https://tcpcat.io"
 license: AGPL-3.0-only
-version: 1.9.0
-date-released: "2026-11-26"
+version: 1.10.0
+date-released: "2026-11-27"
 keywords:
   - network-scanner
   - ebpf
