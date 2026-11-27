@@ -59,7 +59,14 @@ go run ./cmd/tcpcat ai identify "Gitea" --port 3000
 
 Every statement in the file is shown to users as the reason behind a
 finding, so write what you would tell a colleague, in English and French.
+If you don't speak French, a machine translation is fine: the maintainer is
+a native speaker and polishes it in review.
 Existing entries are good models: `grafana`, `jenkins`, `minecraft`.
+
+Not sure which service to add? Each issue labelled
+[`ai-dictionary`](https://github.com/NycolazSec/tcpcat/labels/ai-dictionary)
+is one service, with its ports and suggested exposure. Comment on it to take
+it.
 
 ### Retrain the banner model
 
