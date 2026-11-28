@@ -42,7 +42,7 @@ func SourceBehindNAT(targets []string) (net.IP, bool) {
 			return nil, false
 		}
 		local := c.LocalAddr().(*net.UDPAddr).IP
-		c.Close()
+		_ = c.Close() // nothing was sent: there is nothing to flush
 		return local, behindNAT(local, ip)
 	}
 	return nil, false
