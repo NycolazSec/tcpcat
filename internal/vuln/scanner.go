@@ -68,6 +68,18 @@ var osMentionPattern = regexp.MustCompile(`(?i)\b(Windows|macOS|Mac OS X?|Darwin
 // \b to match right after "wsrep".
 var componentMentionPattern = regexp.MustCompile(`(?i)\b(wsrep|galera)`)
 
+// clientToolPattern finds a flaw of OpenSSH's client programs rather than
+// its server: "ssh in OpenSSH before 10.4 ...", "In scp in OpenSSH ...". A
+// scanned port is the server, which such a flaw does not threaten. "In sshd
+// and ssh in OpenSSH" concerns the server too and does not match.
+var clientToolPattern = regexp.MustCompile(`(?i)^\s*(in\s+)?(ssh|scp|sftp|ssh-agent|ssh-add|ssh-keygen|ssh-keyscan|ssh-pkcs11-helper)\s+(in|of|from)\s+openssh\b`)
+
+// ClientToolFlaw reports whether a vulnerability title is about OpenSSH's
+// client programs (ssh, scp, sftp...) rather than its server.
+func ClientToolFlaw(title string) bool {
+	return clientToolPattern.MatchString(title)
+}
+
 // osFamily normalizes both a title's OS mention and tcpcat's own detected
 // OS name (see internal/service/engine.go's osRegexps) to the same small
 // vocabulary, so "Mac OS X" in a title and "macos" from detection compare
@@ -97,6 +109,10 @@ func osFamily(name string) string {
 func AnnotateApplicability(vulns []Vulnerability, detectedOS string) []Vulnerability {
 	detectedFamily := osFamily(detectedOS)
 	for i := range vulns {
+		if ClientToolFlaw(vulns[i].Title) {
+			vulns[i].Applicability = "client_only:openssh"
+			continue
+		}
 		if m := osMentionPattern.FindStringSubmatch(vulns[i].Title); m != nil {
 			mentionedFamily := osFamily(m[1])
 			if detectedFamily != "" && mentionedFamily != "" && mentionedFamily != detectedFamily {

@@ -17,7 +17,6 @@ package ai
 
 import (
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -48,6 +47,11 @@ type Options struct {
 	// FromClusterNode says the scan ran from a Kubernetes node, which the
 	// cluster's firewall may trust more than the internet.
 	FromClusterNode bool
+	// BehindNAT says the scan left through a router that translates
+	// addresses (a private source address, a public target), such as a
+	// home box: a scan can fill its connection table, which then looks like
+	// the target blocking the scanner.
+	BehindNAT bool
 }
 
 // Identification is what the AI believes runs behind a port, and why.
@@ -115,7 +119,11 @@ func (a *Analyzer) Analyze(results []scan.TargetResult, opt Options) Report {
 	}
 	rep := Report{Vantage: opt.Vantage, Lang: opt.Lang, Story: scanStory(results, opt.Lang)}
 	for _, h := range blindHosts(results) {
-		rep.Alerts = append(rep.Alerts, tr(opt.Lang, "alert-blind", h.host, h.tested))
+		alert := tr(opt.Lang, "alert-blind", h.host, h.tested)
+		if opt.BehindNAT {
+			alert += " " + tr(opt.Lang, "alert-blind-nat")
+		}
+		rep.Alerts = append(rep.Alerts, alert)
 	}
 	for _, h := range muteHosts(results) {
 		rep.Alerts = append(rep.Alerts, tr(opt.Lang, "alert-mute", h.host, h.tested))
@@ -487,6 +495,9 @@ func (a *Analyzer) judge(r scan.TargetResult, opt Options) Finding {
 		f.Title = tr(lang, "title-private", name)
 		f.Why = s.Why.In(lang)
 		f.Fix = joinSentences(tr(lang, "fix-private", r.Port), s.Hint.In(lang))
+		// An admin port is often opened to its admin's own address: the
+		// scan may be the only one that gets through.
+		f.Evidence = append(f.Evidence, tr(lang, "ev-allowlist"))
 	}
 	// A port-only guess among several services is not proof: say less.
 	if id.Source == "port" && len(id.Alternatives) > 0 && kb.SeverityRank(f.Severity) > kb.SeverityRank("medium") {
@@ -543,12 +554,12 @@ func (a *Analyzer) addVulns(f *Finding, r scan.TargetResult, lang string) {
 	var applicable []vuln.Vulnerability
 	clientSide := 0
 	for _, v := range r.Vulnerabilities {
-		if v.Applicability != "" {
-			continue // its title names a precondition the scan has no evidence of
-		}
-		if isClientSide(f.Service.ID, v.Title) {
+		if strings.HasPrefix(v.Applicability, "client_only:") || isClientSide(f.Service.ID, v.Title) {
 			clientSide++
 			continue
+		}
+		if v.Applicability != "" {
+			continue // its title names a precondition the scan has no evidence of
 		}
 		applicable = append(applicable, v)
 	}
@@ -615,21 +626,11 @@ func (a *Analyzer) addVulns(f *Finding, r scan.TargetResult, lang string) {
 	}
 }
 
-// clientTool matches vulnerability titles about a product's client programs
-// rather than its server ("scp in OpenSSH before 10.4 ...").
-var clientTool = map[string]*regexp.Regexp{
-	// "ssh in OpenSSH ...", or "In ssh in OpenSSH ..."; "In sshd and ssh in
-	// OpenSSH" concerns the server too and does not match.
-	"ssh": regexp.MustCompile(`(?i)^\s*(in\s+)?(ssh|scp|sftp|ssh-agent|ssh-add|ssh-keygen|ssh-keyscan|ssh-pkcs11-helper)\s+(in|of|from)\s+openssh\b`),
-}
-
+// isClientSide reports a vulnerability of a product's client programs
+// rather than its server ("scp in OpenSSH before 10.4 ...") on an SSH port.
 func isClientSide(id, title string) bool {
 	s := kb.Default().Get(id)
-	if s == nil {
-		return false
-	}
-	re := clientTool[s.Protocol()]
-	return re != nil && re.MatchString(title)
+	return s != nil && s.Protocol() == "ssh" && vuln.ClientToolFlaw(title)
 }
 
 func reason(r scan.TargetResult) string {

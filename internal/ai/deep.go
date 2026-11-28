@@ -60,7 +60,7 @@ func (a *Analyzer) Deep(results []scan.TargetResult, opt Options, p Prober, prog
 	var diagStory, diagAlerts []string
 	blocked := map[string]bool{}
 	if d, ok := p.(Diagnoser); ok {
-		results, diagStory, diagAlerts, blocked = a.diagnose(results, opt.Lang, d, progress)
+		results, diagStory, diagAlerts, blocked = a.diagnose(results, opt.Lang, opt.BehindNAT, d, progress)
 	}
 	rep := a.Analyze(results, opt)
 	rep.Story = append(rep.Story, diagStory...)
@@ -610,7 +610,7 @@ func (a *Analyzer) plan(rep Report) []Action {
 		}
 		for host, ports := range byHost {
 			if len(ports) >= 2 {
-				plan = append(plan, Action{Severity: "low", Where: host + " : " + strings.Join(ports, ", "), Text: tr(lang, "plan-many-ssh", len(ports))})
+				plan = append(plan, Action{Severity: "low", Where: host, Text: tr(lang, "plan-many-ssh", len(ports), strings.Join(ports, ", "))})
 			}
 		}
 	}

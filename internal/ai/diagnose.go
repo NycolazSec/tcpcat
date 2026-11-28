@@ -97,7 +97,15 @@ func scanStory(results []scan.TargetResult, lang string) []string {
 		case c.closed > 0 && c.dropped == 0:
 			story = append(story, tr(lang, "story-no-firewall"))
 		case c.closed > 0:
-			story = append(story, tr(lang, "story-partial", joinPorts(c.closedPorts)))
+			// A provider that blocks outgoing mail answers port 25 itself.
+			closed := c.closedPorts
+			if hasPort(closed, 25) {
+				story = append(story, tr(lang, "story-smtp-isp"))
+				closed = withoutPort(closed, 25)
+			}
+			if len(closed) > 0 {
+				story = append(story, tr(lang, "story-partial", joinPorts(closed)))
+			}
 		case c.open > 0 && c.dropped > 0:
 			story = append(story, tr(lang, "story-whitelist"))
 		}
@@ -108,6 +116,16 @@ func scanStory(results []scan.TargetResult, lang string) []string {
 		}
 	}
 	return story
+}
+
+func withoutPort(ports []int, p int) []int {
+	var out []int
+	for _, q := range ports {
+		if q != p {
+			out = append(out, q)
+		}
+	}
+	return out
 }
 
 func countLine(lang string, c *portCounts) string {
@@ -162,7 +180,9 @@ func seconds(lang string, d time.Duration) string {
 // diagnose checks the scan's story on the network, read-only, and returns
 // the results with the banners it obtained, what it found, the alerts, and
 // the hosts that blocked the scanner during the scan.
-func (a *Analyzer) diagnose(results []scan.TargetResult, lang string, d Diagnoser, progress func(string)) ([]scan.TargetResult, []string, []string, map[string]bool) {
+// nat says the scan left through a router that translates addresses (see
+// Options.BehindNAT): that router may be what blocked the scan.
+func (a *Analyzer) diagnose(results []scan.TargetResult, lang string, nat bool, d Diagnoser, progress func(string)) ([]scan.TargetResult, []string, []string, map[string]bool) {
 	results = append([]scan.TargetResult(nil), results...)
 	say := func(s string) {
 		if progress != nil {
@@ -196,7 +216,7 @@ func (a *Analyzer) diagnose(results []scan.TargetResult, lang string, d Diagnose
 		}
 
 		if blind[h] {
-			s, al := a.diagnoseBlind(h, scanned, lang, d, say)
+			s, al := a.diagnoseBlind(h, scanned, lang, nat, d, say)
 			story, alerts = append(story, s...), append(alerts, al...)
 			continue
 		}
@@ -212,14 +232,18 @@ func (a *Analyzer) diagnose(results []scan.TargetResult, lang string, d Diagnose
 			}
 		}
 		if len(gone) == len(probe) {
-			alerts = append(alerts, tr(lang, "diag-blocked-now", h, joinPorts(gone)))
+			alert := tr(lang, "diag-blocked-now", h, joinPorts(gone))
+			if nat {
+				alert += " " + tr(lang, "diag-blocked-nat")
+			}
+			alerts = append(alerts, alert)
 			blocked[h] = true
 			say(tr(lang, "diag-wait", int(diagCoolDown.Seconds())))
 			time.Sleep(diagCoolDown)
 			if d.Dial(h, probe[0], diagDialTimeout) == "open" {
-				story = append(story, tr(lang, "diag-unblocked", int(diagCoolDown.Seconds()), probe[0]))
+				story = append(story, tr(lang, natKey("diag-unblocked", nat), int(diagCoolDown.Seconds()), probe[0]))
 			} else {
-				alerts = append(alerts, tr(lang, "diag-still-blocked", int(diagCoolDown.Seconds())))
+				alerts = append(alerts, withNATHint(lang, nat, tr(lang, "diag-still-blocked", int(diagCoolDown.Seconds()))))
 				continue
 			}
 		} else {
@@ -290,7 +314,7 @@ func (a *Analyzer) diagnose(results []scan.TargetResult, lang string, d Diagnose
 
 // diagnoseBlind looks into a host on which nothing answered: one slow
 // connection at a time, then once more after a pause.
-func (a *Analyzer) diagnoseBlind(h string, scanned []int, lang string, d Diagnoser, say func(string)) (story, alerts []string) {
+func (a *Analyzer) diagnoseBlind(h string, scanned []int, lang string, nat bool, d Diagnoser, say func(string)) (story, alerts []string) {
 	ports := commonFirst(scanned)
 	if len(ports) == 0 {
 		return nil, nil
@@ -301,15 +325,33 @@ func (a *Analyzer) diagnoseBlind(h string, scanned []int, lang string, d Diagnos
 			time.Sleep(diagSlowGap)
 		}
 		if st := d.Dial(h, p, diagDialTimeout); st != "filtered" {
-			return []string{tr(lang, "diag-blind-answers", h, p)}, nil
+			return []string{tr(lang, natKey("diag-blind-answers", nat), h, p)}, nil
 		}
 	}
 	say(tr(lang, "diag-wait", int(diagCoolDown.Seconds())))
 	time.Sleep(diagCoolDown)
 	if st := d.Dial(h, ports[0], diagDialTimeout); st != "filtered" {
-		return []string{tr(lang, "diag-unblocked", int(diagCoolDown.Seconds()), ports[0])}, nil
+		return []string{tr(lang, natKey("diag-unblocked", nat), int(diagCoolDown.Seconds()), ports[0])}, nil
 	}
-	return nil, []string{tr(lang, "diag-blind-dead", h, int(diagCoolDown.Seconds()))}
+	return nil, []string{withNATHint(lang, nat, tr(lang, "diag-blind-dead", h, int(diagCoolDown.Seconds())))}
+}
+
+// natKey picks the variant of a message that names the scanner's own router
+// as a possible cause, when the scan went through one.
+func natKey(key string, nat bool) string {
+	if nat {
+		return key + "-nat"
+	}
+	return key
+}
+
+// withNATHint adds to a block that did not lift that the scanner's own
+// router may be the one refusing, when the scan went through one.
+func withNATHint(lang string, nat bool, s string) string {
+	if nat {
+		return s + " " + tr(lang, "diag-nat-hint")
+	}
+	return s
 }
 
 // commonFirst picks up to three of the scanned ports, the ones most hosts

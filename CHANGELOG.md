@@ -44,6 +44,39 @@ Full diffs for every release are available via GitHub's
   the version, so `tcpcat --version` no longer prints "dev" there.
   docs/DISTRIBUTION.md explains how the package is built and updated.
 
+### Fixed
+- A connect scan (`-sT`) from behind a home router no longer fills the
+  router's connection table. Every filtered port kept an entry there until it
+  timed out; past a few dozen connections at a time, the router dropped or
+  refused new ones, the scan's own included, and every port of the target
+  looked filtered. When the scan leaves from a private address towards a
+  public target and `-w` is not given, it now keeps 32 connections at a time,
+  and says so.
+- `--open` no longer hides the closed and filtered ports from the AI. It
+  still trims the console and the exports to the open ports, but `--ai` and
+  `--ai-deep` read every port again, so they can still tell how a firewall
+  filters the machine, or that the scan was blocked.
+- A host with many filtered ports no longer prints one line per port: past
+  25, they are counted in its "Not shown" line, like the closed ones. `-v`
+  lists them all.
+- Flaws of OpenSSH's client tools (`ssh`, `scp`, `sftp`…) found for a scanned
+  SSH server are marked "client tools only, not the server", and no longer
+  count in the findings summary, which now leaves out every flaw marked not
+  applicable, as each host's headline risk already did.
+- tcpcat's AI:
+  - names the scanner's own router as a possible cause of a block when the
+    scan goes through one that translates addresses (a home box), and points
+    to fewer connections at once (`-w 16`) before suspecting the machine.
+  - says that port 25 answering closed among filtered ports usually comes
+    from an internet provider blocking outgoing mail, not from the machine.
+  - says that ports which reach the machine with nothing listening may be
+    services that are stopped, not only opening rules left behind.
+  - warns, for a sensitive port reached from the internet, that it may be
+    open for the scanner's own address only (an allow list), before telling
+    to close it.
+  - writes the advice about SSH answering on several ports as one sentence,
+    with the ports inside it.
+
 ## [1.10.0] - 2026-11-27
 
 ### Added

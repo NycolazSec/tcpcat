@@ -49,3 +49,17 @@ func TestSummarizeSeverityNoVulnerabilities(t *testing.T) {
 		t.Errorf("SummarizeSeverity() = %+v, want empty", got)
 	}
 }
+
+// A flaw flagged as not applicable (another OS, a client-only tool) stays in
+// the results but does not count in the summary, as it does not count in a
+// host's headline risk.
+func TestSummarizeSeveritySkipsNotApplicable(t *testing.T) {
+	got := SummarizeSeverity([]TargetResult{{IP: "10.0.0.1", Vulnerabilities: []vuln.Vulnerability{
+		{ID: "CVE-1", Severity: "critical", Applicability: "client_only:openssh"},
+		{ID: "CVE-2", Severity: "high"},
+	}}})
+	want := []SeveritySummaryEntry{{Severity: "high", Count: 1, Hosts: []string{"10.0.0.1"}}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("SummarizeSeverity() = %+v, want %+v", got, want)
+	}
+}

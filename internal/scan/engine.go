@@ -94,6 +94,22 @@ type Engine struct {
 	// otGuard aborts scanning a target whose latency degrades, for fragile
 	// industrial/OT equipment. nil unless --profile ot is set.
 	otGuard *otguard.Guard
+	// hidden keeps the results --open left out of Execute's list, for
+	// HiddenByOnlyOpen.
+	hidden []TargetResult
+}
+
+// maxListedFiltered is how many FILTERED (or OPEN|FILTERED) ports of one
+// host are listed one by one; above it they are counted in the host's
+// "Not shown" line, as Nmap does. -v lists them all.
+const maxListedFiltered = 25
+
+// HiddenByOnlyOpen returns the results --open left out of the last
+// Execute: the closed and filtered ports. The AI needs them to tell how the
+// scan went (a firewall, a block), while the console and the exports keep
+// showing open ports only.
+func (e *Engine) HiddenByOnlyOpen() []TargetResult {
+	return e.hidden
 }
 
 func NewEngine(opts *config.Options) *Engine {
@@ -146,6 +162,17 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	workerCount := e.opts.MaxWorkers
 	if workerCount < 1 {
 		workerCount = 1
+	}
+	// A connect scan through a home router: see natConnectWorkers. -w
+	// overrides it.
+	if e.opts.WorkersAuto && !usesRawTxPath(e.opts) && GlobalXsk == nil && workerCount > natConnectWorkers {
+		if src, ok := SourceBehindNAT(targets); ok {
+			workerCount = natConnectWorkers
+			if !e.opts.Quiet {
+				fmt.Printf("%s[*] Connect scan from a private address (%s) through a router: %d connections at a time, so the router's connection table does not fill up (-w to change).%s\n",
+					config.Gray, src, natConnectWorkers, config.Reset)
+			}
+		}
 	}
 	// Without -w, raw scans start at the CPU-based worker count and let a
 	// congestion window decide how many probes are in flight: enough workers
@@ -382,19 +409,38 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 	})
 
 	var finalResults []TargetResult
+	e.hidden = nil
 	var currentHost string
 	hostOSShown := false
-	hiddenClosed := 0
+	hiddenClosed, hiddenFiltered := 0, 0
 
-	// flushClosedSummary prints the pending per-host closed-port count (if
-	// any) and resets it -- called on every host change and once more
-	// after the loop, so the last host's count isn't dropped.
-	flushClosedSummary := func() {
-		if hiddenClosed > 0 && !e.opts.Quiet {
-			fmt.Printf("%s[~] %s ─ Not shown: %d closed port(s)%s\n",
-				config.Bold+config.White, currentHost, hiddenClosed, config.Reset)
-			hiddenClosed = 0
+	// A host with many filtered ports (a firewall dropping everything but
+	// a few) would bury its open ports under one line per filtered port:
+	// past maxListedFiltered, they are counted instead of listed.
+	filteredPerHost := map[string]int{}
+	for _, res := range allResults {
+		if res.State == StateFiltered || res.State == StateOpenFiltered {
+			filteredPerHost[res.IP]++
 		}
+	}
+
+	// flushClosedSummary prints the pending per-host count of the closed
+	// and filtered ports not listed (if any) and resets it -- called on
+	// every host change and once more after the loop, so the last host's
+	// count isn't dropped.
+	flushClosedSummary := func() {
+		if (hiddenClosed > 0 || hiddenFiltered > 0) && !e.opts.Quiet {
+			var parts []string
+			if hiddenClosed > 0 {
+				parts = append(parts, fmt.Sprintf("%d closed", hiddenClosed))
+			}
+			if hiddenFiltered > 0 {
+				parts = append(parts, fmt.Sprintf("%d filtered", hiddenFiltered))
+			}
+			fmt.Printf("%s[~] %s ─ Not shown: %s port(s)%s\n",
+				config.Bold+config.White, currentHost, strings.Join(parts, ", "), config.Reset)
+		}
+		hiddenClosed, hiddenFiltered = 0, 0
 	}
 
 	for _, res := range allResults {
@@ -404,6 +450,7 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 			hostOSShown = false
 		}
 		if res.State != StateOpen && e.opts.OnlyOpen {
+			e.hidden = append(e.hidden, res)
 			continue
 		}
 		finalResults = append(finalResults, res)
@@ -420,6 +467,11 @@ func (e *Engine) ExecuteWithProgress(targets []string, ports []int, onProgress P
 		// regardless, exactly as before.
 		if res.State == StateClosed && !e.opts.ShowClosed {
 			hiddenClosed++
+			continue
+		}
+		if (res.State == StateFiltered || res.State == StateOpenFiltered) &&
+			filteredPerHost[res.IP] > maxListedFiltered && !e.opts.Verbose {
+			hiddenFiltered++
 			continue
 		}
 

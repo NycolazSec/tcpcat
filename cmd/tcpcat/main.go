@@ -820,6 +820,8 @@ func main() {
 							switch {
 							case strings.HasPrefix(v.Applicability, "not_applicable_os:"):
 								note = fmt.Sprintf(" %s[not applicable: %s-only]%s", config.White, strings.TrimPrefix(v.Applicability, "not_applicable_os:"), config.Reset)
+							case strings.HasPrefix(v.Applicability, "client_only:"):
+								note = fmt.Sprintf(" %s[client tools only, not the server]%s", config.White, config.Reset)
 							case strings.HasPrefix(v.Applicability, "requires_component:"):
 								note = fmt.Sprintf(" %s[requires %s]%s", config.White, strings.TrimPrefix(v.Applicability, "requires_component:"), config.Reset)
 							}
@@ -908,7 +910,14 @@ func main() {
 	}
 
 	if opts.AI || opts.AIDeep {
-		printAIAfterScan(results, opts.AILang, opts.AIFrom, opts.AIDeep)
+		// --open trims the console and the exports to the open ports, but
+		// the AI reads the closed and filtered ones too: they tell whether a
+		// firewall filters the machine, or whether the scan was blocked.
+		aiResults := results
+		if hidden := engine.HiddenByOnlyOpen(); len(hidden) > 0 {
+			aiResults = append(append([]scan.TargetResult(nil), results...), hidden...)
+		}
+		printAIAfterScan(aiResults, opts.AILang, opts.AIFrom, opts.AIDeep)
 	}
 	if opts.JsonOutput != "" {
 		err := output.ExportJSON(opts.JsonOutput, opts.Target, results, duration, reusedCerts, severitySummary)
